@@ -1,0 +1,76 @@
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^wd-(.*)": "wot-design-uni/components/wd-$1/wd-$1.vue"
+    }
+  },
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "收粮业务员端"
+      }
+    },
+    {
+      "path": "pages/entry/index",
+      "style": {
+        "navigationBarTitleText": "新增录入"
+      }
+    },
+    {
+      "path": "pages/farmers/index",
+      "style": {
+        "navigationBarTitleText": "我的农户"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationBarTitleText": "完善资料"
+      }
+    },
+    {
+      "path": "pages/mine/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#6b7280",
+    "selectedColor": "#145535",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "今日"
+      },
+      {
+        "pagePath": "pages/entry/index",
+        "text": "录入"
+      },
+      {
+        "pagePath": "pages/farmers/index",
+        "text": "农户"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "收粮业务员端",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f5f7f3"
+  }
+}

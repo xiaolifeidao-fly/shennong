@@ -1,0 +1,132 @@
+package initialization
+
+import (
+	"app-api/routers"
+	"common/middleware/db"
+	"common/middleware/redis"
+	"common/middleware/storage/oss"
+	"common/middleware/vipper"
+	"fmt"
+	"log"
+)
+
+// InitOrder 定义初始化顺序
+type InitOrder int
+
+const (
+	ConfigInit InitOrder = iota
+	DBInit
+	RedisInit
+	OssInit
+	IpManagerInit
+	IpManagerV2Init    // 新增V2版本初始化
+	IpManagerShortInit // 新增Short版本初始化
+	DeviceManagerInit
+	ConsumerInit
+	RouterInit
+)
+
+type Initializer struct {
+	Order  InitOrder
+	Name   string
+	InitFn func() error
+}
+
+var initializers = []Initializer{
+	{
+		Order: ConfigInit,
+		Name:  "Config",
+		InitFn: func() error {
+			vipper.Init()
+			return nil
+		},
+	},
+	{
+		Order: DBInit,
+		Name:  "Database",
+		InitFn: func() error {
+			db.InitDB()
+			return nil
+		},
+	},
+	{
+		Order: RedisInit,
+		Name:  "Redis",
+		InitFn: func() error {
+			redisAddr := vipper.GetString("redis.addr")
+			redisPwd := vipper.GetString("redis.password")
+			return redis.InitRedisClient(redisAddr, redisPwd)
+		},
+	},
+
+	{
+		Order: OssInit,
+		Name:  "OSS",
+		InitFn: func() error {
+			enabled := vipper.GetBool("oss.enabled")
+			dirPrefix := vipper.GetString("oss.dirPrefix")
+			bucketName := vipper.GetString("oss.bucketName")
+			accessKeyId := vipper.GetString("oss.accessKeyId")
+			accessKeySecret := vipper.GetString("oss.accessKeySecret")
+			endpoint := vipper.GetString("oss.endpoint")
+			expireTime := vipper.GetInt64("oss.expireTime")
+			callbackUrl := vipper.GetString("oss.callbackUrl")
+			tokenExpireTime := vipper.GetInt64("oss.tokenExpireTime")
+			ossEntity := &oss.OssEntity{
+				Enabled:         enabled,
+				DirPrefix:       dirPrefix,
+				Endpoint:        endpoint,
+				BucketName:      bucketName,
+				AccessKeyId:     accessKeyId,
+				AccessKeySecret: accessKeySecret,
+				ExpireTime:      expireTime,
+				CallbackUrl:     callbackUrl,
+				TokenExpireTime: tokenExpireTime,
+			}
+			oss.Setup(ossEntity)
+			return nil
+		},
+	},
+	// {
+	// 	Order:  IpManagerInit,
+	// 	Name:   "IP Manager",
+	// 	InitFn: ipBiz.InitIpManager,
+	// },
+	// {
+	// 	Order:  IpManagerV2Init,
+	// 	Name:   "IP Manager V2",
+	// 	InitFn: ipBiz.InitIpManagerV2,
+	// },
+	// {
+	// 	Order:  IpManagerShortInit,
+	// 	Name:   "IP Manager Short",
+	// 	InitFn: ipBiz.InitIpManagerShort,
+	// },
+	{
+		Order: RouterInit,
+		Name:  "Router",
+		InitFn: func() error {
+			routers.Init()
+			return nil
+		},
+	},
+}
+
+// Init 统一初始化入口
+func Init() error {
+	// 按顺序执行初始化
+	for _, init := range initializers {
+		log.Printf("Initializing %s...", init.Name)
+		if err := init.InitFn(); err != nil {
+			switch init.Order {
+			case RedisInit, OssInit:
+				log.Printf("Skipping optional initializer %s: %v", init.Name, err)
+				continue
+			default:
+				return fmt.Errorf("failed to initialize %s: %v", init.Name, err)
+			}
+		}
+		log.Printf("%s initialized successfully", init.Name)
+	}
+	return nil
+}
