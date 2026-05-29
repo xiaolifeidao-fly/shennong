@@ -72,6 +72,12 @@ func decryptFarmerEntity(entity *grainFarmerRepository.GrainFarmer) error {
 	if entity.IDNumber, err = decryptFarmerField(entity.IDNumber, key, "id_number"); err != nil {
 		return err
 	}
+	if entity.Phone, err = decryptFarmerField(entity.Phone, key, "phone"); err != nil {
+		return err
+	}
+	if entity.Address, err = decryptFarmerField(entity.Address, key, "address"); err != nil {
+		return err
+	}
 	if entity.BankNumber, err = decryptFarmerField(entity.BankNumber, key, "bank_number"); err != nil {
 		return err
 	}
@@ -105,6 +111,12 @@ func decryptFarmerDTO(dto *grainFarmerDTO.GrainFarmerDTO) error {
 	if dto.IDNumber, err = decryptFarmerField(dto.IDNumber, key, "id_number"); err != nil {
 		return err
 	}
+	if dto.Phone, err = decryptFarmerField(dto.Phone, key, "phone"); err != nil {
+		return err
+	}
+	if dto.Address, err = decryptFarmerField(dto.Address, key, "address"); err != nil {
+		return err
+	}
 	if dto.BankNumber, err = decryptFarmerField(dto.BankNumber, key, "bank_number"); err != nil {
 		return err
 	}
@@ -122,24 +134,35 @@ func decryptFarmerField(value, key, field string) (string, error) {
 }
 
 func DecryptFarmerSensitiveValues(name, idNumber, bankNumber, bankName string) (string, string, string, string, error) {
+	name, idNumber, _, _, bankNumber, bankName, err := DecryptFarmerProfileValues(name, idNumber, "", "", bankNumber, bankName)
+	return name, idNumber, bankNumber, bankName, err
+}
+
+func DecryptFarmerProfileValues(name, idNumber, phone, address, bankNumber, bankName string) (string, string, string, string, string, string, error) {
 	key := farmerCryptoKey()
 	if key == "" {
-		return name, idNumber, bankNumber, bankName, nil
+		return name, idNumber, phone, address, bankNumber, bankName, nil
 	}
 	var err error
 	if name, err = decryptFarmerField(name, key, "name"); err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 	if idNumber, err = decryptFarmerField(idNumber, key, "id_number"); err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", "", err
+	}
+	if phone, err = decryptFarmerField(phone, key, "phone"); err != nil {
+		return "", "", "", "", "", "", err
+	}
+	if address, err = decryptFarmerField(address, key, "address"); err != nil {
+		return "", "", "", "", "", "", err
 	}
 	if bankNumber, err = decryptFarmerField(bankNumber, key, "bank_number"); err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
 	if bankName, err = decryptFarmerField(bankName, key, "bank_name"); err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", "", "", err
 	}
-	return name, idNumber, bankNumber, bankName, nil
+	return name, idNumber, phone, address, bankNumber, bankName, nil
 }
 
 func farmerIDNumberDigest(value string) (string, error) {

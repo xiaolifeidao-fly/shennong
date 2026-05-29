@@ -1,7 +1,7 @@
 <template>
   <view class="card form-card">
     <view class="reuse-strip">
-      <text class="icon">户</text>
+      <text class="icon farmer-icon"></text>
       <text>先选择农户。已建档农户会自动带出身份、电话、住址和收款信息；需要变更时可到农户详情修改。</text>
     </view>
 
@@ -15,7 +15,16 @@
     <view class="field">
       <view class="label-row">
         <text class="label required">农户身份</text>
-        <button class="scan-btn" @click="$emit('scan-id')">拍身份证识别</button>
+        <view class="scan-group">
+          <button class="scan-btn" @click="$emit('scan-id-front')">
+            <text class="mini-icon camera-mini"></text>
+            <text>拍正面</text>
+          </button>
+          <button class="scan-btn" @click="$emit('scan-id-back')">
+            <text class="mini-icon camera-mini"></text>
+            <text>拍背面</text>
+          </button>
+        </view>
       </view>
       <input v-model="model.farmerName" class="input" placeholder="农户姓名" />
     </view>
@@ -36,7 +45,10 @@
     <view v-if="isBankPayment" class="field">
       <view class="label-row">
         <text class="label required">银行卡信息</text>
-        <button class="scan-btn" @click="$emit('scan-bank')">拍银行卡识别</button>
+        <button class="scan-btn" @click="$emit('scan-bank')">
+          <text class="mini-icon card-mini"></text>
+          <text>拍银行卡</text>
+        </button>
       </view>
       <input v-model="model.bankNumber" class="input" placeholder="银行卡号" />
     </view>
@@ -71,7 +83,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: GrainEntryDraft]
   'farmer-change': [farmerId: string]
-  'scan-id': []
+  'scan-id-front': []
+  'scan-id-back': []
   'scan-bank': []
 }>()
 
@@ -120,7 +133,7 @@ function selectPayType(event: { detail: { value: number | string } }) {
 
 <style lang="scss" scoped>
 .form-card {
-  padding: 28rpx;
+  padding: 30rpx;
 }
 
 .reuse-strip {
@@ -129,25 +142,45 @@ function selectPayType(event: { detail: { value: number | string } }) {
   align-items: flex-start;
   padding: 24rpx;
   margin-bottom: 20rpx;
-  border: 1rpx solid rgba(35, 122, 75, 0.18);
-  border-radius: 8rpx;
-  background: #e8f5ec;
+  border: 1rpx solid rgba(35, 122, 75, 0.14);
+  border-radius: 22rpx;
+  background: linear-gradient(135deg, #e8f5ec, #f8fbf4);
   color: #35513b;
   font-size: 24rpx;
   line-height: 1.5;
 }
 
 .icon {
+  position: relative;
   display: flex;
   width: 54rpx;
   height: 54rpx;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #ffffff;
-  color: #145535;
-  font-weight: 800;
+  box-shadow: 0 10rpx 22rpx rgba(35, 122, 75, 0.08);
+}
+
+.farmer-icon::before {
+  position: absolute;
+  top: 12rpx;
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  background: #237a4b;
+  content: '';
+}
+
+.farmer-icon::after {
+  position: absolute;
+  bottom: 11rpx;
+  width: 30rpx;
+  height: 16rpx;
+  border-radius: 18rpx 18rpx 8rpx 8rpx;
+  background: #ffb84d;
+  content: '';
 }
 
 .field {
@@ -183,7 +216,7 @@ function selectPayType(event: { detail: { value: number | string } }) {
 .picker-value {
   width: 100%;
   border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
@@ -202,14 +235,73 @@ function selectPayType(event: { detail: { value: number | string } }) {
   line-height: 1.45;
 }
 
+.scan-group {
+  display: flex;
+  gap: 12rpx;
+}
+
 .scan-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
   padding: 12rpx 18rpx;
   border: 0;
   border-radius: 999rpx;
-  background: #eaf2fb;
-  color: #2563a8;
+  background: #edf7ff;
+  color: #1d5d99;
   font-size: 24rpx;
   font-weight: 760;
   line-height: 1.2;
+}
+
+.mini-icon {
+  position: relative;
+  display: inline-block;
+  width: 24rpx;
+  height: 24rpx;
+}
+
+.camera-mini::before {
+  position: absolute;
+  left: 2rpx;
+  top: 6rpx;
+  width: 18rpx;
+  height: 14rpx;
+  border: 3rpx solid #1d5d99;
+  border-radius: 5rpx;
+  content: '';
+}
+
+.camera-mini::after {
+  position: absolute;
+  left: 9rpx;
+  top: 10rpx;
+  width: 5rpx;
+  height: 5rpx;
+  border: 3rpx solid #1d5d99;
+  border-radius: 50%;
+  content: '';
+}
+
+.card-mini::before {
+  position: absolute;
+  left: 1rpx;
+  top: 5rpx;
+  width: 20rpx;
+  height: 14rpx;
+  border: 3rpx solid #1d5d99;
+  border-radius: 5rpx;
+  content: '';
+}
+
+.card-mini::after {
+  position: absolute;
+  left: 6rpx;
+  top: 14rpx;
+  width: 12rpx;
+  height: 3rpx;
+  border-radius: 999rpx;
+  background: #1d5d99;
+  content: '';
 }
 </style>

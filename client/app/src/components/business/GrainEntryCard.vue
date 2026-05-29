@@ -5,7 +5,10 @@
         <text class="card-title">{{ title }}</text>
         <text class="card-meta">{{ entry.place }}</text>
       </view>
-      <text class="badge">{{ getEntryPrice(entry) }}</text>
+      <text class="badge">
+        <text class="price-icon"></text>
+        <text>{{ getEntryPrice(entry) }}</text>
+      </text>
     </view>
     <view class="data-grid">
       <view class="kv">
@@ -78,6 +81,9 @@ const title = computed(() => `${pickTime(props.entry.buyTime)} · ${props.entry.
 }
 
 .badge {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
   padding: 10rpx 16rpx;
   border-radius: 999rpx;
   background: #e8f5ec;
@@ -85,6 +91,25 @@ const title = computed(() => `${pickTime(props.entry.buyTime)} · ${props.entry.
   font-size: 22rpx;
   font-weight: 760;
   white-space: nowrap;
+}
+
+.price-icon {
+  position: relative;
+  width: 18rpx;
+  height: 18rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 50%;
+}
+
+.price-icon::after {
+  position: absolute;
+  left: 6rpx;
+  top: -8rpx;
+  width: 3rpx;
+  height: 28rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+  content: '';
 }
 
 .data-grid {
@@ -96,7 +121,7 @@ const title = computed(() => `${pickTime(props.entry.buyTime)} · ${props.entry.
 
 .kv {
   padding: 20rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #f8faf6;
 }
 

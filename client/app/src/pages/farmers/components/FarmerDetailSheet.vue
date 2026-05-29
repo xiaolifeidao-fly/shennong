@@ -3,7 +3,9 @@
     <view class="sheet">
       <view class="sheet-head">
         <text class="sheet-title">{{ editing ? '编辑农户资料' : '农户当天汇总与明细' }}</text>
-        <button class="close" @click="$emit('close')">×</button>
+        <button class="close" @click="$emit('close')">
+          <text class="close-icon"></text>
+        </button>
       </view>
 
       <view v-if="editing" class="card form-card">
@@ -31,7 +33,10 @@
           <text class="label">收款人/开户行</text>
           <input v-model="editForm.bankName" class="input" />
         </view>
-        <button class="primary-btn" @click="saveFarmer">保存农户资料</button>
+        <button class="primary-btn" @click="saveFarmer">
+          <text class="check-mini"></text>
+          <text>保存农户资料</text>
+        </button>
       </view>
 
       <template v-else>
@@ -60,8 +65,14 @@
             <view class="photo">现场凭证</view>
           </view>
           <view class="inline-actions">
-            <button class="secondary-btn" @click="startEdit">编辑农户资料</button>
-            <button class="primary-btn" @click="$emit('entry', farmer.id)">给该农户录粮</button>
+            <button class="secondary-btn" @click="startEdit">
+              <text class="edit-mini"></text>
+              <text>编辑资料</text>
+            </button>
+            <button class="primary-btn" @click="$emit('entry', farmer.id)">
+              <text class="plus-mini"></text>
+              <text>录粮</text>
+            </button>
           </view>
         </view>
 
@@ -163,15 +174,17 @@ function saveFarmer() {
   display: flex;
   align-items: flex-end;
   background: rgba(15, 22, 16, 0.42);
+  animation: fade-in 0.2s ease both;
 }
 
 .sheet {
   width: 100%;
   max-height: 86vh;
   padding: 28rpx 28rpx calc(36rpx + env(safe-area-inset-bottom));
-  border-radius: 8rpx 8rpx 0 0;
-  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  background: #f8fbf6;
   overflow: auto;
+  animation: sheet-up 0.28s ease both;
 }
 
 .sheet-head,
@@ -194,14 +207,16 @@ function saveFarmer() {
 }
 
 .close {
+  display: flex;
   width: 72rpx;
   height: 72rpx;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 50%;
-  background: #f2f4f0;
+  background: #ffffff;
   color: #384338;
-  font-size: 40rpx;
-  line-height: 72rpx;
+  box-shadow: 0 10rpx 24rpx rgba(31, 47, 31, 0.08);
 }
 
 .farmer-card,
@@ -298,7 +313,7 @@ function saveFarmer() {
 .photo {
   min-width: 0;
   padding: 20rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #f8faf6;
 }
 
@@ -338,9 +353,13 @@ function saveFarmer() {
 
 .primary-btn,
 .secondary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
   flex: 1;
   min-height: 84rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   font-size: 28rpx;
   font-weight: 800;
   line-height: 84rpx;
@@ -348,8 +367,9 @@ function saveFarmer() {
 
 .primary-btn {
   border: 1rpx solid #237a4b;
-  background: #237a4b;
+  background: linear-gradient(135deg, #237a4b, #145535);
   color: #ffffff;
+  box-shadow: 0 14rpx 28rpx rgba(35, 122, 75, 0.18);
 }
 
 .secondary-btn {
@@ -379,7 +399,7 @@ function saveFarmer() {
 .textarea {
   width: 100%;
   border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
@@ -393,5 +413,107 @@ function saveFarmer() {
 .textarea {
   min-height: 148rpx;
   padding: 22rpx 24rpx;
+}
+
+.close-icon,
+.check-mini,
+.edit-mini,
+.plus-mini {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.close-icon {
+  width: 30rpx;
+  height: 30rpx;
+}
+
+.close-icon::before,
+.close-icon::after {
+  position: absolute;
+  left: 13rpx;
+  top: 1rpx;
+  width: 4rpx;
+  height: 28rpx;
+  border-radius: 999rpx;
+  background: #384338;
+  content: '';
+}
+
+.close-icon::before {
+  transform: rotate(45deg);
+}
+
+.close-icon::after {
+  transform: rotate(-45deg);
+}
+
+.check-mini {
+  width: 28rpx;
+  height: 18rpx;
+  border-left: 5rpx solid currentColor;
+  border-bottom: 5rpx solid currentColor;
+  transform: rotate(-45deg) translateY(-3rpx);
+}
+
+.edit-mini {
+  width: 26rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+  transform: rotate(-35deg);
+}
+
+.edit-mini::after {
+  position: absolute;
+  right: -5rpx;
+  top: -3rpx;
+  width: 8rpx;
+  height: 14rpx;
+  border-radius: 4rpx;
+  background: #ffb84d;
+  content: '';
+}
+
+.plus-mini {
+  width: 26rpx;
+  height: 26rpx;
+}
+
+.plus-mini::before,
+.plus-mini::after {
+  position: absolute;
+  left: 11rpx;
+  top: 3rpx;
+  width: 4rpx;
+  height: 20rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+  content: '';
+}
+
+.plus-mini::after {
+  transform: rotate(90deg);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(80rpx);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 </style>

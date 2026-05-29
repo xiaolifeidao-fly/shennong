@@ -15,7 +15,7 @@ import {
   listGrainPurchaseEntries,
   updateGrainPurchaseEntry,
 } from '@/services/grainPurchase'
-import { recognizeGrainCard } from '@/services/grainOcr'
+import { recognizeGrainCard, type IDCardSide } from '@/services/grainOcr'
 import { DEFAULT_GRAIN_STATION_ID } from '@/config/app'
 import type {
   FarmerProfile,
@@ -551,8 +551,9 @@ export const useGrainStore = defineStore('grain', {
         bankName: '',
       }
     },
-    async recognizeIdCard(filePath: string, draft: GrainEntryDraft) {
-      const result = await recognizeGrainCard(filePath, 'id-card')
+    async recognizeIdCard(filePath: string, draft: GrainEntryDraft, side: IDCardSide = 'front') {
+      const farmerId = draft.farmerId !== 'new' ? draft.farmerId : undefined
+      const result = await recognizeGrainCard(filePath, 'id-card', { farmerId, imageSide: side })
       return {
         farmerName: result.name || draft.farmerName,
         idNumber: result.idNumber || draft.idNumber,
@@ -561,7 +562,8 @@ export const useGrainStore = defineStore('grain', {
       }
     },
     async recognizeBankCard(filePath: string, draft: GrainEntryDraft) {
-      const result = await recognizeGrainCard(filePath, 'bank-card')
+      const farmerId = draft.farmerId !== 'new' ? draft.farmerId : undefined
+      const result = await recognizeGrainCard(filePath, 'bank-card', { farmerId })
       return {
         bankNumber: result.bankNumber || draft.bankNumber,
         bankName: result.bankName || draft.bankName,

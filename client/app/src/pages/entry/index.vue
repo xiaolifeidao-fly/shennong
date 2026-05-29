@@ -18,8 +18,14 @@
         <view class="kv"><text>付款方式</text><text class="value">{{ lastSavedEntry.payType }}</text></view>
       </view>
       <view class="saved-actions">
-        <button class="secondary-btn" @click="editSavedEntry">查看/修改这笔</button>
-        <button class="primary-btn" @click="startAnotherEntry">继续录入</button>
+        <button class="secondary-btn" @click="editSavedEntry">
+          <text class="edit-mini"></text>
+          <text>查看/修改</text>
+        </button>
+        <button class="primary-btn" @click="startAnotherEntry">
+          <text class="plus-mini"></text>
+          <text>继续录入</text>
+        </button>
       </view>
     </view>
     <view class="card history-card">
@@ -33,7 +39,10 @@
       </picker>
       <view v-if="editingEntryId" class="edit-strip">
         <text>正在修改已提交记录，保存后会同步服务端并保留修改快照。</text>
-        <button class="clear-edit" @click="clearEditing">改为新增</button>
+        <button class="clear-edit" @click="clearEditing">
+          <text class="plus-mini dark"></text>
+          <text>新增</text>
+        </button>
       </view>
     </view>
 
@@ -42,7 +51,8 @@
       :farmers="grainStore.farmers"
       :preset="grainStore.preset"
       @farmer-change="handleFarmerChange"
-      @scan-id="applyIdScan"
+      @scan-id-front="() => applyIdScan('front')"
+      @scan-id-back="() => applyIdScan('back')"
       @scan-bank="applyBankScan"
     />
 
@@ -159,27 +169,40 @@ function clearEditing() {
   hasInitializedDraft.value = true
 }
 
-async function takeCameraPhoto() {
-  const result = await uni.chooseImage({
-    count: 1,
-    sizeType: ['compressed'],
-    sourceType: ['camera'],
+async function chooseCardPhoto(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    uni.showActionSheet({
+      itemList: ['拍照', '从相册选择'],
+      success: (res) => {
+        const sourceType: Array<'camera' | 'album'> = res.tapIndex === 0 ? ['camera'] : ['album']
+        uni.chooseImage({
+          count: 1,
+          sizeType: ['compressed'],
+          sourceType,
+          success: (imgRes) => {
+            const filePath = imgRes.tempFilePaths?.[0]
+            if (!filePath) {
+              reject(new Error('未获取到照片'))
+              return
+            }
+            resolve(filePath)
+          },
+          fail: (err) => reject(new Error(err.errMsg || '取消选择')),
+        })
+      },
+      fail: (err) => reject(new Error(err.errMsg || '取消')),
+    })
   })
-  const filePath = result.tempFilePaths?.[0]
-  if (!filePath) {
-    throw new Error('未获取到照片')
-  }
-  return filePath
 }
 
-async function applyIdScan() {
+async function applyIdScan(side: 'front' | 'back' = 'front') {
   try {
-    const filePath = await takeCameraPhoto()
-    draft.value = { ...draft.value, ...(await grainStore.recognizeIdCard(filePath, draft.value)) }
-    uni.showToast({ title: '身份证识别完成', icon: 'success' })
+    const filePath = await chooseCardPhoto()
+    draft.value = { ...draft.value, ...(await grainStore.recognizeIdCard(filePath, draft.value, side)) }
+    uni.showToast({ title: side === 'front' ? '身份证正面识别完成' : '身份证背面识别完成', icon: 'success' })
   } catch (error) {
     const message = error instanceof Error ? error.message : '身份证识别失败'
-    if (!message.includes('cancel')) {
+    if (!message.includes('cancel') && !message.includes('取消')) {
       uni.showToast({ title: message, icon: 'none' })
     }
   }
@@ -187,12 +210,12 @@ async function applyIdScan() {
 
 async function applyBankScan() {
   try {
-    const filePath = await takeCameraPhoto()
+    const filePath = await chooseCardPhoto()
     draft.value = { ...draft.value, ...(await grainStore.recognizeBankCard(filePath, draft.value)) }
     uni.showToast({ title: '银行卡识别完成', icon: 'success' })
   } catch (error) {
     const message = error instanceof Error ? error.message : '银行卡识别失败'
-    if (!message.includes('cancel')) {
+    if (!message.includes('cancel') && !message.includes('取消')) {
       uni.showToast({ title: message, icon: 'none' })
     }
   }
@@ -330,13 +353,13 @@ function validateDraft(value: GrainEntryDraft) {
 }
 
 .history-card {
-  padding: 28rpx;
+  padding: 30rpx;
 }
 
 .saved-card {
-  padding: 28rpx;
+  padding: 30rpx;
   border: 1rpx solid rgba(35, 122, 75, 0.18);
-  background: #f4fbf5;
+  background: linear-gradient(135deg, #f4fbf5, #ffffff);
 }
 
 .saved-head,
@@ -367,7 +390,7 @@ function validateDraft(value: GrainEntryDraft) {
 .saved-badge {
   flex: 0 0 auto;
   padding: 10rpx 16rpx;
-  border-radius: 8rpx;
+  border-radius: 999rpx;
   background: #ffffff;
   color: #145535;
   font-size: 24rpx;
@@ -385,7 +408,7 @@ function validateDraft(value: GrainEntryDraft) {
   min-width: 0;
   padding: 18rpx;
   border-radius: 8rpx;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .kv text {
@@ -408,9 +431,13 @@ function validateDraft(value: GrainEntryDraft) {
 
 .primary-btn,
 .secondary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
   flex: 1;
   min-height: 78rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   font-size: 26rpx;
   font-weight: 800;
   line-height: 78rpx;
@@ -418,8 +445,9 @@ function validateDraft(value: GrainEntryDraft) {
 
 .primary-btn {
   border: 1rpx solid #237a4b;
-  background: #237a4b;
+  background: linear-gradient(135deg, #237a4b, #145535);
   color: #ffffff;
+  box-shadow: 0 14rpx 28rpx rgba(35, 122, 75, 0.18);
 }
 
 .secondary-btn {
@@ -446,7 +474,7 @@ function validateDraft(value: GrainEntryDraft) {
   height: 88rpx;
   padding: 0 24rpx;
   border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
@@ -460,7 +488,7 @@ function validateDraft(value: GrainEntryDraft) {
   gap: 20rpx;
   padding: 20rpx;
   margin-top: 20rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #fff7ed;
   color: #8a4b11;
   font-size: 24rpx;
@@ -469,21 +497,76 @@ function validateDraft(value: GrainEntryDraft) {
 .loading-strip {
   padding: 18rpx 22rpx;
   margin-bottom: 18rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #f6f8f4;
   color: #667266;
   font-size: 24rpx;
 }
 
 .clear-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
   flex: 0 0 auto;
-  min-width: 148rpx;
+  min-width: 118rpx;
   height: 64rpx;
   border: 1rpx solid #fed7aa;
-  border-radius: 8rpx;
+  border-radius: 16rpx;
   background: #ffffff;
   color: #9a3412;
   font-size: 24rpx;
   line-height: 64rpx;
+}
+
+.edit-mini,
+.plus-mini {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.edit-mini {
+  width: 26rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #145535;
+  transform: rotate(-35deg);
+}
+
+.edit-mini::after {
+  position: absolute;
+  right: -5rpx;
+  top: -3rpx;
+  width: 8rpx;
+  height: 14rpx;
+  border-radius: 4rpx;
+  background: #ffb84d;
+  content: '';
+}
+
+.plus-mini {
+  width: 26rpx;
+  height: 26rpx;
+}
+
+.plus-mini::before,
+.plus-mini::after {
+  position: absolute;
+  left: 11rpx;
+  top: 3rpx;
+  width: 4rpx;
+  height: 20rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+  content: '';
+}
+
+.plus-mini::after {
+  transform: rotate(90deg);
+}
+
+.plus-mini.dark {
+  color: #9a3412;
 }
 </style>

@@ -1,6 +1,9 @@
 <template>
   <view class="hero">
-    <text class="eyebrow">今日我的收粮</text>
+    <view class="hero-top">
+      <text class="eyebrow">今日我的收粮</text>
+      <text class="spark-icon"></text>
+    </view>
     <text class="title">已录入 {{ entryCount }} 笔，合计 {{ totalTon }} 吨</text>
     <view class="hero-grid">
       <view class="hero-stat">
@@ -34,34 +37,79 @@ const amountText = computed(() => formatAmount(props.totalAmount))
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 36rpx;
-  border-radius: 8rpx;
-  background: linear-gradient(135deg, rgba(21, 89, 54, 0.97), rgba(43, 119, 73, 0.91)), #237a4b;
-  box-shadow: 0 14rpx 34rpx rgba(31, 47, 31, 0.08);
+  padding: 40rpx;
+  border-radius: 32rpx;
+  background:
+    radial-gradient(circle at 88% 20%, rgba(255, 207, 108, 0.44), transparent 160rpx),
+    linear-gradient(135deg, rgba(19, 74, 52, 0.98), rgba(34, 132, 83, 0.94) 58%, rgba(110, 147, 65, 0.96)),
+    #237a4b;
+  box-shadow: 0 24rpx 54rpx rgba(31, 72, 45, 0.2);
+  animation: hero-in 0.48s ease both;
 }
 
 .hero::after {
   position: absolute;
-  right: -84rpx;
-  bottom: -104rpx;
-  width: 336rpx;
-  height: 336rpx;
-  border: 48rpx solid rgba(255, 255, 255, 0.12);
-  border-radius: 50%;
+  right: -72rpx;
+  bottom: -96rpx;
+  width: 310rpx;
+  height: 310rpx;
+  border: 42rpx solid rgba(255, 255, 255, 0.14);
+  border-radius: 40%;
   content: '';
+  transform: rotate(18deg);
 }
 
 .eyebrow,
 .title,
+.hero-top,
 .hero-grid {
   position: relative;
   z-index: 1;
 }
 
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .eyebrow {
   display: block;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.84);
   font-size: 24rpx;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.spark-icon {
+  position: relative;
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.spark-icon::before,
+.spark-icon::after {
+  position: absolute;
+  background: #ffcf6c;
+  content: '';
+}
+
+.spark-icon::before {
+  left: 25rpx;
+  top: 10rpx;
+  width: 5rpx;
+  height: 34rpx;
+  border-radius: 999rpx;
+}
+
+.spark-icon::after {
+  left: 10rpx;
+  top: 25rpx;
+  width: 34rpx;
+  height: 5rpx;
+  border-radius: 999rpx;
 }
 
 .title {
@@ -69,7 +117,7 @@ const amountText = computed(() => formatAmount(props.totalAmount))
   max-width: 620rpx;
   margin-top: 16rpx;
   color: #ffffff;
-  font-size: 50rpx;
+  font-size: 52rpx;
   font-weight: 800;
   line-height: 1.16;
 }
@@ -82,10 +130,11 @@ const amountText = computed(() => formatAmount(props.totalAmount))
 }
 
 .hero-stat {
-  padding: 24rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.18);
-  border-radius: 8rpx;
-  background: rgba(255, 255, 255, 0.14);
+  padding: 26rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.24);
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(14rpx);
 }
 
 .stat-value,
@@ -103,5 +152,17 @@ const amountText = computed(() => formatAmount(props.totalAmount))
   margin-top: 10rpx;
   color: rgba(255, 255, 255, 0.82);
   font-size: 24rpx;
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(22rpx) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

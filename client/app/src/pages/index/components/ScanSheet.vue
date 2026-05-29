@@ -3,11 +3,13 @@
     <view class="sheet">
       <view class="sheet-head">
         <text class="sheet-title">{{ title }}</text>
-        <button class="close" @click="$emit('close')">×</button>
+        <button class="close" @click="$emit('close')">
+          <text class="close-icon"></text>
+        </button>
       </view>
 
       <view class="notice">
-        <text class="notice-icon">{{ type === 'bank' ? '付' : '证' }}</text>
+        <text class="notice-icon" :class="type === 'bank' ? 'bank-icon' : 'id-icon'"></text>
         <text>{{ description }}</text>
       </view>
 
@@ -68,15 +70,17 @@ const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '收�
   display: flex;
   align-items: flex-end;
   background: rgba(15, 22, 16, 0.42);
+  animation: fade-in 0.2s ease both;
 }
 
 .sheet {
   width: 100%;
   max-height: 86vh;
   padding: 28rpx 28rpx calc(36rpx + env(safe-area-inset-bottom));
-  border-radius: 8rpx 8rpx 0 0;
-  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  background: #f8fbf6;
   overflow: auto;
+  animation: sheet-up 0.28s ease both;
 }
 
 .sheet-head {
@@ -94,14 +98,16 @@ const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '收�
 }
 
 .close {
+  display: flex;
   width: 72rpx;
   height: 72rpx;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 50%;
-  background: #f2f4f0;
+  background: #ffffff;
   color: #384338;
-  font-size: 40rpx;
-  line-height: 72rpx;
+  box-shadow: 0 10rpx 24rpx rgba(31, 47, 31, 0.08);
 }
 
 .notice {
@@ -109,25 +115,24 @@ const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '收�
   gap: 20rpx;
   align-items: flex-start;
   padding: 24rpx;
-  border: 1rpx solid #f4e1bd;
-  border-radius: 8rpx;
-  background: #fffaf0;
+  border: 1rpx solid rgba(255, 184, 77, 0.32);
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #fffaf0, #f5fbef);
   color: #56614f;
   font-size: 24rpx;
   line-height: 1.5;
 }
 
 .notice-icon {
+  position: relative;
   display: flex;
   width: 54rpx;
   height: 54rpx;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #e8f5ec;
-  color: #145535;
-  font-weight: 800;
 }
 
 .result-card {
@@ -146,7 +151,7 @@ const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '收�
 .photo {
   min-width: 0;
   padding: 20rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #f8faf6;
 }
 
@@ -178,5 +183,90 @@ const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '收�
   color: #48604e;
   font-size: 24rpx;
   text-align: center;
+}
+
+.close-icon {
+  position: relative;
+  width: 30rpx;
+  height: 30rpx;
+}
+
+.close-icon::before,
+.close-icon::after {
+  position: absolute;
+  left: 13rpx;
+  top: 1rpx;
+  width: 4rpx;
+  height: 28rpx;
+  border-radius: 999rpx;
+  background: #384338;
+  content: '';
+}
+
+.close-icon::before {
+  transform: rotate(45deg);
+}
+
+.close-icon::after {
+  transform: rotate(-45deg);
+}
+
+.id-icon::before {
+  width: 34rpx;
+  height: 24rpx;
+  border: 4rpx solid #145535;
+  border-radius: 8rpx;
+  content: '';
+}
+
+.id-icon::after {
+  position: absolute;
+  left: 20rpx;
+  top: 31rpx;
+  width: 22rpx;
+  height: 4rpx;
+  border-radius: 999rpx;
+  background: #ffb84d;
+  content: '';
+}
+
+.bank-icon::before {
+  width: 32rpx;
+  height: 24rpx;
+  border: 4rpx solid #145535;
+  border-top-width: 10rpx;
+  border-radius: 8rpx;
+  content: '';
+}
+
+.bank-icon::after {
+  position: absolute;
+  right: 14rpx;
+  bottom: 14rpx;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #ffb84d;
+  content: '';
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(80rpx);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 </style>

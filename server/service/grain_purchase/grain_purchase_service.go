@@ -484,9 +484,11 @@ func grainBusinessLocation() *time.Location {
 
 func decryptDailySummaryFarmerFields(summaries []*grainPurchaseDTO.GrainFarmerDailySummaryDTO) error {
 	for _, summary := range summaries {
-		name, idNumber, bankNumber, bankName, err := grainFarmerService.DecryptFarmerSensitiveValues(
+		name, idNumber, phone, address, bankNumber, bankName, err := grainFarmerService.DecryptFarmerProfileValues(
 			summary.FarmerName,
 			summary.FarmerIDNumber,
+			summary.FarmerPhone,
+			summary.FarmerAddress,
 			summary.BankNumber,
 			summary.BankName,
 		)
@@ -495,6 +497,8 @@ func decryptDailySummaryFarmerFields(summaries []*grainPurchaseDTO.GrainFarmerDa
 		}
 		summary.FarmerName = name
 		summary.FarmerIDNumber = idNumber
+		summary.FarmerPhone = phone
+		summary.FarmerAddress = address
 		summary.BankNumber = bankNumber
 		summary.BankName = bankName
 	}
@@ -503,9 +507,11 @@ func decryptDailySummaryFarmerFields(summaries []*grainPurchaseDTO.GrainFarmerDa
 
 func decryptSnapshotFarmerFields(entities []*grainPurchaseRepository.GrainPurchaseEntrySnapshot) error {
 	for _, entity := range entities {
-		name, idNumber, bankNumber, bankName, err := grainFarmerService.DecryptFarmerSensitiveValues(
+		name, idNumber, phone, address, bankNumber, bankName, err := grainFarmerService.DecryptFarmerProfileValues(
 			entity.FarmerName,
 			entity.FarmerIDNumber,
+			entity.FarmerPhone,
+			entity.FarmerAddress,
 			entity.FarmerBankNumber,
 			entity.FarmerBankName,
 		)
@@ -514,6 +520,8 @@ func decryptSnapshotFarmerFields(entities []*grainPurchaseRepository.GrainPurcha
 		}
 		entity.FarmerName = name
 		entity.FarmerIDNumber = idNumber
+		entity.FarmerPhone = phone
+		entity.FarmerAddress = address
 		entity.FarmerBankNumber = bankNumber
 		entity.FarmerBankName = bankName
 	}

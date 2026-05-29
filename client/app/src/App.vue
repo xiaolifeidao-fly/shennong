@@ -27,7 +27,7 @@ uni.$on('auth:expired', () => {
 <style lang="scss">
 page {
   min-height: 100%;
-  background: #f5f7f3;
+  background: #eef4ed;
   color: #172018;
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
@@ -42,12 +42,27 @@ textarea {
 
 button {
   margin: 0;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+button::after {
+  border: 0;
+}
+
+button:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 .page {
   min-height: 100vh;
   padding: 32rpx 28rpx calc(120rpx + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(35, 122, 75, 0.12), rgba(245, 247, 243, 0) 320rpx), #f5f7f3;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(255, 186, 73, 0.2), transparent 260rpx),
+    radial-gradient(circle at 88% 8%, rgba(35, 122, 75, 0.18), transparent 300rpx),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 244, 237, 0) 380rpx),
+    #eef4ed;
+  animation: page-rise 0.38s ease both;
 }
 
 .section {
@@ -55,9 +70,21 @@ button {
 }
 
 .card {
-  border: 1rpx solid rgba(226, 232, 221, 0.9);
-  border-radius: 8rpx;
-  background: #ffffff;
-  box-shadow: 0 8rpx 22rpx rgba(31, 47, 31, 0.045);
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18rpx 44rpx rgba(31, 47, 31, 0.08);
+}
+
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

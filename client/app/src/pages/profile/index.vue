@@ -1,14 +1,19 @@
 <template>
   <view class="page profile-page">
     <view class="header">
-      <text class="title">完善业务员资料</text>
-      <text class="subtitle">微信登录只绑定身份，昵称、头像和手机号需要你主动授权或填写。</text>
+      <text class="title">个人信息</text>
+      <text class="subtitle">可修改昵称、头像、姓名和手机号。</text>
     </view>
 
     <view class="card profile-card">
       <button class="avatar-button" open-type="chooseAvatar" @chooseavatar="handleChooseAvatar">
         <image v-if="form.wxAvatar" class="avatar-img" :src="form.wxAvatar" mode="aspectFill" />
-        <text v-else class="avatar-placeholder">头像</text>
+        <text v-else class="avatar-placeholder">
+          <text class="camera-icon"></text>
+        </text>
+        <text class="avatar-badge">
+          <text class="camera-icon small"></text>
+        </text>
       </button>
 
       <view class="field">
@@ -25,12 +30,21 @@
         <text class="label">手机号</text>
         <view class="phone-row">
           <input v-model="form.phone" class="input" placeholder="授权后自动填入，也可手动输入" />
-          <button class="phone-btn" open-type="getPhoneNumber" @getphonenumber="handleGetPhoneNumber">授权</button>
+          <button class="phone-btn icon-text-btn" open-type="getPhoneNumber" @getphonenumber="handleGetPhoneNumber">
+            <text class="phone-icon"></text>
+            <text>授权</text>
+          </button>
         </view>
       </view>
 
-      <button class="submit" :loading="submitting" @click="saveProfile">保存并进入</button>
-      <button class="skip" @click="goHome">暂时跳过</button>
+      <button class="submit icon-text-btn" :loading="submitting" @click="saveProfile">
+        <text class="check-icon"></text>
+        <text>保存</text>
+      </button>
+      <button class="skip icon-text-btn" @click="goMine">
+        <text class="back-icon"></text>
+        <text>返回我的</text>
+      </button>
     </view>
   </view>
 </template>
@@ -112,7 +126,7 @@ async function saveProfile() {
       wxAvatar: form.wxAvatar,
     })
     uni.showToast({ title: '资料已保存', icon: 'success' })
-    goHome()
+    goMine()
   } catch (error) {
     uni.showToast({
       title: error instanceof Error ? error.message : '保存失败',
@@ -123,8 +137,8 @@ async function saveProfile() {
   }
 }
 
-function goHome() {
-  uni.switchTab({ url: '/pages/index/index' })
+function goMine() {
+  uni.switchTab({ url: '/pages/mine/index' })
 }
 </script>
 
@@ -162,6 +176,7 @@ function goHome() {
 }
 
 .avatar-button {
+  position: relative;
   display: flex;
   width: 132rpx;
   height: 132rpx;
@@ -169,9 +184,16 @@ function goHome() {
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: 8rpx;
-  background: #e8f5ec;
+  border-radius: 30rpx;
+  background: linear-gradient(135deg, #e8f5ec, #fff5df);
   overflow: hidden;
+}
+
+.avatar-button::after,
+.phone-btn::after,
+.submit::after,
+.skip::after {
+  border: 0;
 }
 
 .avatar-img {
@@ -180,9 +202,26 @@ function goHome() {
 }
 
 .avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #145535;
   font-size: 28rpx;
   font-weight: 800;
+}
+
+.avatar-badge {
+  position: absolute;
+  right: 10rpx;
+  bottom: 10rpx;
+  display: flex;
+  width: 42rpx;
+  height: 42rpx;
+  align-items: center;
+  justify-content: center;
+  border: 3rpx solid #ffffff;
+  border-radius: 50%;
+  background: #237a4b;
 }
 
 .field {
@@ -202,7 +241,7 @@ function goHome() {
   height: 88rpx;
   padding: 0 24rpx;
   border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
@@ -217,16 +256,24 @@ function goHome() {
 .phone-btn,
 .submit,
 .skip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
   min-height: 88rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   font-size: 28rpx;
   font-weight: 800;
   line-height: 88rpx;
 }
 
+.icon-text-btn {
+  padding: 0 24rpx;
+}
+
 .phone-btn {
-  border: 0;
-  background: #eaf2fb;
+  border: 1rpx solid #d6e8fb;
+  background: #f3f8ff;
   color: #2563a8;
 }
 
@@ -234,8 +281,9 @@ function goHome() {
   width: 100%;
   margin-top: 36rpx;
   border: 1rpx solid #237a4b;
-  background: #237a4b;
+  background: linear-gradient(135deg, #237a4b, #145535);
   color: #ffffff;
+  box-shadow: 0 16rpx 30rpx rgba(35, 122, 75, 0.18);
 }
 
 .skip {
@@ -244,5 +292,121 @@ function goHome() {
   border: 1rpx solid #e2e8dd;
   background: #ffffff;
   color: #445044;
+}
+
+.camera-icon,
+.phone-icon,
+.check-icon,
+.back-icon {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.camera-icon {
+  width: 44rpx;
+  height: 32rpx;
+  border: 4rpx solid #145535;
+  border-radius: 8rpx;
+}
+
+.camera-icon::before {
+  position: absolute;
+  left: 8rpx;
+  top: -11rpx;
+  width: 18rpx;
+  height: 8rpx;
+  border-radius: 6rpx 6rpx 0 0;
+  background: #145535;
+  content: '';
+}
+
+.camera-icon::after {
+  position: absolute;
+  left: 13rpx;
+  top: 7rpx;
+  width: 10rpx;
+  height: 10rpx;
+  border: 4rpx solid #145535;
+  border-radius: 50%;
+  content: '';
+}
+
+.camera-icon.small {
+  width: 22rpx;
+  height: 16rpx;
+  border-width: 3rpx;
+  border-color: #ffffff;
+}
+
+.camera-icon.small::before {
+  left: 4rpx;
+  top: -7rpx;
+  width: 10rpx;
+  height: 5rpx;
+  background: #ffffff;
+}
+
+.camera-icon.small::after {
+  left: 6rpx;
+  top: 3rpx;
+  width: 5rpx;
+  height: 5rpx;
+  border-width: 3rpx;
+  border-color: #ffffff;
+}
+
+.phone-icon {
+  width: 22rpx;
+  height: 34rpx;
+  border: 4rpx solid #2563a8;
+  border-radius: 8rpx;
+}
+
+.phone-icon::after {
+  position: absolute;
+  left: 7rpx;
+  bottom: 3rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: 50%;
+  background: #2563a8;
+  content: '';
+}
+
+.check-icon {
+  width: 32rpx;
+  height: 20rpx;
+  border-left: 5rpx solid #ffffff;
+  border-bottom: 5rpx solid #ffffff;
+  transform: rotate(-45deg) translateY(-4rpx);
+}
+
+.back-icon {
+  width: 28rpx;
+  height: 4rpx;
+  border-radius: 99rpx;
+  background: #445044;
+}
+
+.back-icon::before,
+.back-icon::after {
+  position: absolute;
+  left: 0;
+  width: 16rpx;
+  height: 4rpx;
+  border-radius: 99rpx;
+  background: #445044;
+  content: '';
+}
+
+.back-icon::before {
+  top: -5rpx;
+  transform: rotate(-42deg);
+}
+
+.back-icon::after {
+  top: 5rpx;
+  transform: rotate(42deg);
 }
 </style>

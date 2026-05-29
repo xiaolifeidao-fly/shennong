@@ -1,24 +1,13 @@
 <template>
   <view class="page login-page">
     <view class="header">
-      <text class="title">手机号一键登录</text>
-      <text class="subtitle">授权微信绑定手机号后自动登录，并由 app-api 返回后续请求使用的 token。</text>
-    </view>
-
-    <view class="wechat-card">
-      <view class="wechat-icon">微</view>
-      <view class="wechat-copy">
-        <text class="wechat-title">使用微信手机号登录</text>
-        <text class="wechat-desc">点击后会弹出微信手机号授权，允许后自动完成登录。</text>
-      </view>
-      <button class="wechat-login-btn" open-type="getPhoneNumber" :loading="wechatSubmitting" @getphonenumber="handleWechatPhoneLogin">
-        一键登录
-      </button>
-      <button class="plain-login-btn" :disabled="wechatSubmitting" @click="handleWechatLogin">仅微信身份登录</button>
+      <text class="brand-icon"></text>
+      <text class="title">登录</text>
+      <text class="subtitle">使用账号密码登录，或一键登录。</text>
     </view>
 
     <view class="form">
-      <text class="form-title">账号密码备用登录</text>
+      <text class="form-title">账号密码登录</text>
       <wd-input v-model="form.username" label="账号" clearable placeholder="请输入账号" />
       <wd-input
         v-model="form.password"
@@ -28,7 +17,12 @@
         type="password"
         placeholder="请输入密码"
       />
-      <wd-button type="primary" block :loading="submitting" @click="handleLogin">登录</wd-button>
+      <view class="login-actions">
+        <wd-button type="primary" :loading="submitting" @click="handleLogin">登录</wd-button>
+        <button class="quick-login-btn" open-type="getPhoneNumber" :loading="wechatSubmitting" @getphonenumber="handleWechatPhoneLogin">
+          一键登录
+        </button>
+      </view>
     </view>
   </view>
 </template>
@@ -75,32 +69,6 @@ async function handleWechatPhoneLogin(event: GetPhoneNumberEvent) {
   try {
     await userStore.loginWithWechatPhone(code)
     uni.showToast({ title: '登录成功', icon: 'success' })
-    const profile = userStore.profile
-    if (!profile?.wxNickname || profile.wxNickname === '微信用户' || !profile?.wxAvatar) {
-      uni.navigateTo({ url: '/pages/profile/index?from=login' })
-      return
-    }
-    uni.switchTab({ url: '/pages/index/index' })
-  } catch (error) {
-    uni.showToast({
-      title: error instanceof Error ? error.message : '微信登录失败',
-      icon: 'none',
-    })
-  } finally {
-    wechatSubmitting.value = false
-  }
-}
-
-async function handleWechatLogin() {
-  wechatSubmitting.value = true
-  try {
-    await userStore.loginWithWechat()
-    uni.showToast({ title: '登录成功', icon: 'success' })
-    const profile = userStore.profile
-    if (!profile?.phone || !profile?.wxNickname || profile.wxNickname === '微信用户') {
-      uni.navigateTo({ url: '/pages/profile/index?from=login' })
-      return
-    }
     uni.switchTab({ url: '/pages/index/index' })
   } catch (error) {
     uni.showToast({
@@ -142,11 +110,37 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   gap: 36rpx;
-  background: linear-gradient(180deg, rgba(35, 122, 75, 0.12), rgba(245, 247, 243, 0) 320rpx), #f5f7f3;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 184, 77, 0.2), transparent 260rpx),
+    linear-gradient(180deg, rgba(35, 122, 75, 0.12), rgba(245, 247, 243, 0) 320rpx),
+    #eef4ed;
 }
 
 .header {
   padding-top: 48rpx;
+}
+
+.brand-icon {
+  position: relative;
+  display: block;
+  width: 72rpx;
+  height: 72rpx;
+  margin-bottom: 18rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #237a4b, #ffb84d);
+  box-shadow: 0 16rpx 30rpx rgba(35, 122, 75, 0.16);
+}
+
+.brand-icon::before {
+  position: absolute;
+  left: 27rpx;
+  top: 16rpx;
+  width: 18rpx;
+  height: 40rpx;
+  border-radius: 18rpx 18rpx 4rpx 4rpx;
+  background: #ffffff;
+  content: '';
+  transform: rotate(34deg);
 }
 
 .title {
@@ -164,71 +158,8 @@ async function handleLogin() {
   line-height: 1.5;
 }
 
-.wechat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-  padding: 32rpx;
-  border: 1rpx solid rgba(226, 232, 221, 0.9);
-  border-radius: 8rpx;
-  background: #ffffff;
-  box-shadow: 0 8rpx 22rpx rgba(31, 47, 31, 0.045);
-}
-
-.wechat-icon {
-  display: flex;
-  width: 96rpx;
-  height: 96rpx;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8rpx;
-  background: #e8f5ec;
-  color: #145535;
-  font-size: 38rpx;
-  font-weight: 800;
-}
-
-.wechat-title,
-.wechat-desc,
 .form-title {
   display: block;
-}
-
-.wechat-title {
-  color: #172018;
-  font-size: 34rpx;
-  font-weight: 760;
-}
-
-.wechat-desc {
-  margin-top: 8rpx;
-  color: #6d776c;
-  font-size: 26rpx;
-  line-height: 1.5;
-}
-
-.wechat-login-btn {
-  width: 100%;
-  min-height: 88rpx;
-  border: 0;
-  border-radius: 8rpx;
-  background: #237a4b;
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 800;
-  line-height: 88rpx;
-}
-
-.plain-login-btn {
-  width: 100%;
-  min-height: 76rpx;
-  border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
-  background: #ffffff;
-  color: #445044;
-  font-size: 26rpx;
-  font-weight: 700;
-  line-height: 76rpx;
 }
 
 .form-title {
@@ -243,7 +174,27 @@ async function handleLogin() {
   gap: 24rpx;
   padding: 28rpx;
   border: 1rpx solid rgba(226, 232, 221, 0.9);
-  border-radius: 8rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18rpx 44rpx rgba(31, 47, 31, 0.08);
+}
+
+.login-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+}
+
+.quick-login-btn {
+  width: 100%;
+  min-height: 88rpx;
+  padding: 0;
+  border: 1rpx solid #237a4b;
+  border-radius: 18rpx;
   background: #ffffff;
+  color: #237a4b;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 88rpx;
 }
 </style>

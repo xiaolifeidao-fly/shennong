@@ -5,7 +5,10 @@
         <text class="card-title">{{ farmer.name }} · {{ farmer.entryCount }} 笔录入</text>
         <text class="card-meta">{{ metaText }}</text>
       </view>
-      <text class="badge" :class="{ warn: farmer.status === 'missing-bank' }">{{ badgeText }}</text>
+      <text class="badge" :class="{ warn: farmer.status === 'missing-bank' }">
+        <text class="badge-dot"></text>
+        <text>{{ badgeText }}</text>
+      </text>
     </view>
 
     <view class="data-grid">
@@ -51,6 +54,11 @@ const metaText = computed(() => {
 <style lang="scss" scoped>
 .farmer-card {
   padding: 28rpx;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.farmer-card:active {
+  transform: scale(0.985);
 }
 
 .card-head {
@@ -82,6 +90,9 @@ const metaText = computed(() => {
 }
 
 .badge {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
   flex: 0 0 auto;
   padding: 10rpx 16rpx;
   border-radius: 999rpx;
@@ -89,6 +100,13 @@ const metaText = computed(() => {
   color: #145535;
   font-size: 22rpx;
   font-weight: 760;
+}
+
+.badge-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .badge.warn {
@@ -106,7 +124,7 @@ const metaText = computed(() => {
 .kv {
   min-width: 0;
   padding: 20rpx;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #f8faf6;
 }
 

@@ -53,7 +53,7 @@ function farmerName(farmerId: string) {
 }
 
 .head {
-  background: #fbfcfa;
+  background: linear-gradient(90deg, #fbfcfa, #f0f7ef);
 }
 
 .head text {

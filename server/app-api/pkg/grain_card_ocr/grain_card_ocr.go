@@ -3,8 +3,17 @@ package grain_card_ocr
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/oss"
+	"common/middleware/vipper"
+	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
+	farmerImageService "service/farmer_image"
+	ocrResultService "service/ocr_result"
+	ocrResultRepository "service/ocr_result/repository"
+	ocrService "service/ocr"
+	ocrDTO "service/ocr/dto"
 	"strings"
 	"time"
 
@@ -13,26 +22,22 @@ import (
 
 type GrainCardOcrHandler struct {
 	*commonRouter.BaseHandler
-}
-
-type recognizeResult struct {
-	CardType     string `json:"cardType"`
-	Mock         bool   `json:"mock"`
-	OssBucket    string `json:"ossBucket"`
-	OssObjectKey string `json:"ossObjectKey"`
-	OssURL       string `json:"ossUrl"`
-	FileName     string `json:"fileName"`
-	FileSize     int64  `json:"fileSize"`
-	MimeType     string `json:"mimeType"`
-	Name         string `json:"name,omitempty"`
-	IDNumber     string `json:"idNumber,omitempty"`
-	Address      string `json:"address,omitempty"`
-	BankNumber   string `json:"bankNumber,omitempty"`
-	BankName     string `json:"bankName,omitempty"`
+	ocrService          *ocrService.AliyunOCRService
+	farmerImageService  *farmerImageService.FarmerImageService
+	ocrResultService    *ocrResultService.OcrResultService
 }
 
 func NewGrainCardOcrHandler() *GrainCardOcrHandler {
-	return &GrainCardOcrHandler{BaseHandler: &commonRouter.BaseHandler{}}
+	imgSvc := farmerImageService.NewFarmerImageService()
+	ocrResSvc := ocrResultService.NewOcrResultService()
+	_ = imgSvc.EnsureTable()
+	_ = ocrResSvc.EnsureTable()
+	return &GrainCardOcrHandler{
+		BaseHandler:         &commonRouter.BaseHandler{},
+		ocrService:          ocrService.NewAliyunOCRServiceFromConfig(),
+		farmerImageService:  imgSvc,
+		ocrResultService:    ocrResSvc,
+	}
 }
 
 func (h *GrainCardOcrHandler) RegisterHandler(engine *gin.RouterGroup) {
@@ -57,46 +62,142 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	}
 	appUserID, _ := appCtx.CurrentAppUserID(context)
 
-	result := mockRecognizeResult(cardType, file.Filename, file.Size, file.Header.Get("Content-Type"), stationID, appUserID)
-	commonRouter.ToJson(context, result, nil)
+	// 可选参数：农户ID和身份证面（front/back）
+	farmerIDStr := strings.TrimSpace(context.PostForm("farmerId"))
+	imageSide := strings.TrimSpace(context.PostForm("imageSide"))
+	if imageSide == "" {
+		imageSide = "front"
+	}
+
+	openFile, err := file.Open()
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	defer openFile.Close()
+	image, err := io.ReadAll(openFile)
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+
+	objectPath := buildOcrObjectPath(cardType, file.Filename, stationID, appUserID)
+	if err := oss.Put(objectPath, image); err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	expireDuration := time.Duration(vipper.GetInt64("ocr.ossUrlExpireSeconds")) * time.Second
+	if expireDuration <= 0 {
+		expireDuration = 10 * time.Minute
+	}
+	imageURL, err := oss.GetUrl(objectPath, &expireDuration)
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+
+	var result *ocrDTO.RecognizeCardResult
+
+	// 有 farmerId 时启用图片记录 + OCR缓存
+	farmerID := parseUint64(farmerIDStr)
+	if farmerID > 0 {
+		businessID, imgErr := h.resolveBusinessID(farmerID, appUserID, cardType, imageSide, file.Filename, imageURL)
+		if imgErr == nil && businessID != "" {
+			// 命中缓存
+			if cached := h.ocrResultService.GetSuccessResult(businessID); cached != "" {
+				var cachedResult ocrDTO.RecognizeCardResult
+				if json.Unmarshal([]byte(cached), &cachedResult) == nil {
+					cachedResult.OssURL = imageURL
+					if oss.Oss != nil {
+						cachedResult.OssBucket = oss.Oss.BucketName
+						cachedResult.OssObjectKey = oss.Oss.BuildKey(objectPath)
+					}
+					commonRouter.ToJson(context, &cachedResult, nil)
+					return
+				}
+			}
+
+			// 调用OCR
+			result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
+				CardType: cardType,
+				FileName: file.Filename,
+				FileSize: file.Size,
+				MimeType: file.Header.Get("Content-Type"),
+				ImageURL: imageURL,
+			})
+			h.saveOcrResult(businessID, imageURL, result, err)
+		}
+	}
+
+	// 无 farmerId 或图片记录失败时，直接调用OCR（向下兼容）
+	if result == nil && err == nil {
+		result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
+			CardType: cardType,
+			FileName: file.Filename,
+			FileSize: file.Size,
+			MimeType: file.Header.Get("Content-Type"),
+			ImageURL: imageURL,
+		})
+	}
+
+	if result != nil && oss.Oss != nil {
+		result.OssBucket = oss.Oss.BucketName
+		result.OssObjectKey = oss.Oss.BuildKey(objectPath)
+		result.OssURL = imageURL
+	}
+	commonRouter.ToJson(context, result, err)
 }
 
-func mockRecognizeResult(cardType, fileName string, fileSize int64, mimeType string, stationID, appUserID uint64) recognizeResult {
+// resolveBusinessID 查找或创建图片记录，返回业务唯一ID
+func (h *GrainCardOcrHandler) resolveBusinessID(farmerID, appUserID uint64, cardType, imageSide, imageName, ossURL string) (string, error) {
+	if cardType == "id-card" {
+		record, err := h.farmerImageService.FindOrCreateIDCardImage(farmerID, appUserID, imageSide, imageName, ossURL)
+		if err != nil {
+			return "", err
+		}
+		return farmerImageService.IDCardBusinessID(record.Id), nil
+	}
+	record, err := h.farmerImageService.FindOrCreateBankCardImage(farmerID, appUserID, imageName, ossURL)
+	if err != nil {
+		return "", err
+	}
+	return farmerImageService.BankCardBusinessID(record.Id), nil
+}
+
+func (h *GrainCardOcrHandler) saveOcrResult(businessID, ossURL string, result *ocrDTO.RecognizeCardResult, ocrErr error) {
+	status := ocrResultRepository.OcrStatusSuccess
+	resultJSON := ""
+	if ocrErr != nil || result == nil {
+		status = ocrResultRepository.OcrStatusFailed
+	} else {
+		if data, err := json.Marshal(result); err == nil {
+			resultJSON = string(data)
+		}
+	}
+	_ = h.ocrResultService.SaveResult(businessID, ossURL, resultJSON, status)
+}
+
+func buildOcrObjectPath(cardType, fileName string, stationID, appUserID uint64) string {
 	ext := strings.ToLower(filepath.Ext(fileName))
 	if ext == "" {
 		ext = ".jpg"
 	}
 	now := time.Now()
-	objectKey := fmt.Sprintf(
-		"mock/grain-card-ocr/%d/%d/%s/%s%s",
+	return fmt.Sprintf(
+		"grain-card-ocr/%d/%d/%s/%s%s",
 		stationID,
 		appUserID,
 		now.Format("20060102"),
 		now.Format("150405000000000"),
 		ext,
 	)
-	if strings.TrimSpace(mimeType) == "" {
-		mimeType = "image/jpeg"
-	}
+}
 
-	result := recognizeResult{
-		CardType:     cardType,
-		Mock:         true,
-		OssBucket:    "mock-shennong-grain",
-		OssObjectKey: objectKey,
-		OssURL:       "https://mock-oss.local/" + objectKey,
-		FileName:     fileName,
-		FileSize:     fileSize,
-		MimeType:     mimeType,
+func parseUint64(s string) uint64 {
+	if s == "" {
+		return 0
 	}
-	if cardType == "bank-card" {
-		result.BankNumber = "6228480402564890018"
-		result.BankName = "中国农业银行"
-		return result
-	}
-
-	result.Name = "张三"
-	result.IDNumber = "410105199001013215"
-	result.Address = "河南省郑州市中原区示例路100号"
-	return result
+	var v uint64
+	fmt.Sscanf(s, "%d", &v)
+	return v
 }

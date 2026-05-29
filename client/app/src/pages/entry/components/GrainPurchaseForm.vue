@@ -37,17 +37,19 @@
       <text class="label required">收购地点</text>
       <view class="place-row">
         <input v-model="model.place" class="input place-input" placeholder="可手动输入或调用定位回填" @input="handlePlaceInput" />
-        <picker class="place-picker" :value="placeIndex" :range="placeNames" @change="selectPlace">
-          <view class="place-action">常用</view>
-        </picker>
-        <button class="location-btn" @click="$emit('select-current-location')">调用定位</button>
+        <button class="place-action" @click="$emit('select-current-location')">
+          <text class="pin-mini"></text>
+        </button>
       </view>
     </view>
 
     <view class="field">
       <view class="label-row">
         <text class="label">其他材料</text>
-        <button class="scan-btn" @click="chooseMaterials">上传图片</button>
+        <button class="scan-btn" @click="chooseMaterials">
+          <text class="upload-mini"></text>
+          <text>上传</text>
+        </button>
       </view>
       <view class="material-grid">
         <image
@@ -58,12 +60,16 @@
           mode="aspectFill"
           @click="previewMaterial(index)"
         />
-        <button v-if="!model.materialImages.length" class="empty-upload" @click="chooseMaterials">添加身份证补充、票据、现场照片</button>
+        <button v-if="!model.materialImages.length" class="empty-upload" @click="chooseMaterials">
+          <text class="upload-plus"></text>
+          <text>添加身份证补充、票据、现场照片</text>
+        </button>
       </view>
     </view>
 
     <button class="submit" :loading="saving" :disabled="saving" @click="$emit('submit')">
-      {{ saving ? '正在保存...' : editing ? '保存修改并记录' : '保存本次录入' }}
+      <text class="submit-icon"></text>
+      <text>{{ saving ? '正在保存...' : editing ? '保存修改并记录' : '保存本次录入' }}</text>
     </button>
   </view>
 </template>
@@ -92,28 +98,13 @@ const model = computed({
 })
 const priceText = computed(() => calcUnitPrice(Number(model.value.amount), Number(model.value.quantity), model.value.unit))
 const cropNames = computed(() => props.preset.purchaseTypes.length ? props.preset.purchaseTypes.map((item) => item.typeName) : props.preset.crops)
-const placeNames = computed(() => props.preset.purchasePlaces.length ? props.preset.purchasePlaces.map((item) => item.placeName) : props.preset.places)
 const cropIndex = computed(() => Math.max(0, cropNames.value.indexOf(model.value.crop)))
-const placeIndex = computed(() => Math.max(0, placeNames.value.indexOf(model.value.place)))
 
 function selectCrop(event: { detail: { value: number | string } }) {
   const option = props.preset.purchaseTypes[Number(event.detail.value)]
   model.value.purchaseTypeId = option?.id || 0
   model.value.crop = option?.typeName || cropNames.value[Number(event.detail.value)] || model.value.crop
   model.value.unit = option?.unit || model.value.unit || '公斤'
-}
-
-function selectPlace(event: { detail: { value: number | string } }) {
-  const option = props.preset.purchasePlaces[Number(event.detail.value)]
-  model.value.placeId = option?.id || 0
-  model.value.place = option?.placeName || placeNames.value[Number(event.detail.value)] || model.value.place
-  model.value.locationName = option?.placeName || model.value.locationName
-  model.value.locationAddress = option?.address || model.value.locationAddress
-  model.value.longitude = option?.longitude || model.value.longitude
-  model.value.latitude = option?.latitude || model.value.latitude
-  model.value.province = option?.province || model.value.province
-  model.value.city = option?.city || model.value.city
-  model.value.district = option?.district || model.value.district
 }
 
 function handleCropInput() {
@@ -153,7 +144,7 @@ function previewMaterial(index: number) {
 
 <style lang="scss" scoped>
 .form-card {
-  padding: 28rpx;
+  padding: 30rpx;
 }
 
 .field {
@@ -180,7 +171,7 @@ function previewMaterial(index: number) {
   height: 88rpx;
   padding: 0 24rpx;
   border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
@@ -207,43 +198,32 @@ function previewMaterial(index: number) {
   gap: 16rpx;
 }
 
-.place-picker {
-  flex: 0 0 auto;
-}
-
 .place-input {
   min-width: 0;
   flex: 1;
 }
 
 .place-action {
-  width: 116rpx;
+  display: flex;
+  width: 92rpx;
   height: 88rpx;
+  align-items: center;
+  justify-content: center;
   border: 1rpx solid #e2e8dd;
-  border-radius: 8rpx;
+  border-radius: 18rpx;
   background: #ffffff;
-  color: #243027;
-  font-size: 24rpx;
-  font-weight: 760;
-  line-height: 88rpx;
-  text-align: center;
 }
 
-.location-btn,
 .scan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
   flex: 0 0 auto;
   border: 0;
-  background: #eaf2fb;
-  color: #2563a8;
+  background: #edf7ff;
+  color: #1d5d99;
   font-weight: 760;
-}
-
-.location-btn {
-  width: 172rpx;
-  height: 88rpx;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  line-height: 88rpx;
 }
 
 .label-row {
@@ -280,6 +260,10 @@ function previewMaterial(index: number) {
 }
 
 .empty-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
   grid-column: 1 / -1;
   border: 1rpx dashed rgba(35, 122, 75, 0.36);
   background: #f8faf6;
@@ -289,14 +273,86 @@ function previewMaterial(index: number) {
 }
 
 .submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
   width: 100%;
   min-height: 84rpx;
   border: 1rpx solid #237a4b;
-  border-radius: 8rpx;
-  background: #237a4b;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #237a4b, #145535);
   color: #ffffff;
   font-size: 28rpx;
   font-weight: 800;
   line-height: 84rpx;
+  box-shadow: 0 18rpx 34rpx rgba(35, 122, 75, 0.22);
+}
+
+.pin-mini,
+.upload-mini,
+.upload-plus,
+.submit-icon {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.pin-mini {
+  width: 26rpx;
+  height: 26rpx;
+  border: 4rpx solid #237a4b;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+}
+
+.pin-mini::after {
+  position: absolute;
+  left: 6rpx;
+  top: 6rpx;
+  width: 6rpx;
+  height: 6rpx;
+  border-radius: 50%;
+  background: #ffb84d;
+  content: '';
+}
+
+.upload-mini,
+.upload-plus {
+  width: 28rpx;
+  height: 28rpx;
+}
+
+.upload-mini::before,
+.upload-plus::before {
+  position: absolute;
+  left: 12rpx;
+  top: 3rpx;
+  width: 4rpx;
+  height: 18rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+  content: '';
+}
+
+.upload-mini::after,
+.upload-plus::after {
+  position: absolute;
+  left: 7rpx;
+  top: 3rpx;
+  width: 12rpx;
+  height: 12rpx;
+  border-top: 4rpx solid currentColor;
+  border-left: 4rpx solid currentColor;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.submit-icon {
+  width: 28rpx;
+  height: 18rpx;
+  border-left: 5rpx solid #ffffff;
+  border-bottom: 5rpx solid #ffffff;
+  transform: rotate(-45deg) translateY(-3rpx);
 }
 </style>
