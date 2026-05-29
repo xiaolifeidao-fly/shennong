@@ -14,7 +14,6 @@ const (
 	ContextUserKey      = "auth.user"
 	ContextUserIDKey    = "auth.userId"
 	ContextRoleIDsKey   = "auth.roleIds"
-	ContextTenantIDsKey = "auth.tenantIds"
 	ContextTokenKey     = "auth.token"
 )
 
@@ -45,7 +44,6 @@ func Middleware() gin.HandlerFunc {
 		c.Set(ContextUserKey, user)
 		c.Set(ContextUserIDKey, user.ID)
 		c.Set(ContextRoleIDsKey, user.RoleIDs)
-		c.Set(ContextTenantIDsKey, user.TenantIDs)
 		c.Set(ContextTokenKey, token)
 		c.Next()
 	}

@@ -1,4 +1,6 @@
-import { clearToken, getToken } from '@/utils/token'
+import { expireLogin } from '@/utils/authGuard'
+import { getToken } from '@/utils/token'
+import { DEFAULT_GRAIN_STATION_ID } from '@/config/app'
 import type { ApiResponse } from '@/types/api'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -12,6 +14,26 @@ interface RequestOptions<TBody = RequestData> {
 
 const baseURL = import.meta.env.VITE_APP_API_BASE_URL
 
+function stationHeaders() {
+  if (!DEFAULT_GRAIN_STATION_ID) {
+    return {}
+  }
+
+  const stationId = String(DEFAULT_GRAIN_STATION_ID)
+  return {
+    stationId,
+    'X-Station-Id': stationId,
+  }
+}
+
+function authHeaders() {
+  const token = getToken()
+  return {
+    ...stationHeaders(),
+    ...(token ? { token, Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
 export async function request<TData, TBody extends RequestData = RequestData>(
   url: string,
   options: RequestOptions<TBody> = {},
@@ -23,24 +45,24 @@ export async function request<TData, TBody extends RequestData = RequestData>(
   }
 
   try {
-    const token = getToken()
     const response = await uni.request({
       url: `${baseURL}${url}`,
       method,
       data,
       header: {
         'content-type': 'application/json',
-        ...(token ? { token, Authorization: `Bearer ${token}` } : {}),
+        ...authHeaders(),
       },
     })
 
     const payload = response.data as ApiResponse<TData>
+    const isUnauthorized = response.statusCode === 401 || payload?.code === 401
 
-    if (!payload?.success) {
+    if (isUnauthorized || !payload?.success) {
       const message = payload?.message || payload?.error || '请求失败'
 
-      if (message.includes('未登录') || message.toLowerCase().includes('login')) {
-        clearToken()
+      if (isUnauthorized || message.includes('未登录') || message.includes('过期') || message.toLowerCase().includes('login')) {
+        expireLogin()
       }
 
       throw new Error(message)
@@ -51,6 +73,38 @@ export async function request<TData, TBody extends RequestData = RequestData>(
     if (showLoading) {
       uni.hideLoading()
     }
+  }
+}
+
+export async function upload<TData>(
+  url: string,
+  filePath: string,
+  formData: Record<string, string | number> = {},
+  name = 'file',
+) {
+  uni.showLoading({ title: '识别中', mask: true })
+  try {
+    const response = await uni.uploadFile({
+      url: `${baseURL}${url}`,
+      filePath,
+      name,
+      formData,
+      header: authHeaders(),
+    })
+    const payload = JSON.parse(String(response.data || '{}')) as ApiResponse<TData>
+    const isUnauthorized = response.statusCode === 401 || payload?.code === 401
+
+    if (isUnauthorized || !payload?.success) {
+      const message = payload?.message || payload?.error || '上传失败'
+      if (isUnauthorized || message.includes('未登录') || message.includes('过期') || message.toLowerCase().includes('login')) {
+        expireLogin()
+      }
+      throw new Error(message)
+    }
+
+    return payload.data
+  } finally {
+    uni.hideLoading()
   }
 }
 
@@ -69,4 +123,5 @@ export const http = {
   ) => request<TData, TBody>(url, { ...options, method: 'PUT', data }),
   delete: <TData>(url: string, options?: Omit<RequestOptions, 'method' | 'data'>) =>
     request<TData>(url, { ...options, method: 'DELETE' }),
+  upload,
 }

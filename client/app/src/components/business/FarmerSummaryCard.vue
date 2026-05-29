@@ -19,7 +19,7 @@
       </view>
       <view class="kv">
         <text>均价</text>
-        <text class="value">{{ farmer.avgPrice.toFixed(2) }} 元/斤</text>
+        <text class="value">{{ farmer.avgPrice.toFixed(2) }} 元/公斤</text>
       </view>
     </view>
   </view>

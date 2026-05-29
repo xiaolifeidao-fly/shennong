@@ -45,12 +45,6 @@ export class UserRecord {
 
   balanceAmount = "0";
 
-  tenantUserId?: number;
-
-  tenantId?: number;
-
-  tenantName = "";
-
   lastLoginTime?: string;
 
   updatedTime?: string;
@@ -131,42 +125,10 @@ export async function deleteUser(id: number) {
   return unwrapApiResponse(response.data);
 }
 
-export class TenantOption {
-  id!: number;
-
-  name = "";
-
-  code = "";
-}
-
-export interface TenantUserPayload {
-  userId: number;
-  tenantId: number;
-}
-
 export interface AccountPayload {
   userId: number;
   accountStatus?: string;
   balanceAmount?: string;
-}
-
-export async function fetchTenantOptions() {
-  return getPage(TenantOption, "/tenants", { pageIndex: 1, pageSize: 200 });
-}
-
-export async function createTenantUser(payload: TenantUserPayload) {
-  const response = await instance.post<ApiResponse<{ id: number }>>("/tenant-users", payload);
-  return unwrapApiResponse(response.data);
-}
-
-export async function updateTenantUser(id: number, payload: Partial<TenantUserPayload>) {
-  const response = await instance.put<ApiResponse<{ id: number }>>(`/tenant-users/${id}`, payload);
-  return unwrapApiResponse(response.data);
-}
-
-export async function deleteTenantUser(id: number) {
-  const response = await instance.delete<ApiResponse<{ deleted: boolean }>>(`/tenant-users/${id}`);
-  return unwrapApiResponse(response.data);
 }
 
 export async function createAccount(payload: AccountPayload) {

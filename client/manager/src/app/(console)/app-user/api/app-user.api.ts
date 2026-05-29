@@ -16,6 +16,10 @@ export class AppUserRecord {
 
   department = "";
 
+  stationId = 0;
+
+  stationName = "";
+
   password = "";
 
   originPassword = "";
@@ -47,6 +51,7 @@ export interface AppUserPayload extends Record<string, unknown> {
   email?: string;
   phone?: string;
   department?: string;
+  stationId?: number;
   status?: string;
   secretKey?: string;
   remark?: string;

@@ -108,39 +108,14 @@ func (r *UserRepository) ListUserAccounts(userIDs []int) ([]UserAccountRow, erro
 	return rows, nil
 }
 
-func (r *UserRepository) ListUserTenants(userIDs []int) ([]UserTenantRow, error) {
-	if r.Db == nil {
-		return nil, fmt.Errorf("database is not initialized")
-	}
-	if len(userIDs) == 0 {
-		return []UserTenantRow{}, nil
-	}
-	sql := `SELECT tu.id, tu.user_id, tu.tenant_id, t.name AS tenant_name
-	FROM tenant_user tu
-	LEFT JOIN tenant t ON t.id = tu.tenant_id AND t.active = 1
-	WHERE tu.active = 1 AND tu.user_id IN ?
-	ORDER BY tu.id DESC`
-	var rows []UserTenantRow
-	if err := r.QueryBySQL(&rows, sql, userIDs); err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
 func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 	clauses := []string{"WHERE u.active = 1"}
 	values := make([]interface{}, 0, 16)
 
 	if value := strings.TrimSpace(query.Search); value != "" {
 		likeValue := "%" + value + "%"
-		clauses = append(clauses, `(u.name LIKE ? OR u.username LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.department LIKE ? OR u.remark LIKE ?
-			OR EXISTS (
-				SELECT 1
-				FROM tenant_user tu
-				LEFT JOIN tenant t ON t.id = tu.tenant_id AND t.active = 1
-				WHERE tu.user_id = u.id AND tu.active = 1 AND t.name LIKE ?
-			))`)
-		values = append(values, likeValue, likeValue, likeValue, likeValue, likeValue, likeValue, likeValue)
+		clauses = append(clauses, `(u.name LIKE ? OR u.username LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR u.department LIKE ? OR u.remark LIKE ?)`)
+		values = append(values, likeValue, likeValue, likeValue, likeValue, likeValue, likeValue)
 	}
 	if value := strings.TrimSpace(query.Name); value != "" {
 		clauses = append(clauses, "u.name LIKE ?")
@@ -205,15 +180,4 @@ func (r *UserRoleRepository) EnsureTable() error {
 		return fmt.Errorf("database is not initialized")
 	}
 	return r.Db.AutoMigrate(&UserRole{})
-}
-
-type TenantUserRepository struct {
-	db.Repository[*TenantUser]
-}
-
-func (r *TenantUserRepository) EnsureTable() error {
-	if r.Db == nil {
-		return fmt.Errorf("database is not initialized")
-	}
-	return r.Db.AutoMigrate(&TenantUser{})
 }

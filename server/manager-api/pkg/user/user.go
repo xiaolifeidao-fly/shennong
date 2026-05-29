@@ -45,12 +45,6 @@ func (h *UserHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/user-roles", h.createUserRole)
 	engine.PUT("/user-roles/:id", h.updateUserRole)
 	engine.DELETE("/user-roles/:id", h.deleteUserRole)
-
-	engine.GET("/tenant-users", h.listTenantUsers)
-	engine.GET("/tenant-users/:id", h.getTenantUserByID)
-	engine.POST("/tenant-users", h.createTenantUser)
-	engine.PUT("/tenant-users/:id", h.updateTenantUser)
-	engine.DELETE("/tenant-users/:id", h.deleteTenantUser)
 }
 
 func (h *UserHandler) listUsers(context *gin.Context) {
@@ -245,70 +239,6 @@ func (h *UserHandler) deleteUserRole(context *gin.Context) {
 	err := h.userService.DeleteUserRole(id)
 	if err == gorm.ErrRecordNotFound {
 		commonRouter.ToError(context, "user role not found")
-		return
-	}
-	commonRouter.ToJson(context, gin.H{"deleted": true}, err)
-}
-
-func (h *UserHandler) listTenantUsers(context *gin.Context) {
-	var query userDTO.TenantUserQueryDTO
-	if err := context.ShouldBindQuery(&query); err != nil {
-		commonRouter.ToError(context, "参数错误")
-		return
-	}
-	result, err := h.userService.ListTenantUsers(query)
-	commonRouter.ToJson(context, result, err)
-}
-
-func (h *UserHandler) getTenantUserByID(context *gin.Context) {
-	id, ok := parseUserID(context)
-	if !ok {
-		return
-	}
-	result, err := h.userService.GetTenantUserByID(id)
-	if err == gorm.ErrRecordNotFound {
-		commonRouter.ToError(context, "tenant user not found")
-		return
-	}
-	commonRouter.ToJson(context, result, err)
-}
-
-func (h *UserHandler) createTenantUser(context *gin.Context) {
-	var req userDTO.CreateTenantUserDTO
-	if err := context.ShouldBindJSON(&req); err != nil {
-		commonRouter.ToError(context, "参数错误")
-		return
-	}
-	result, err := h.userService.CreateTenantUser(&req)
-	commonRouter.ToJson(context, result, err)
-}
-
-func (h *UserHandler) updateTenantUser(context *gin.Context) {
-	id, ok := parseUserID(context)
-	if !ok {
-		return
-	}
-	var req userDTO.UpdateTenantUserDTO
-	if err := context.ShouldBindJSON(&req); err != nil {
-		commonRouter.ToError(context, "参数错误")
-		return
-	}
-	result, err := h.userService.UpdateTenantUser(id, &req)
-	if err == gorm.ErrRecordNotFound {
-		commonRouter.ToError(context, "tenant user not found")
-		return
-	}
-	commonRouter.ToJson(context, result, err)
-}
-
-func (h *UserHandler) deleteTenantUser(context *gin.Context) {
-	id, ok := parseUserID(context)
-	if !ok {
-		return
-	}
-	err := h.userService.DeleteTenantUser(id)
-	if err == gorm.ErrRecordNotFound {
-		commonRouter.ToError(context, "tenant user not found")
 		return
 	}
 	commonRouter.ToJson(context, gin.H{"deleted": true}, err)

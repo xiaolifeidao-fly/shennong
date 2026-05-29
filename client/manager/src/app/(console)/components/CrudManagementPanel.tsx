@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import {
   Button,
+  Cascader,
   Form,
   Input,
   InputNumber,
@@ -41,13 +42,21 @@ export interface CrudOption {
   value: string | number | boolean;
 }
 
-export interface CrudField<R extends CrudRecord> {
-  name: Extract<keyof R, string>;
+export interface CrudCascaderOption {
   label: string;
-  type?: "text" | "textarea" | "number" | "select" | "password";
+  value: string;
+  children?: CrudCascaderOption[];
+}
+
+export interface CrudField<R extends CrudRecord> {
+  name: Extract<keyof R, string> | string;
+  label: string;
+  type?: "text" | "textarea" | "number" | "select" | "password" | "cascader";
   required?: boolean;
   placeholder?: string;
   options?: CrudOption[];
+  cascaderOptions?: CrudCascaderOption[];
+  linkedNames?: [Extract<keyof R, string>, Extract<keyof R, string>, Extract<keyof R, string>];
   min?: number;
   precision?: number;
   hiddenOnCreate?: boolean;
@@ -112,6 +121,34 @@ function renderValue(value: unknown) {
     return value ? "是" : "否";
   }
   return String(value);
+}
+
+function buildInitialFormValues<R extends CrudRecord>(record: R, fields: CrudField<R>[]) {
+  const values: Record<string, unknown> = { ...record };
+  fields.forEach((field) => {
+    if (field.type !== "cascader" || !field.linkedNames) {
+      return;
+    }
+    values[field.name] = field.linkedNames
+      .map((name) => record[name])
+      .filter((value) => typeof value === "string" && value !== "");
+  });
+  return values;
+}
+
+function applyLinkedFieldValues<R extends CrudRecord>(values: Record<string, unknown>, fields: CrudField<R>[]) {
+  fields.forEach((field) => {
+    if (field.type !== "cascader" || !field.linkedNames) {
+      return;
+    }
+    const fieldName = String(field.name);
+    const fieldValue = values[fieldName];
+    const selectedValues = Array.isArray(fieldValue) ? fieldValue : [];
+    field.linkedNames.forEach((name, index) => {
+      values[name] = selectedValues[index] ?? "";
+    });
+    delete values[fieldName];
+  });
 }
 
 function statusTag(value: unknown, label?: string) {
@@ -243,7 +280,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
               icon={<EditOutlined />}
               onClick={() => {
                 setEditingRecord(record);
-                form.setFieldsValue(record);
+                form.setFieldsValue(buildInitialFormValues(record, fields));
                 setModalOpen(true);
               }}
             />
@@ -283,6 +320,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
 
   const handleSubmit = async () => {
     const rawValues = compactPayload(form.getFieldsValue());
+    applyLinkedFieldValues(rawValues, fields);
     if (editingRecord) {
       fields.forEach((field) => {
         if (field.disabledOnEdit) {
@@ -440,6 +478,15 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
                     placeholder={field.placeholder}
                     options={field.options}
                     disabled={field.disabledOnEdit && Boolean(editingRecord)}
+                  />
+                ) : field.type === "cascader" ? (
+                  <Cascader
+                    allowClear
+                    showSearch
+                    options={field.cascaderOptions}
+                    placeholder={field.placeholder}
+                    disabled={field.disabledOnEdit && Boolean(editingRecord)}
+                    changeOnSelect={false}
                   />
                 ) : field.type === "password" ? (
                   <Input.Password placeholder={field.placeholder} disabled={field.disabledOnEdit && Boolean(editingRecord)} />

@@ -13,6 +13,12 @@
       "postcss": true,
       "minified": true
     },
+    "permission": {
+      "scope.userLocation": {
+        "desc": "用于定位并选择收购地点"
+      }
+    },
+    "requiredPrivateInfos": ["chooseLocation"],
     "usingComponents": true
   }
 }

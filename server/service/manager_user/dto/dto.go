@@ -24,9 +24,6 @@ type UserDTO struct {
 	AccountID      int       `json:"accountId"`
 	AccountStatus  string    `json:"accountStatus"`
 	BalanceAmount  string    `json:"balanceAmount"`
-	TenantUserID   int       `json:"tenantUserId"`
-	TenantID       uint64    `json:"tenantId"`
-	TenantName     string    `json:"tenantName"`
 }
 
 type CreateUserDTO struct {
@@ -133,28 +130,4 @@ type UserRoleQueryDTO struct {
 	PageSize  int    `form:"pageSize"`
 	UserID    uint64 `form:"userId"`
 	RoleID    uint64 `form:"roleId"`
-}
-
-type TenantUserDTO struct {
-	baseDTO.BaseDTO
-	UserID   uint64 `json:"userId"`
-	TenantID uint64 `json:"tenantId"`
-}
-
-type CreateTenantUserDTO struct {
-	UserID   uint64 `json:"userId"`
-	TenantID uint64 `json:"tenantId"`
-}
-
-type UpdateTenantUserDTO struct {
-	UserID   *uint64 `json:"userId,omitempty"`
-	TenantID *uint64 `json:"tenantId,omitempty"`
-}
-
-type TenantUserQueryDTO struct {
-	Page      int    `form:"page"`
-	PageIndex int    `form:"pageIndex"`
-	PageSize  int    `form:"pageSize"`
-	UserID    uint64 `form:"userId"`
-	TenantID  uint64 `form:"tenantId"`
 }

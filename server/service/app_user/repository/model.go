@@ -73,4 +73,6 @@ type AppUserListRow struct {
 	WxCity          string     `gorm:"column:wx_city"`
 	WxLanguage      string     `gorm:"column:wx_language"`
 	WxLastLoginTime *time.Time `gorm:"column:wx_last_login_time"`
+	StationID       uint64     `gorm:"column:station_id"`
+	StationName     string     `gorm:"column:station_name"`
 }

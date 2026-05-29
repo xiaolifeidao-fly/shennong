@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircleOutlined, LockOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, Form, Input, Modal, Popconfirm, Tooltip, message } from "antd";
 import { CrudManagementPanel } from "../../components/CrudManagementPanel";
 import type { CrudField, CrudTableColumn, CrudOption } from "../../components/CrudManagementPanel";
+import { grainStationApi } from "../../grain/api/grain.api";
 import {
   createAppUser,
   deleteAppUser,
@@ -22,7 +23,7 @@ const statusOptions: CrudOption[] = [
   { label: "锁定", value: "locked" },
 ];
 
-const fields: CrudField<AppUserRecord>[] = [
+const baseFields: CrudField<AppUserRecord>[] = [
   { name: "name", label: "姓名", required: true },
   { name: "username", label: "用户名", required: true },
   { name: "password", label: "密码", type: "password", required: true, hiddenOnEdit: true },
@@ -31,13 +32,10 @@ const fields: CrudField<AppUserRecord>[] = [
   { name: "phone", label: "手机号" },
   { name: "department", label: "部门", hiddenOnEdit: true },
   { name: "status", label: "状态", type: "select", options: statusOptions },
-  { name: "secretKey", label: "密钥", hiddenOnEdit: true },
-  { name: "pubToken", label: "发布 Token", hiddenOnEdit: true },
-  { name: "banCount", label: "封禁次数", type: "number", min: 0, precision: 0, hiddenOnEdit: true },
   { name: "remark", label: "备注", type: "textarea" },
 ];
 
-const columns: CrudTableColumn<AppUserRecord>[] = [
+const baseColumns: CrudTableColumn<AppUserRecord>[] = [
   { name: "username", label: "用户名", width: 150 },
   { name: "name", label: "姓名", width: 140 },
   { name: "phone", label: "手机号", width: 150 },
@@ -66,15 +64,50 @@ function formatDateTime(value: unknown) {
 
 export function AppUserManagementPanel() {
   const [passwordForm] = Form.useForm<{ password: string; confirmPassword: string }>();
+  const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordRecord, setPasswordRecord] = useState<AppUserRecord | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
+  useEffect(() => {
+    grainStationApi
+      .list({ pageIndex: 1, pageSize: 200, status: "active" })
+      .then((stations) => {
+        setStationOptions(
+          stations.data.map((station) => ({
+            label: station.stationName,
+            value: station.id,
+          })),
+        );
+      })
+      .catch((error) => message.error(error instanceof Error ? error.message : "加载粮站选项失败"));
+  }, []);
+
+  const stationLabel = (stationId: unknown, record: AppUserRecord) =>
+    record.stationName || stationOptions.find((option) => option.value === stationId)?.label || String(stationId || "-");
+
+  const fields: CrudField<AppUserRecord>[] = [
+    {
+      name: "stationId",
+      label: "粮站",
+      type: "select",
+      required: true,
+      placeholder: "请选择粮站",
+      options: stationOptions,
+    },
+    ...baseFields,
+  ];
+
+  const columns: CrudTableColumn<AppUserRecord>[] = [
+    { name: "stationId", label: "粮站", width: 180, render: stationLabel },
+    ...baseColumns,
+  ];
+
   return (
     <>
       <CrudManagementPanel<AppUserRecord, AppUserPayload>
-        title="App用户"
-        createText="新增App用户"
+        title="业务员管理"
+        createText="新增业务员"
         searchPlaceholder="用户名/姓名"
         searchParam="search"
         fields={fields}

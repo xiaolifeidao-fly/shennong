@@ -9,8 +9,8 @@
       <text>扫身份证</text>
     </button>
     <button class="quick" @click="$emit('scan-bank')">
-      <text class="icon">卡</text>
-      <text>扫银行卡</text>
+      <text class="icon">付</text>
+      <text>付款识别</text>
     </button>
   </view>
 </template>

@@ -6,6 +6,7 @@ import (
 	"net/mail"
 	appUserDTO "service/app_user/dto"
 	appUserRepository "service/app_user/repository"
+	grainConfigRepository "service/grain_config/repository"
 	"strings"
 	"time"
 
@@ -15,12 +16,14 @@ import (
 type AppUserService struct {
 	appUserRepository            *appUserRepository.AppUserRepository
 	appUserLoginRecordRepository *appUserRepository.AppUserLoginRecordRepository
+	stationUserRepository        *grainConfigRepository.GrainStationUserRepository
 }
 
 func NewAppUserService() *AppUserService {
 	return &AppUserService{
 		appUserRepository:            db.GetRepository[appUserRepository.AppUserRepository](),
 		appUserLoginRecordRepository: db.GetRepository[appUserRepository.AppUserLoginRecordRepository](),
+		stationUserRepository:        db.GetRepository[grainConfigRepository.GrainStationUserRepository](),
 	}
 }
 
@@ -29,6 +32,9 @@ func (s *AppUserService) EnsureTable() error {
 		return err
 	}
 	if err := s.appUserLoginRecordRepository.EnsureTable(); err != nil {
+		return err
+	}
+	if err := s.stationUserRepository.EnsureTable(); err != nil {
 		return err
 	}
 	return nil

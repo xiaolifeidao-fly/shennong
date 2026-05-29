@@ -1,7 +1,27 @@
 <script setup lang="ts">
-const appReady = true
+import { onLaunch, onShow } from '@dcloudio/uni-app'
+import { installAuthGuard, redirectLoggedInUser, ensureAuthenticated } from '@/utils/authGuard'
+import { useUserStore } from '@/stores/user'
 
-void appReady
+const userStore = useUserStore()
+
+installAuthGuard()
+
+onLaunch(() => {
+  userStore.restoreLoginState()
+  ensureAuthenticated()
+  redirectLoggedInUser()
+})
+
+onShow(() => {
+  userStore.restoreLoginState()
+  ensureAuthenticated()
+  redirectLoggedInUser()
+})
+
+uni.$on('auth:expired', () => {
+  userStore.clearLocalLoginState()
+})
 </script>
 
 <style lang="scss">

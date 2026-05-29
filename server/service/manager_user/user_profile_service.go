@@ -103,27 +103,11 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 			accountByUserID[row.UserID] = row
 		}
 	}
-	tenantRows, err := s.userRepository.ListUserTenants(userIDs)
-	if err != nil {
-		return nil, err
-	}
-	tenantByUserID := make(map[int]userRepository.UserTenantRow, len(tenantRows))
-	for _, row := range tenantRows {
-		if _, exists := tenantByUserID[row.UserID]; !exists {
-			tenantByUserID[row.UserID] = row
-		}
-	}
-
 	for _, item := range items {
 		if account, ok := accountByUserID[item.Id]; ok {
 			item.AccountID = account.ID
 			item.AccountStatus = account.AccountStatus
 			item.BalanceAmount = account.BalanceAmount
-		}
-		if tenant, ok := tenantByUserID[item.Id]; ok {
-			item.TenantUserID = tenant.ID
-			item.TenantID = tenant.TenantID
-			item.TenantName = tenant.TenantName
 		}
 	}
 	return baseDTO.BuildPage(int(total), items), nil

@@ -47,16 +47,6 @@ func (u *UserRole) TableName() string {
 	return "user_role"
 }
 
-type TenantUser struct {
-	db.BaseEntity
-	UserID   uint64 `gorm:"column:user_id;type:bigint unsigned;index:idx_user_id" orm:"column(user_id);null" description:"用户ID"`
-	TenantID uint64 `gorm:"column:tenant_id;type:bigint unsigned;index:idx_tenant_id" orm:"column(tenant_id);null" description:"租户ID"`
-}
-
-func (t *TenantUser) TableName() string {
-	return "tenant_user"
-}
-
 type UserListRow struct {
 	db.BaseEntity
 	Name           string    `gorm:"column:name"`
@@ -80,11 +70,4 @@ type UserAccountRow struct {
 	UserID        int    `gorm:"column:user_id"`
 	AccountStatus string `gorm:"column:account_status"`
 	BalanceAmount string `gorm:"column:balance_amount"`
-}
-
-type UserTenantRow struct {
-	ID         int    `gorm:"column:id"`
-	UserID     int    `gorm:"column:user_id"`
-	TenantID   uint64 `gorm:"column:tenant_id"`
-	TenantName string `gorm:"column:tenant_name"`
 }

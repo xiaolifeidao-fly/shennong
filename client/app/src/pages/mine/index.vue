@@ -26,9 +26,13 @@
         <text class="label">常用收购类型</text>
         <input v-model="presetForm.crops" class="input" />
       </view>
-      <view class="field last">
-        <text class="label">常用付款方式</text>
+      <view class="field">
+        <text class="label">付款登记默认方式</text>
         <input v-model="presetForm.payTypes" class="input" />
+      </view>
+      <view class="field last">
+        <text class="label">常用收购地点</text>
+        <input v-model="presetForm.places" class="input" />
       </view>
     </view>
 
@@ -47,6 +51,7 @@ import { onShow } from '@dcloudio/uni-app'
 import SectionHeader from '@/components/business/SectionHeader.vue'
 import { useGrainStore } from '@/stores/grain'
 import { useUserStore } from '@/stores/user'
+import { redirectToLogin } from '@/utils/authGuard'
 
 const userStore = useUserStore()
 const grainStore = useGrainStore()
@@ -55,6 +60,7 @@ const presetForm = reactive({
   salesmanName: grainStore.preset.salesmanName,
   crops: grainStore.preset.crops.join('、'),
   payTypes: grainStore.preset.payTypes.join('、'),
+  places: grainStore.preset.places.join('、'),
 })
 
 const avatarText = computed(() => userStore.displayName.slice(0, 1))
@@ -101,6 +107,7 @@ async function loadProfile() {
 async function handleLogout() {
   await userStore.logout()
   uni.showToast({ title: '已退出', icon: 'success' })
+  redirectToLogin()
 }
 
 function savePreset() {
@@ -109,6 +116,7 @@ function savePreset() {
     salesmanName: presetForm.salesmanName || '王强',
     crops: presetForm.crops.split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
     payTypes: presetForm.payTypes.split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
+    places: presetForm.places.split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
   })
   uni.showToast({ title: '已保存预设', icon: 'success' })
 }

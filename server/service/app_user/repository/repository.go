@@ -97,7 +97,14 @@ func (r *AppUserRepository) ListUsersByQuery(query appUserDTO.AppUserQueryDTO, p
 		u.origin_password, u.status, u.last_login_time, u.secret_key, u.remark,
 		u.pub_token, u.ban_count, u.open_uid, u.union_id, u.wx_session_key,
 		u.wx_nickname, u.wx_avatar, u.wx_gender, u.wx_country, u.wx_province,
-		u.wx_city, u.wx_language, u.wx_last_login_time
+		u.wx_city, u.wx_language, u.wx_last_login_time,
+		COALESCE((
+			SELECT su.station_id
+			FROM grain_station_user su
+			WHERE su.active = 1 AND su.status = 'active' AND su.app_user_id = u.id
+			ORDER BY su.id DESC
+			LIMIT 1
+		), 0) AS station_id
 	FROM app_user u ` + whereSQL + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
 	values = append(values, pageSize, (pageIndex-1)*pageSize)
 	var rows []AppUserListRow

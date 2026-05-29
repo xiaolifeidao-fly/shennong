@@ -14,7 +14,6 @@ type UserService struct {
 	userRepository            *userRepository.UserRepository
 	userLoginRecordRepository *userRepository.UserLoginRecordRepository
 	userRoleRepository        *userRepository.UserRoleRepository
-	tenantUserRepository      *userRepository.TenantUserRepository
 }
 
 func NewUserService() *UserService {
@@ -22,7 +21,6 @@ func NewUserService() *UserService {
 		userRepository:            db.GetRepository[userRepository.UserRepository](),
 		userLoginRecordRepository: db.GetRepository[userRepository.UserLoginRecordRepository](),
 		userRoleRepository:        db.GetRepository[userRepository.UserRoleRepository](),
-		tenantUserRepository:      db.GetRepository[userRepository.TenantUserRepository](),
 	}
 }
 
@@ -36,7 +34,7 @@ func (s *UserService) EnsureTable() error {
 	if err := s.userRoleRepository.EnsureTable(); err != nil {
 		return err
 	}
-	return s.tenantUserRepository.EnsureTable()
+	return nil
 }
 
 func normalizeUserPage(page, pageIndex, pageSize int) (int, int) {

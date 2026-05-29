@@ -20,7 +20,6 @@ import (
 const (
 	userTokenPrefix     = "KAKROLOT_USER_TOKEN_PRE_"
 	userRolePrefix      = "KAKROLOT_USER_ROLE_PRE_KEY_"
-	userTenantPrefix    = "KAKROLOT_USER_TENANT_PRE_KEY_"
 	userIPLoginPrefix   = "Kakrolot_user_ip_login_"
 	tokenExpireSeconds  = 2 * 60 * 60
 	resourceExpireHours = 24 * 60 * 60
@@ -29,7 +28,6 @@ const (
 var (
 	ErrNotLogin           = errors.New("user not login")
 	ErrUserNoResource     = errors.New("user not resource")
-	ErrUserTenantIsNull   = errors.New("user tenant is null")
 	ErrInvalidCredential  = errors.New("用户名或密码错误")
 	ErrUserDisabled       = errors.New("该用户已被封禁")
 	ErrLoginTooManyErrors = errors.New("用户密码错误次数太多,请一小时后再试")
@@ -42,14 +40,12 @@ type LoginUser struct {
 	Role      string   `json:"role"`
 	Status    string   `json:"status"`
 	RoleIDs   []uint64 `json:"roleIds,omitempty"`
-	TenantIDs []uint64 `json:"tenantIds,omitempty"`
 }
 
 type AuthService struct {
 	userRepository            *userRepository.UserRepository
 	userLoginRecordRepository *userRepository.UserLoginRecordRepository
 	userRoleRepository        *userRepository.UserRoleRepository
-	tenantUserRepository      *userRepository.TenantUserRepository
 	resourceRepository        *permissionRepository.ResourceRepository
 	roleResourceRepository    *permissionRepository.RoleResourceRepository
 }
@@ -59,7 +55,6 @@ func NewAuthService() *AuthService {
 		userRepository:            db.GetRepository[userRepository.UserRepository](),
 		userLoginRecordRepository: db.GetRepository[userRepository.UserLoginRecordRepository](),
 		userRoleRepository:        db.GetRepository[userRepository.UserRoleRepository](),
-		tenantUserRepository:      db.GetRepository[userRepository.TenantUserRepository](),
 		resourceRepository:        db.GetRepository[permissionRepository.ResourceRepository](),
 		roleResourceRepository:    db.GetRepository[permissionRepository.RoleResourceRepository](),
 	}
@@ -152,16 +147,7 @@ func (s *AuthService) ValidateToken(token, requestURL string) (*LoginUser, error
 		return nil, ErrUserNoResource
 	}
 
-	tenantIDs, err := s.getTenantIDsByUserID(loginUser.ID)
-	if err != nil {
-		return nil, err
-	}
-	if len(tenantIDs) == 0 {
-		return nil, ErrUserTenantIsNull
-	}
-
 	loginUser.RoleIDs = roleIDs
-	loginUser.TenantIDs = tenantIDs
 	if err := s.flushExpireTime(token); err != nil {
 		return nil, err
 	}
@@ -264,32 +250,6 @@ func (s *AuthService) findResourceByURL(resourceURL string) (*permissionReposito
 	return nil, nil
 }
 
-func (s *AuthService) getTenantIDsByUserID(userID uint64) ([]uint64, error) {
-	key := buildUserTenantKey(userID)
-	if value := redisMiddleware.Get(key); strings.TrimSpace(value) != "" {
-		return parseUint64List(value)
-	}
-	if s.tenantUserRepository.Db == nil {
-		return nil, fmt.Errorf("database is not initialized")
-	}
-	var entities []*userRepository.TenantUser
-	if err := s.tenantUserRepository.Db.
-		Where("user_id = ? AND active = ?", userID, 1).
-		Order("id DESC").
-		Find(&entities).Error; err != nil {
-		return nil, err
-	}
-	tenantIDs := make([]uint64, 0, len(entities))
-	for _, entity := range entities {
-		tenantIDs = append(tenantIDs, entity.TenantID)
-	}
-	if len(tenantIDs) == 0 {
-		return []uint64{}, nil
-	}
-	redisMiddleware.SetEx(key, joinUint64List(tenantIDs), resourceExpireHours)
-	return tenantIDs, nil
-}
-
 func (s *AuthService) isLimit(ip string, maxLoginErrorNum int64) bool {
 	if strings.TrimSpace(ip) == "" || maxLoginErrorNum <= 0 {
 		return false
@@ -326,22 +286,11 @@ func buildUserRoleKey(userID uint64) string {
 	return userRolePrefix + strconv.FormatUint(userID, 10)
 }
 
-func buildUserTenantKey(userID uint64) string {
-	return userTenantPrefix + strconv.FormatUint(userID, 10)
-}
-
 func ClearUserRoleCache(userID uint64) {
 	if redisMiddleware.Rdb == nil || userID == 0 {
 		return
 	}
 	redisMiddleware.Del(buildUserRoleKey(userID))
-}
-
-func ClearUserTenantCache(userID uint64) {
-	if redisMiddleware.Rdb == nil || userID == 0 {
-		return
-	}
-	redisMiddleware.Del(buildUserTenantKey(userID))
 }
 
 func buildIPKey(ip string) string {

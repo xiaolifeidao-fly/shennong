@@ -183,6 +183,8 @@ func (s *AppUserService) ListUsers(query appUserDTO.AppUserQueryDTO) (*baseDTO.P
 			WxCity:          row.WxCity,
 			WxLanguage:      row.WxLanguage,
 			WxLastLoginTime: row.WxLastLoginTime,
+			StationID:       row.StationID,
+			StationName:     row.StationName,
 		})
 	}
 	return baseDTO.BuildPage(int(total), items), nil
@@ -196,7 +198,7 @@ func (s *AppUserService) GetUserByID(id uint) (*appUserDTO.AppUserDTO, error) {
 	if entity.Active == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-	return db.ToDTO[appUserDTO.AppUserDTO](entity), nil
+	return s.toAppUserDTO(entity)
 }
 
 func (s *AppUserService) CreateUser(req *appUserDTO.CreateAppUserDTO) (*appUserDTO.AppUserDTO, error) {
@@ -273,7 +275,12 @@ func (s *AppUserService) CreateUser(req *appUserDTO.CreateAppUserDTO) (*appUserD
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[appUserDTO.AppUserDTO](created), nil
+	if req.StationID > 0 {
+		if _, err := s.stationUserRepository.SaveActiveStation(uint64(created.Id), req.StationID); err != nil {
+			return nil, err
+		}
+	}
+	return s.toAppUserDTO(created)
 }
 
 func (s *AppUserService) RegisterUser(req *appUserDTO.RegisterAppUserDTO) (*appUserDTO.AppUserDTO, error) {
@@ -313,7 +320,7 @@ func (s *AppUserService) RegisterUser(req *appUserDTO.RegisterAppUserDTO) (*appU
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[appUserDTO.AppUserDTO](created), nil
+	return s.toAppUserDTO(created)
 }
 
 func (s *AppUserService) UpdateUser(id uint, req *appUserDTO.UpdateAppUserDTO) (*appUserDTO.AppUserDTO, error) {
@@ -447,7 +454,12 @@ func (s *AppUserService) UpdateUser(id uint, req *appUserDTO.UpdateAppUserDTO) (
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[appUserDTO.AppUserDTO](saved), nil
+	if req.StationID != nil && *req.StationID > 0 {
+		if _, err := s.stationUserRepository.SaveActiveStation(uint64(saved.Id), *req.StationID); err != nil {
+			return nil, err
+		}
+	}
+	return s.toAppUserDTO(saved)
 }
 
 func (s *AppUserService) DeleteUser(id uint) error {
@@ -482,4 +494,20 @@ func toCurrentAppUserProfileDTO(entity *appUserRepository.AppUser) *appUserDTO.C
 		WxAvatar:        entity.WxAvatar,
 		WxLastLoginTime: entity.WxLastLoginTime,
 	}
+}
+
+func (s *AppUserService) toAppUserDTO(entity *appUserRepository.AppUser) (*appUserDTO.AppUserDTO, error) {
+	result := db.ToDTO[appUserDTO.AppUserDTO](entity)
+	if entity == nil || entity.Id == 0 {
+		return result, nil
+	}
+	stationUser, err := s.stationUserRepository.FindActiveByAppUserID(uint64(entity.Id))
+	if err == nil {
+		result.StationID = stationUser.StationID
+		return result, nil
+	}
+	if err == gorm.ErrRecordNotFound {
+		return result, nil
+	}
+	return nil, err
 }

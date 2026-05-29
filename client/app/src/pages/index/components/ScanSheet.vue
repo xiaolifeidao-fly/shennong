@@ -7,7 +7,7 @@
       </view>
 
       <view class="notice">
-        <text class="notice-icon">{{ type === 'bank' ? '卡' : '证' }}</text>
+        <text class="notice-icon">{{ type === 'bank' ? '付' : '证' }}</text>
         <text>{{ description }}</text>
       </view>
 
@@ -38,18 +38,18 @@ defineEmits<{
   close: []
 }>()
 
-const title = computed(() => (props.type === 'bank' ? '模拟银行卡识别' : '模拟身份证识别'))
+const title = computed(() => (props.type === 'bank' ? '模拟付款方式识别' : '模拟身份证识别'))
 const description = computed(() =>
   props.type === 'bank'
-    ? '模拟银行卡识别成功：银行卡号、开户行已自动带入录入表单，后续可接 OCR。'
+    ? '选择银行卡时拍卡识别；选择支付宝或微信时填写收款人姓名和收款账号。'
     : '模拟身份证识别成功：姓名、身份证号、住址已自动带入录入表单，后续可接小程序相机。',
 )
 const fields = computed(() =>
   props.type === 'bank'
     ? [
-        { label: '银行卡号', value: '6228 **** **** 6631' },
-        { label: '开户行', value: '农商银行北城支行' },
-        { label: '状态', value: '待接 OCR' },
+        { label: '银行卡', value: '拍卡识别卡号与开户行' },
+        { label: '支付宝/微信', value: '填写收款人和账号' },
+        { label: '状态', value: '按付款方式录入' },
       ]
     : [
         { label: '姓名', value: '李建国' },
@@ -57,7 +57,7 @@ const fields = computed(() =>
         { label: '状态', value: '待接 OCR' },
       ],
 )
-const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '识别区域', 'TODO'] : ['身份证正面', '身份证反面', 'TODO']))
+const photos = computed(() => (props.type === 'bank' ? ['银行卡照片', '收款账号', 'TODO'] : ['身份证正面', '身份证反面', 'TODO']))
 </script>
 
 <style lang="scss" scoped>

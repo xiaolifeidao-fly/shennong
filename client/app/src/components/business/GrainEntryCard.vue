@@ -21,6 +21,17 @@
         <text class="value">{{ entry.payType }}</text>
       </view>
     </view>
+    <view v-if="entry.materialImages.length" class="materials">
+      <text class="sub-title">其他材料</text>
+      <text class="sub-value">{{ entry.materialImages.length }} 张图片</text>
+    </view>
+    <view v-if="entry.editLogs.length" class="logs">
+      <text class="sub-title">修改记录</text>
+      <view v-for="log in entry.editLogs" :key="log.id" class="log-row">
+        <text>{{ log.time }} · {{ log.operator }}</text>
+        <text class="log-summary">{{ log.summary }}</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -100,5 +111,37 @@ const title = computed(() => `${pickTime(props.entry.buyTime)} · ${props.entry.
   color: #172018;
   font-size: 25rpx;
   font-weight: 700;
+}
+
+.materials,
+.logs {
+  padding-top: 20rpx;
+  margin-top: 20rpx;
+  border-top: 1rpx solid #edf1e8;
+}
+
+.sub-title,
+.sub-value,
+.log-row text {
+  display: block;
+}
+
+.sub-title {
+  color: #445044;
+  font-size: 24rpx;
+  font-weight: 760;
+}
+
+.sub-value,
+.log-row {
+  margin-top: 8rpx;
+  color: #6d776c;
+  font-size: 23rpx;
+  line-height: 1.45;
+}
+
+.log-summary {
+  margin-top: 4rpx;
+  color: #172018;
 }
 </style>

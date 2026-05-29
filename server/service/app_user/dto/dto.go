@@ -31,6 +31,8 @@ type AppUserDTO struct {
 	WxCity          string     `json:"wxCity"`
 	WxLanguage      string     `json:"wxLanguage"`
 	WxLastLoginTime *time.Time `json:"wxLastLoginTime"`
+	StationID       uint64     `json:"stationId"`
+	StationName     string     `json:"stationName"`
 }
 
 type CreateAppUserDTO struct {
@@ -58,6 +60,7 @@ type CreateAppUserDTO struct {
 	WxCity          string     `json:"wxCity"`
 	WxLanguage      string     `json:"wxLanguage"`
 	WxLastLoginTime *time.Time `json:"wxLastLoginTime"`
+	StationID       uint64     `json:"stationId"`
 }
 
 type RegisterAppUserDTO struct {
@@ -91,6 +94,7 @@ type UpdateAppUserDTO struct {
 	WxCity          *string    `json:"wxCity,omitempty"`
 	WxLanguage      *string    `json:"wxLanguage,omitempty"`
 	WxLastLoginTime *time.Time `json:"wxLastLoginTime,omitempty"`
+	StationID       *uint64    `json:"stationId,omitempty"`
 }
 
 type AppUserQueryDTO struct {

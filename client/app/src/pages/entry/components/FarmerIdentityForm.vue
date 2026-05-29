@@ -2,7 +2,7 @@
   <view class="card form-card">
     <view class="reuse-strip">
       <text class="icon">户</text>
-      <text>先选择农户。已建档农户会自动带出身份、电话、住址和银行卡信息；需要变更时可到农户详情修改。</text>
+      <text>先选择农户。已建档农户会自动带出身份、电话、住址和收款信息；需要变更时可到农户详情修改。</text>
     </view>
 
     <view class="field">
@@ -14,7 +14,7 @@
 
     <view class="field">
       <view class="label-row">
-        <text class="label">农户身份</text>
+        <text class="label required">农户身份</text>
         <button class="scan-btn" @click="$emit('scan-id')">拍身份证识别</button>
       </view>
       <input v-model="model.farmerName" class="input" placeholder="农户姓名" />
@@ -27,14 +27,29 @@
     </view>
 
     <view class="field">
+      <text class="label required">付款方式</text>
+      <picker :value="payTypeIndex" :range="payTypeNames" @change="selectPayType">
+        <view class="picker-value">{{ model.payType || '请选择付款方式' }}</view>
+      </picker>
+    </view>
+
+    <view v-if="isBankPayment" class="field">
       <view class="label-row">
-        <text class="label">银行卡信息</text>
+        <text class="label required">银行卡信息</text>
         <button class="scan-btn" @click="$emit('scan-bank')">拍银行卡识别</button>
       </view>
       <input v-model="model.bankNumber" class="input" placeholder="银行卡号" />
     </view>
-    <view class="field">
+    <view v-if="isBankPayment" class="field">
       <input v-model="model.bankName" class="input" placeholder="开户行" />
+    </view>
+    <view v-else-if="isAccountPayment" class="field">
+      <text class="label required">收款人姓名</text>
+      <input v-model="model.bankName" class="input" placeholder="请输入收款人姓名" />
+    </view>
+    <view v-if="isAccountPayment" class="field">
+      <text class="label required">收款账号</text>
+      <input v-model="model.bankNumber" class="input" :placeholder="accountPlaceholder" />
     </view>
     <view class="field last">
       <text class="label">农户电话</text>
@@ -45,11 +60,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { FarmerProfile, GrainEntryDraft } from '@/types/grain'
+import type { FarmerProfile, GrainEntryDraft, GrainPreset } from '@/types/grain'
 
 const props = defineProps<{
   modelValue: GrainEntryDraft
   farmers: FarmerProfile[]
+  preset: GrainPreset
 }>()
 
 const emit = defineEmits<{
@@ -69,11 +85,36 @@ const farmerOptions = computed(() => [
   { id: 'new', name: '新农户，拍身份证建档' },
 ])
 const farmerIndex = computed(() => Math.max(0, farmerOptions.value.findIndex((item) => item.id === props.modelValue.farmerId)))
+const payTypeNames = computed(() => props.preset.paymentMethods.length ? props.preset.paymentMethods.map((item) => item.methodName) : props.preset.payTypes)
+const payTypeIndex = computed(() => Math.max(0, payTypeNames.value.indexOf(model.value.payType)))
+const selectedPaymentMethod = computed(() =>
+  props.preset.paymentMethods.find((item) => item.id === model.value.paymentMethodId) ||
+  props.preset.paymentMethods.find((item) => item.methodName === model.value.payType),
+)
+const paymentMethodCode = computed(() => model.value.paymentMethodCode || selectedPaymentMethod.value?.methodCode || '')
+const isBankPayment = computed(() => paymentMethodCode.value === 'Bank')
+const isAccountPayment = computed(() => paymentMethodCode.value === 'Alipay' || paymentMethodCode.value === 'WECHAT')
+const accountPlaceholder = computed(() => {
+  if (paymentMethodCode.value === 'Alipay') {
+    return '请输入支付宝账号'
+  }
+  if (paymentMethodCode.value === 'WECHAT') {
+    return '请输入微信收款账号'
+  }
+  return '请输入收款账号'
+})
 
 function handleFarmerChange(event: { detail: { value: number | string } }) {
   const index = Number(event.detail.value)
   const farmerId = farmerOptions.value[index]?.id || 'new'
   emit('farmer-change', farmerId)
+}
+
+function selectPayType(event: { detail: { value: number | string } }) {
+  const option = props.preset.paymentMethods[Number(event.detail.value)]
+  model.value.paymentMethodId = option?.id || 0
+  model.value.paymentMethodCode = option?.methodCode || ''
+  model.value.payType = option?.methodName || payTypeNames.value[Number(event.detail.value)] || model.value.payType
 }
 </script>
 
@@ -130,6 +171,11 @@ function handleFarmerChange(event: { detail: { value: number | string } }) {
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+}
+
+.required::after {
+  content: ' *';
+  color: #d14343;
 }
 
 .input,

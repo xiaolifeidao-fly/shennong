@@ -2,15 +2,19 @@
 
 import {
   AppstoreOutlined,
+  BankOutlined,
   BellOutlined,
   CompassOutlined,
+  DatabaseOutlined,
   LogoutOutlined,
+  SafetyCertificateOutlined,
   TeamOutlined,
+  UsergroupAddOutlined,
 } from "@ant-design/icons";
 import { Avatar, Badge, Button, Layout, Menu, Space, Tag, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
-import { PropsWithChildren, useMemo } from "react";
+import { PropsWithChildren, useEffect, useMemo, useState } from "react";
 import { clearAuthToken } from "@/utils/auth";
 
 const { Content, Header, Sider } = Layout;
@@ -19,6 +23,18 @@ const { Text } = Typography;
 interface ManagerShellProps extends PropsWithChildren {}
 
 type MenuItem = Required<MenuProps>["items"][number];
+
+const pageTitleMap: Record<string, string> = {
+  "/manager-dashboard": "数据总览",
+  "/user": "用户管理",
+  "/permission": "权限管理",
+  "/grain/stations": "粮站列表",
+  "/grain/config": "基础设置",
+  "/grain/payment-methods": "付款方式",
+  "/grain/farmers": "农户管理",
+  "/app-user": "业务员管理",
+  "/grain/entries": "收粮明细",
+};
 
 function getOpenKeys(pathname: string) {
   if (pathname.startsWith("/activation-code")) {
@@ -34,7 +50,25 @@ function getOpenKeys(pathname: string) {
     return ["/shop"];
   }
   if (pathname.startsWith("/app-user")) {
-    return ["/app-user-group"];
+    return ["/grain-farmer-group"];
+  }
+  if (pathname.startsWith("/permission")) {
+    return ["/system-group"];
+  }
+  if (pathname.startsWith("/grain")) {
+    if (
+      pathname.startsWith("/grain/stations") ||
+      pathname.startsWith("/grain/config") ||
+      pathname.startsWith("/grain/payment-methods")
+    ) {
+      return ["/grain-station-group"];
+    }
+    if (pathname.startsWith("/grain/farmers")) {
+      return ["/grain-farmer-group"];
+    }
+    if (pathname.startsWith("/grain/entries")) {
+      return ["/grain-purchase-group"];
+    }
   }
   return [];
 }
@@ -42,6 +76,8 @@ function getOpenKeys(pathname: string) {
 export function ManagerShell({ children }: ManagerShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const activePath = pathname ?? "/manager-dashboard";
+  const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(activePath));
   const quickActions = useMemo(
     () => [
       {
@@ -55,9 +91,19 @@ export function ManagerShell({ children }: ManagerShellProps) {
         icon: <TeamOutlined />,
       },
       {
+        key: "/permission",
+        label: "权限管理",
+        icon: <SafetyCertificateOutlined />,
+      },
+      {
         key: "/app-user",
-        label: "App用户",
+        label: "业务员管理",
         icon: <TeamOutlined />,
+      },
+      {
+        key: "/grain/entries",
+        label: "收粮明细",
+        icon: <DatabaseOutlined />,
       },
     ],
     [],
@@ -75,21 +121,73 @@ export function ManagerShell({ children }: ManagerShellProps) {
         label: "用户管理",
       },
       {
-        key: "/app-user-group",
-        icon: <TeamOutlined />,
-        label: "app用户",
+        key: "/system-group",
+        icon: <SafetyCertificateOutlined />,
+        label: "系统设置",
         children: [
           {
+            key: "/permission",
+            label: "角色资源",
+          },
+        ],
+      },
+      {
+        key: "/grain-station-group",
+        icon: <BankOutlined />,
+        label: "粮站管理",
+        children: [
+          {
+            key: "/grain/stations",
+            label: "粮站列表",
+          },
+          {
+            key: "/grain/config",
+            label: "基础设置",
+          },
+          {
+            key: "/grain/payment-methods",
+            label: "付款方式",
+          },
+        ],
+      },
+      {
+        key: "/grain-farmer-group",
+        icon: <UsergroupAddOutlined />,
+        label: "粮户管理",
+        children: [
+          {
+            key: "/grain/farmers",
+            label: "农户管理",
+          },
+          {
             key: "/app-user",
-            label: "app用户管理",
+            label: "业务员管理",
+          },
+        ],
+      },
+      {
+        key: "/grain-purchase-group",
+        icon: <DatabaseOutlined />,
+        label: "收粮管理",
+        children: [
+          {
+            key: "/grain/entries",
+            label: "收粮明细",
           },
         ],
       },
     ],
     [],
   );
-  const activePath = pathname ?? "/manager-dashboard";
   const selectedKey = activePath === "/activation-code" ? "/activation-code/admin" : activePath;
+
+  useEffect(() => {
+    const pathOpenKeys = getOpenKeys(activePath);
+    if (pathOpenKeys.length === 0) {
+      return;
+    }
+    setOpenKeys((currentKeys) => Array.from(new Set([...currentKeys, ...pathOpenKeys])));
+  }, [activePath]);
 
   const handleLogout = () => {
     clearAuthToken();
@@ -97,7 +195,8 @@ export function ManagerShell({ children }: ManagerShellProps) {
   };
 
   const pageTitle =
-    quickActions.find((action) => activePath.startsWith(action.key))?.label ?? "管理工作台";
+    Object.entries(pageTitleMap).find(([path]) => activePath.startsWith(path))?.[1] ??
+    "管理工作台";
 
   return (
     <div className="manager-app-frame">
@@ -139,7 +238,8 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 className="manager-shell-menu"
                 mode="inline"
                 selectedKeys={[selectedKey]}
-                defaultOpenKeys={getOpenKeys(activePath)}
+                openKeys={openKeys}
+                onOpenChange={(keys) => setOpenKeys(keys as string[])}
                 items={items}
                 onClick={({ key }) => {
                   if (typeof key === "string" && key.startsWith("/")) {
@@ -152,9 +252,9 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 }}
               />
               <div className="manager-sidebar-foot">
-                <span>当前空间</span>
-                <strong>北城粮站体系</strong>
-                <Tag bordered={false}>全量数据权限</Tag>
+                <span>权限模式</span>
+                <strong>系统角色权限</strong>
+                <Tag bordered={false}>按角色授权</Tag>
               </div>
             </div>
           </Sider>

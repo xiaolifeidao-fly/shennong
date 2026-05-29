@@ -4,11 +4,11 @@ export function formatAmount(value: number) {
   return `¥${value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
 }
 
-export function formatQuantity(value: number, unit = '斤') {
+export function formatQuantity(value: number, unit = '公斤') {
   return `${value.toLocaleString('zh-CN')} ${unit}`
 }
 
-export function calcUnitPrice(amount: number, quantity: number, unit = '斤') {
+export function calcUnitPrice(amount: number, quantity: number, unit = '公斤') {
   if (!amount || !quantity) {
     return ''
   }

@@ -1,7 +1,7 @@
 <template>
   <view class="notice">
     <text class="icon">提</text>
-    <text>当前先模拟拍照识别：点击“模拟识别”会自动填入身份证、银行卡相关信息。后续可接微信小程序相机、OCR 或第三方识别能力。</text>
+    <text>拍身份证或选择银行卡付款时会先打开摄像头，拍照后上传到服务端识别；支付宝和微信付款请手动填写收款人姓名与收款账号。</text>
   </view>
 </template>
 

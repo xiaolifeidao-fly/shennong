@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircleOutlined,
   EditOutlined,
   LockOutlined,
-  PartitionOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -29,12 +28,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import {
   createAccount,
-  createTenantUser,
-  deleteTenantUser,
-  fetchTenantOptions,
   updateAccount,
-  updateTenantUser,
-  type TenantOption,
   type UserPayload,
   type UserRecord,
 } from "../api/user.api";
@@ -78,33 +72,19 @@ export function UserManagementDemo() {
   const [searchValue, setSearchValue] = useState(query.search);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
-  const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
 
   const activeCount = users.filter((item) => resolveUserStatus(item) === "normal").length;
-  const boundCount = users.filter((item) => Boolean(item.tenantName?.trim())).length;
   const totalBalance = users.reduce((sum, item) => sum + resolveBalance(item), 0);
 
   const heroStats = useMemo(
     () => [
       { label: "可见用户", value: stats.visibleUsers },
       { label: "活跃用户", value: stats.activeUsers || activeCount },
-      { label: "已绑定账号", value: boundCount },
+      { label: "资金账户", value: stats.accountCount },
       { label: "钱包总额", value: formatCurrency(totalBalance) },
     ],
-    [activeCount, boundCount, stats.activeUsers, stats.visibleUsers, totalBalance],
+    [activeCount, stats.accountCount, stats.activeUsers, stats.visibleUsers, totalBalance],
   );
-
-  useEffect(() => {
-    const loadTenants = async () => {
-      try {
-        const result = await fetchTenantOptions();
-        setTenantOptions(result.data);
-      } catch {
-        setTenantOptions([]);
-      }
-    };
-    void loadTenants();
-  }, []);
 
   const handleCreate = () => {
     setEditingUser(null);
@@ -193,45 +173,6 @@ export function UserManagementDemo() {
           originPassword: password,
         });
         message.success("密码已更新");
-      },
-    });
-  };
-
-  const handleChangeTenant = (record: UserRecord) => {
-    let nextTenantId = record.tenantId ?? 0;
-    Modal.confirm({
-      title: "修改租户",
-      content: (
-        <Select<number>
-          allowClear
-          defaultValue={record.tenantId || undefined}
-          placeholder="请选择租户"
-          style={{ width: "100%", marginTop: 16 }}
-          onChange={(value) => {
-            nextTenantId = value ?? 0;
-          }}
-          options={tenantOptions.map((item) => ({
-            label: item.name || item.code,
-            value: item.id,
-          }))}
-        />
-      ),
-      onOk: async () => {
-        if (!nextTenantId) {
-          if (record.tenantUserId) {
-            await deleteTenantUser(record.tenantUserId);
-          }
-          await refresh();
-          message.success("租户已更新");
-          return;
-        }
-        if (record.tenantUserId) {
-          await updateTenantUser(record.tenantUserId, { tenantId: nextTenantId });
-        } else {
-          await createTenantUser({ userId: record.id, tenantId: nextTenantId });
-        }
-        await refresh();
-        message.success("租户已更新");
       },
     });
   };
@@ -327,12 +268,6 @@ export function UserManagementDemo() {
       render: (value: string) => value || "-",
     },
     {
-      title: "租户信息",
-      key: "tenantInfo",
-      width: 180,
-      render: (_, record) => record.tenantName || "-",
-    },
-    {
       title: "角色",
       dataIndex: "role",
       key: "role",
@@ -382,21 +317,13 @@ export function UserManagementDemo() {
     {
       title: "操作",
       key: "actions",
-      width: 288,
+      width: 248,
       fixed: "right",
       render: (_, record) => {
         const frozen = resolveUserStatus(record) === "frozen";
 
         return (
           <Space size={4} wrap>
-            <Tooltip title="修改租户">
-              <Button
-                size="small"
-                type="text"
-                icon={<PartitionOutlined />}
-                onClick={() => handleChangeTenant(record)}
-              />
-            </Tooltip>
             <Tooltip title="修改角色">
               <Button
                 size="small"

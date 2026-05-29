@@ -35,7 +35,9 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user'
+import { redirectLoggedInUser } from '@/utils/authGuard'
 
 const userStore = useUserStore()
 const submitting = ref(false)
@@ -43,6 +45,10 @@ const wechatSubmitting = ref(false)
 const form = reactive({
   username: '',
   password: '',
+})
+
+onShow(() => {
+  redirectLoggedInUser()
 })
 
 interface GetPhoneNumberEvent {

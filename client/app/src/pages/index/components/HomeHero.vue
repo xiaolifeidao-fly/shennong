@@ -26,7 +26,7 @@ const props = defineProps<{
   farmerCount: number
 }>()
 
-const totalTon = computed(() => (props.totalQuantity / 2000).toFixed(1))
+const totalTon = computed(() => (props.totalQuantity / 1000).toFixed(1))
 const amountText = computed(() => formatAmount(props.totalAmount))
 </script>
 

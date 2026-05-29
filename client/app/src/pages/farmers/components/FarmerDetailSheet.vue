@@ -24,11 +24,11 @@
           <input v-model="editForm.phone" class="input" />
         </view>
         <view class="field">
-          <text class="label">银行卡号</text>
+          <text class="label">收款账号</text>
           <input v-model="editForm.bankNumber" class="input" />
         </view>
         <view class="field">
-          <text class="label">开户行</text>
+          <text class="label">收款人/开户行</text>
           <input v-model="editForm.bankName" class="input" />
         </view>
         <button class="primary-btn" @click="saveFarmer">保存农户资料</button>
@@ -41,7 +41,7 @@
               <text class="card-title">{{ farmer.name }} · 今日 {{ entries.length }} 笔</text>
               <text class="card-meta">{{ farmer.statusText }}</text>
             </view>
-            <text class="badge">{{ totalQuantity.toLocaleString('zh-CN') }} 斤</text>
+            <text class="badge">{{ totalQuantity.toLocaleString('zh-CN') }} 公斤</text>
           </view>
           <view class="data-grid">
             <view class="kv"><text>身份证号</text><text class="value">{{ farmer.idNumber }}</text></view>
@@ -50,13 +50,13 @@
           </view>
           <view class="kv address"><text>住址</text><text class="value">{{ farmer.address }}</text></view>
           <view class="data-grid">
-            <view class="kv"><text>银行卡</text><text class="value">{{ farmer.bankNumber }}</text></view>
-            <view class="kv"><text>开户行</text><text class="value">{{ farmer.bankName }}</text></view>
+            <view class="kv"><text>收款账号</text><text class="value">{{ farmer.bankNumber }}</text></view>
+            <view class="kv"><text>收款人/开户行</text><text class="value">{{ farmer.bankName }}</text></view>
             <view class="kv"><text>归属</text><text class="value">我的录入</text></view>
           </view>
           <view class="photo-row">
             <view class="photo">身份证照片</view>
-            <view class="photo">银行卡照片</view>
+            <view class="photo">收款凭证</view>
             <view class="photo">现场凭证</view>
           </view>
           <view class="inline-actions">
@@ -65,7 +65,28 @@
           </view>
         </view>
 
+        <SectionHeader title="农户汇总明细" action-text="再录一笔" @action="$emit('entry', farmer.id)" />
+        <view class="summary-table">
+          <view class="summary-row summary-head">
+            <text>收购类型</text>
+            <text>日期</text>
+            <text>付款</text>
+            <text>总公斤</text>
+            <text>总金额</text>
+          </view>
+          <view v-for="summary in summaries" :key="summary.id" class="summary-row">
+            <text>{{ summary.crop || '-' }}</text>
+            <text>{{ summary.summaryDate || '-' }}</text>
+            <text>{{ summary.payType || '-' }}</text>
+            <text>{{ summary.totalQuantity.toLocaleString('zh-CN') }}</text>
+            <text>{{ formatAmount(summary.totalAmount) }}</text>
+          </view>
+          <view v-if="summariesLoading" class="empty-summary">正在加载汇总...</view>
+          <view v-else-if="!summaries.length" class="empty-summary">暂无汇总数据</view>
+        </view>
+
         <SectionHeader title="多次录入明细" action-text="再录一笔" @action="$emit('entry', farmer.id)" />
+        <view v-if="entriesLoading" class="detail-loading">正在加载录入明细...</view>
         <view class="list">
           <GrainEntryCard v-for="entry in entries" :key="entry.id" :entry="entry" :farmer="farmer" />
         </view>
@@ -79,12 +100,15 @@ import { computed, reactive, watch } from 'vue'
 import SectionHeader from '@/components/business/SectionHeader.vue'
 import GrainEntryCard from '@/components/business/GrainEntryCard.vue'
 import { formatAmount } from '@/utils/grain'
-import type { FarmerProfile, GrainEntry } from '@/types/grain'
+import type { FarmerProfile, GrainEntry, GrainFarmerPurchaseSummary } from '@/types/grain'
 
 const props = defineProps<{
   visible: boolean
   farmer?: FarmerProfile
   entries: GrainEntry[]
+  summaries: GrainFarmerPurchaseSummary[]
+  entriesLoading?: boolean
+  summariesLoading?: boolean
   editing: boolean
 }>()
 
@@ -97,6 +121,8 @@ const emit = defineEmits<{
 
 const editForm = reactive<FarmerProfile>({
   id: '',
+  stationId: 0,
+  appUserId: 0,
   name: '',
   idNumber: '',
   phone: '',
@@ -215,6 +241,57 @@ function saveFarmer() {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16rpx;
   margin-top: 24rpx;
+}
+
+.summary-table {
+  overflow: hidden;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 8rpx;
+  background: #ffffff;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1.25fr 1fr 1fr 1.15fr;
+  gap: 10rpx;
+  padding: 18rpx 16rpx;
+  border-top: 1rpx solid #eef2ea;
+}
+
+.summary-row:first-child {
+  border-top: 0;
+}
+
+.summary-row text {
+  min-width: 0;
+  color: #384338;
+  font-size: 22rpx;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.summary-head {
+  background: #f6f8f4;
+}
+
+.summary-head text {
+  color: #667266;
+  font-weight: 760;
+}
+
+.empty-summary {
+  padding: 28rpx;
+  color: #7b857b;
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.detail-loading {
+  padding: 18rpx 22rpx;
+  border-radius: 8rpx;
+  background: #f6f8f4;
+  color: #667266;
+  font-size: 24rpx;
 }
 
 .kv,

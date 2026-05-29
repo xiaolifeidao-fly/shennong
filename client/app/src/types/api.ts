@@ -6,6 +6,11 @@ export interface ApiResponse<T> {
   error: string | null
 }
 
+export interface PageResponse<T> {
+  total: number
+  data: T[]
+}
+
 export interface LoginRequest {
   username: string
   password: string

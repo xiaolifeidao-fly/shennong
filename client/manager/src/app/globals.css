@@ -478,6 +478,113 @@ select {
   box-shadow: 0 12px 24px rgba(35, 122, 75, 0.18);
 }
 
+.permission-workbench {
+  width: 100%;
+}
+
+.permission-role-item {
+  margin-bottom: 10px;
+  padding: 12px !important;
+  border: 1px solid var(--manager-border);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.permission-role-item:hover {
+  border-color: var(--manager-border-strong);
+  background: #f8fbf6;
+}
+
+.permission-role-item-active {
+  border-color: rgba(31, 122, 77, 0.36);
+  background: linear-gradient(135deg, #145535 0%, #237a4b 100%);
+  box-shadow: 0 12px 24px rgba(35, 122, 75, 0.18);
+}
+
+.permission-role-item-active .ant-list-item-meta-title,
+.permission-role-item-active .ant-list-item-meta-description,
+.permission-role-item-active .ant-typography,
+.permission-role-item-active .ant-btn {
+  color: #ffffff !important;
+}
+
+.permission-tree-panel {
+  margin-top: 18px;
+  min-height: 470px;
+  max-height: 560px;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--manager-border);
+  border-radius: 8px;
+  background: #fbfcf9;
+}
+
+.permission-tree-panel .ant-tree {
+  background: transparent;
+}
+
+.permission-tree-panel .ant-tree-treenode {
+  width: 100%;
+  padding: 5px 0;
+}
+
+.permission-tree-panel .ant-tree-node-content-wrapper {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+.permission-tree-panel .ant-tree-node-selected {
+  background: var(--manager-green-soft) !important;
+}
+
+.permission-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.permission-detail-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf1e9;
+}
+
+.permission-detail-row .ant-typography {
+  overflow-wrap: anywhere;
+}
+
+.permission-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+@media (max-width: 1280px) {
+  .permission-workbench {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .permission-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-detail-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 .manager-dashboard-card {
   position: relative;
   min-height: 136px;
