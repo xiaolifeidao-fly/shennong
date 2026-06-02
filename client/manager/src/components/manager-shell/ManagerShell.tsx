@@ -7,7 +7,6 @@ import {
   CompassOutlined,
   DatabaseOutlined,
   DownOutlined,
-  HomeOutlined,
   LockOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -174,32 +173,6 @@ export function ManagerShell({ children }: ManagerShellProps) {
       {
         key: "/grain/entries",
         label: "收粮明细",
-        icon: <DatabaseOutlined />,
-      },
-    ],
-    [],
-  );
-
-  const sidebarShortcuts = useMemo(
-    () => [
-      {
-        key: "/manager-dashboard",
-        label: "首页",
-        icon: <HomeOutlined />,
-      },
-      {
-        key: "/grain/farmers",
-        label: "农户",
-        icon: <UsergroupAddOutlined />,
-      },
-      {
-        key: "/grain/dashboard",
-        label: "大盘",
-        icon: <BarChartOutlined />,
-      },
-      {
-        key: "/grain/entries",
-        label: "明细",
         icon: <DatabaseOutlined />,
       },
     ],
@@ -471,22 +444,6 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 <Tag bordered={false} className="manager-sidebar-env manager-collapse-hidden">
                   运营后台
                 </Tag>
-              </div>
-
-              <div className="manager-sidebar-shortcuts manager-collapse-hidden">
-                {sidebarShortcuts.map((shortcut) => {
-                  const active = activePath === shortcut.key;
-                  return (
-                    <Button
-                      key={shortcut.key}
-                      type={active ? "primary" : "text"}
-                      icon={shortcut.icon}
-                      onClick={() => router.push(shortcut.key)}
-                    >
-                      {shortcut.label}
-                    </Button>
-                  );
-                })}
               </div>
 
               <Menu

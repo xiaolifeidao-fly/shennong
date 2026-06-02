@@ -61,14 +61,14 @@ func NewAuthService() *AuthService {
 	}
 }
 
-func (s *AuthService) Login(username, password, ip string, maxLoginErrorNum int64) (string, *LoginUser, error) {
+func (s *AuthService) Login(account, password, ip string, maxLoginErrorNum int64) (string, *LoginUser, error) {
 	if err := ensureRedisReady(); err != nil {
 		return "", nil, err
 	}
-	username = strings.TrimSpace(username)
+	account = strings.TrimSpace(account)
 	password = strings.TrimSpace(password)
 	ip = strings.TrimSpace(ip)
-	if username == "" || password == "" {
+	if account == "" || password == "" {
 		return "", nil, ErrInvalidCredential
 	}
 	if s.isLimit(ip, maxLoginErrorNum) {
@@ -78,7 +78,7 @@ func (s *AuthService) Login(username, password, ip string, maxLoginErrorNum int6
 		return "", nil, fmt.Errorf("database is not initialized")
 	}
 
-	user, err := s.userRepository.FindByUsername(username)
+	user, err := s.userRepository.FindByUsernameOrPhone(account)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			s.calLoginError(ip)
@@ -89,7 +89,7 @@ func (s *AuthService) Login(username, password, ip string, maxLoginErrorNum int6
 	if !strings.EqualFold(strings.TrimSpace(user.Status), "active") {
 		return "", nil, ErrUserDisabled
 	}
-	encryptedPassword := encryptPassword(username, password)
+	encryptedPassword := encryptPassword(user.Username, password)
 	if !strings.EqualFold(encryptedPassword, strings.TrimSpace(user.Password)) {
 		s.calLoginError(ip)
 		return "", nil, ErrInvalidCredential

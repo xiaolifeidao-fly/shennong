@@ -42,13 +42,7 @@ func (r *GrainFarmerRepository) FindActiveByIDNumberDigestForAppUser(idNumberDig
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity GrainFarmer
-	dbQuery := r.Db.Where("active = ?", 1)
-	if stationID > 0 {
-		dbQuery = dbQuery.Where("station_id = ?", stationID)
-	}
-	if appUserID > 0 {
-		dbQuery = dbQuery.Where("app_user_id = ?", appUserID)
-	}
+	dbQuery := r.Db.Where("active = ? AND station_id = ? AND app_user_id = ?", 1, stationID, appUserID)
 	idNumberDigest = strings.TrimSpace(idNumberDigest)
 	plainIDNumber = strings.TrimSpace(plainIDNumber)
 	if idNumberDigest != "" && plainIDNumber != "" {

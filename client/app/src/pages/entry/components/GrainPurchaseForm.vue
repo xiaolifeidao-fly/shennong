@@ -81,11 +81,6 @@
         </button>
       </view>
     </view>
-
-    <button class="submit" :loading="saving" :disabled="saving" @click="$emit('submit')">
-      <text class="submit-icon"></text>
-      <text>{{ saving ? '正在保存...' : editing ? '保存修改并记录' : '保存本次录入' }}</text>
-    </button>
   </view>
 </template>
 
@@ -97,14 +92,11 @@ import type { GrainEntryDraft, GrainPreset } from '@/types/grain'
 const props = defineProps<{
   modelValue: GrainEntryDraft
   preset: GrainPreset
-  editing?: boolean
-  saving?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: GrainEntryDraft]
   'select-current-location': []
-  submit: []
 }>()
 
 const model = computed({
@@ -359,27 +351,9 @@ function previewMaterial(index: number) {
   line-height: 148rpx;
 }
 
-.submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  width: 100%;
-  min-height: 84rpx;
-  border: 1rpx solid #237a4b;
-  border-radius: 20rpx;
-  background: linear-gradient(135deg, #237a4b, #145535);
-  color: #ffffff;
-  font-size: 28rpx;
-  font-weight: 800;
-  line-height: 84rpx;
-  box-shadow: 0 18rpx 34rpx rgba(35, 122, 75, 0.22);
-}
-
 .pin-mini,
 .upload-mini,
-.upload-plus,
-.submit-icon {
+.upload-plus {
   position: relative;
   display: inline-block;
   flex: 0 0 auto;
@@ -435,11 +409,4 @@ function previewMaterial(index: number) {
   transform: rotate(45deg);
 }
 
-.submit-icon {
-  width: 28rpx;
-  height: 18rpx;
-  border-left: 5rpx solid #ffffff;
-  border-bottom: 5rpx solid #ffffff;
-  transform: rotate(-45deg) translateY(-3rpx);
-}
 </style>

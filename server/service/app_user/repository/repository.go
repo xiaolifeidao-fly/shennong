@@ -23,7 +23,22 @@ func (r *AppUserRepository) FindByUsername(username string) (*AppUser, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity AppUser
-	if err := r.Db.Where("username = ? AND active = ?", username, 1).First(&entity).Error; err != nil {
+	if err := r.Db.Where("username = ? AND active = ?", strings.TrimSpace(username), 1).First(&entity).Error; err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
+func (r *AppUserRepository) FindByUsernameOrPhone(account string) (*AppUser, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	account = strings.TrimSpace(account)
+	var entity AppUser
+	if err := r.Db.
+		Where("(username = ? OR phone = ?) AND active = ?", account, account, 1).
+		Order("id ASC").
+		First(&entity).Error; err != nil {
 		return nil, err
 	}
 	return &entity, nil

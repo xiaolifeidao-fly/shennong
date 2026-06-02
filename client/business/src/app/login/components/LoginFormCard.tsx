@@ -2,13 +2,13 @@
 
 import {
   LockOutlined,
-  MailOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { Button, Checkbox, Form, Input, Space, Typography, message } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { login } from "@/app/login/api/login.api";
-import { isAuthenticated, setAuthToken } from "@/utils/auth";
+import { isAuthenticated, setAuthToken, setCurrentAppUser } from "@/utils/auth";
 
 const { Title } = Typography;
 
@@ -37,6 +37,7 @@ export function LoginFormCard() {
         password: values.password,
       });
       setAuthToken(response.token, values.remember);
+      setCurrentAppUser(response.user, values.remember);
       messageApi.success("登录成功，正在进入后台");
       router.replace("/manager-dashboard");
     } catch (error) {
@@ -95,13 +96,13 @@ export function LoginFormCard() {
           onFinish={handleFinish}
         >
           <Form.Item
-            label="账号"
+            label="用户名/手机号"
             name="account"
-            rules={[{ required: true, message: "请输入登录账号" }]}
+            rules={[{ required: true, message: "请输入用户名或手机号" }]}
           >
             <Input
-              prefix={<MailOutlined style={{ color: "rgba(16,40,64,0.42)" }} />}
-              placeholder="请输入邮箱或账号"
+              prefix={<UserOutlined style={{ color: "rgba(16,40,64,0.42)" }} />}
+              placeholder="请输入用户名或手机号"
               size="large"
             />
           </Form.Item>

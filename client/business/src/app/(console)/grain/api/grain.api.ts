@@ -1,6 +1,6 @@
 "use client";
 
-import { getData, getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
+import { getData, getDataList, getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
 import { getAuthToken } from "@/utils/auth";
 import type { CrudListQuery } from "../../components/CrudManagementPanel";
 
@@ -282,6 +282,14 @@ export const grainEntryMaterialApi = {
 export const grainPurchaseTypeApi = crudApi(GrainPurchaseTypeRecord, "/grain-purchase-types");
 export const grainPaymentMethodApi = crudApi(GrainPaymentMethodRecord, "/grain-payment-methods");
 export const grainPurchasePlaceApi = crudApi(GrainPurchasePlaceRecord, "/grain-purchase-places");
+
+export function listActiveGrainPurchaseTypes(stationId?: number) {
+  return getDataList(GrainPurchaseTypeRecord, "/grain-purchase-types", { stationId, status: "active" });
+}
+
+export function listActiveGrainPaymentMethods(stationId?: number) {
+  return getDataList(GrainPaymentMethodRecord, "/grain-payment-methods", { stationId, status: "active" });
+}
 
 export async function voidGrainPurchaseEntry(id: number) {
   const response = await instance.put<ApiResponse<{ voided: boolean }>>(`/grain-purchase-entries/${id}/void`);

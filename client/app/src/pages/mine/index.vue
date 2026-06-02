@@ -31,6 +31,15 @@
         <text class="info-value">{{ item.value }}</text>
       </view>
     </view>
+
+    <button v-if="userStore.isLoggedIn" class="password-btn" @click="goChangePassword">
+      <text class="lock-icon">
+        <text class="lock-shackle"></text>
+        <text class="lock-body"></text>
+      </text>
+      <text>修改密码</text>
+      <text class="chevron-icon"></text>
+    </button>
   </view>
 </template>
 
@@ -77,6 +86,10 @@ function goLogin() {
 
 function goProfile() {
   uni.navigateTo({ url: '/pages/profile/index' })
+}
+
+function goChangePassword() {
+  uni.navigateTo({ url: '/pages/change-password/index' })
 }
 
 async function loadProfile() {
@@ -232,6 +245,80 @@ async function handleLogout() {
 
 .info-card {
   padding: 30rpx;
+}
+
+.password-btn {
+  display: grid;
+  grid-template-columns: 40rpx 1fr 28rpx;
+  gap: 18rpx;
+  align-items: center;
+  width: 100%;
+  min-height: 96rpx;
+  padding: 0 28rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 20rpx;
+  background: #ffffff;
+  color: #172018;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 96rpx;
+  text-align: left;
+  box-shadow: 0 10rpx 24rpx rgba(31, 47, 31, 0.05);
+}
+
+.password-btn::after {
+  border: 0;
+}
+
+.lock-icon,
+.chevron-icon {
+  position: relative;
+  display: block;
+}
+
+.lock-icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+.lock-shackle {
+  position: absolute;
+  left: 9rpx;
+  top: 2rpx;
+  width: 22rpx;
+  height: 20rpx;
+  border: 4rpx solid #237a4b;
+  border-bottom: 0;
+  border-radius: 14rpx 14rpx 0 0;
+}
+
+.lock-body {
+  position: absolute;
+  left: 5rpx;
+  bottom: 3rpx;
+  width: 30rpx;
+  height: 24rpx;
+  border-radius: 8rpx;
+  background: #237a4b;
+}
+
+.lock-body::after {
+  position: absolute;
+  left: 13rpx;
+  top: 8rpx;
+  width: 6rpx;
+  height: 10rpx;
+  border-radius: 99rpx;
+  background: #ffffff;
+  content: '';
+}
+
+.chevron-icon {
+  width: 18rpx;
+  height: 18rpx;
+  border-top: 4rpx solid #8a9488;
+  border-right: 4rpx solid #8a9488;
+  transform: rotate(45deg);
 }
 
 .info-head {

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BankOutlined,
   CalendarOutlined,
   DatabaseOutlined,
   FileDoneOutlined,
@@ -11,8 +10,7 @@ import {
   TeamOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Progress, Space, Table, Typography, message } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Button, DatePicker, Empty, Progress, Space, Typography, message } from "antd";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 import { useRouter } from "next/navigation";
@@ -75,56 +73,6 @@ function rangeLabel(range: RangeValue) {
   return `${params.startDate} 至 ${params.endDate}`;
 }
 
-const columns: ColumnsType<GrainPurchaseDashboardDimensionRecord> = [
-  {
-    title: "粮站",
-    dataIndex: "name",
-    width: 180,
-    render: (value: string, record) => (
-      <div className="manager-dashboard-table-title">
-        {value || "未命名粮站"}
-        <Text className="manager-dashboard-table-subtitle">收粮 {record.entryCount} 笔</Text>
-      </div>
-    ),
-  },
-  {
-    title: "业务员",
-    dataIndex: "activeUserCount",
-    width: 110,
-    render: (value: number) => `${formatNumber(value)} 人`,
-  },
-  {
-    title: "农户数",
-    dataIndex: "farmerCount",
-    width: 110,
-    render: (value: number) => `${formatNumber(value)} 户`,
-  },
-  {
-    title: "收粮量",
-    dataIndex: "totalQuantity",
-    width: 130,
-    render: (value: number) => formatWeight(value).text,
-  },
-  {
-    title: "金额",
-    dataIndex: "totalAmount",
-    width: 140,
-    render: (value: number) => <span className="manager-dashboard-money">{formatMoney(value)}</span>,
-  },
-  {
-    title: "均价",
-    dataIndex: "averageUnitPrice",
-    width: 130,
-    render: (value: number) => `${formatMoney(value)}/公斤`,
-  },
-  {
-    title: "金额占比",
-    dataIndex: "amountShare",
-    width: 150,
-    render: (value: number) => <Progress percent={sharePercent(value)} size="small" strokeColor="#237a4b" />,
-  },
-];
-
 export default function ManagerDashboardPage() {
   const router = useRouter();
   const [range, setRange] = useState<RangeValue>([today, today]);
@@ -148,7 +96,6 @@ export default function ManagerDashboardPage() {
 
   const overview = dashboard?.overview;
   const weight = formatWeight(overview?.totalQuantity ?? 0);
-  const stationRows = useMemo(() => sortRows(dashboard?.byStation ?? []), [dashboard]);
   const cropRows = useMemo(() => sortRows(dashboard?.byCrop ?? []).slice(0, 6), [dashboard]);
   const currentRangeLabel = rangeLabel(range);
 
@@ -186,7 +133,7 @@ export default function ManagerDashboardPage() {
             合计收粮 {weight.text}。
           </Title>
           <Text className="manager-dashboard-hero__subtitle">
-            数据来自服务端收粮汇总表，按粮站、业务员、农户、品类汇总今日收粮业务数据。
+            数据来自服务端收粮汇总表，汇总业务员、农户、品类等今日收粮业务数据。
           </Text>
         </div>
         <Space wrap className="manager-dashboard-hero__actions">
@@ -228,27 +175,6 @@ export default function ManagerDashboardPage() {
       </section>
 
       <section className="manager-dashboard-main-grid">
-        <div className="manager-dashboard-panel manager-dashboard-panel--wide">
-          <div className="manager-dashboard-panel__header">
-            <BankOutlined className="manager-dashboard-panel__icon" />
-            <div>
-              <h3>{currentRangeLabel}粮站表现</h3>
-              <Text>按粮站汇总收粮规模、农户覆盖、业务员参与和金额占比。</Text>
-            </div>
-          </div>
-          <div className="manager-table">
-            <Table<GrainPurchaseDashboardDimensionRecord>
-              rowKey={(record) => record.key || String(record.stationId)}
-              columns={columns}
-              dataSource={stationRows}
-              loading={loading}
-              pagination={false}
-              scroll={{ x: 920 }}
-              locale={{ emptyText: "当前时间段暂无粮站汇总" }}
-            />
-          </div>
-        </div>
-
         <div className="manager-dashboard-panel manager-dashboard-panel--wide">
           <div className="manager-dashboard-panel__header">
             <FileDoneOutlined className="manager-dashboard-panel__icon" />

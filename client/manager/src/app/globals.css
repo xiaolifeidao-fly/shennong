@@ -830,6 +830,31 @@ select {
   box-shadow: none !important;
 }
 
+.grain-entry-form-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: start;
+  gap: 16px;
+}
+
+.grain-entry-form-fields,
+.grain-entry-form-aside {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grain-entry-form-aside {
+  position: sticky;
+  top: 18px;
+}
+
+.grain-entry-form-aside .manager-form-section {
+  padding: 16px;
+  box-shadow: none;
+}
+
 @media (max-width: 860px) {
   .manager-crud-form {
     grid-template-columns: 1fr;
@@ -849,6 +874,14 @@ select {
 
   .manager-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .grain-entry-form-main {
+    grid-template-columns: 1fr;
+  }
+
+  .grain-entry-form-aside {
+    position: static;
   }
 }
 
@@ -2164,40 +2197,6 @@ body {
   font-weight: 700;
   line-height: 24px;
   white-space: nowrap;
-}
-
-.manager-sidebar-shortcuts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.manager-sidebar-shortcuts .ant-btn {
-  height: 58px;
-  padding: 8px 4px;
-  display: inline-flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.78);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.manager-sidebar-shortcuts .ant-btn-primary {
-  color: #173114;
-  background: #dff3d8;
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: none;
-}
-
-.manager-sidebar-shortcuts .ant-btn:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.13) !important;
 }
 
 .manager-shell-menu.ant-menu {

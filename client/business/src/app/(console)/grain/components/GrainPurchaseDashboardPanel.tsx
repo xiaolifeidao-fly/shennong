@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AppstoreOutlined,
-  BankOutlined,
   BarChartOutlined,
   CalendarOutlined,
   DashboardOutlined,
@@ -150,10 +149,10 @@ function DimensionSection({
       render: (value: number) => `${value} 户`,
     },
     {
-      title: "业务员",
+      title: "账号",
       dataIndex: "activeUserCount",
       width: 96,
-      render: (value: number) => `${value} 人`,
+      render: (value: number) => `${value} 个`,
     },
     {
       title: "重量",
@@ -213,7 +212,6 @@ export function GrainPurchaseDashboardPanel() {
   const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [dashboard, setDashboard] = useState<GrainPurchaseDashboardRecord | null>(null);
   const [loading, setLoading] = useState(false);
-  const [stationMode, setStationMode] = useState<DimensionMode>("chart");
   const [cropMode, setCropMode] = useState<DimensionMode>("chart");
 
   const loadDashboard = async () => {
@@ -255,8 +253,8 @@ export function GrainPurchaseDashboardPanel() {
       tone: "green",
     },
     {
-      label: "当前操作业务员",
-      value: `${formatNumber(overview?.activeUserCount ?? 0)} 人`,
+      label: "当前账号",
+      value: `${formatNumber(overview?.activeUserCount ?? 0)} 个`,
       hint: `${formatNumber(overview?.entryCount ?? 0)} 笔收粮流水`,
       icon: <TeamOutlined />,
       tone: "blue",
@@ -328,16 +326,6 @@ export function GrainPurchaseDashboardPanel() {
       </section>
 
       <div className="grain-dashboard-grid">
-        <DimensionSection
-          title="按照粮站维度展示"
-          subtitle="对比各粮站收粮规模、农户覆盖与业务员参与"
-          icon={<BankOutlined />}
-          rows={dashboard?.byStation ?? []}
-          mode={stationMode}
-          onModeChange={setStationMode}
-          accent="#2f8f5b"
-          emptyText="当前条件下暂无粮站汇总"
-        />
         <DimensionSection
           title="按照粮食类型维度展示"
           subtitle="观察不同粮食类型的重量、金额与金额占比"

@@ -7,7 +7,6 @@ import {
   CameraOutlined,
   DeleteOutlined,
   EditOutlined,
-  EnvironmentOutlined,
   FileImageOutlined,
   HistoryOutlined,
   IdcardOutlined,
@@ -16,7 +15,7 @@ import {
   ScanOutlined,
   SearchOutlined,
   StopOutlined,
-  UserOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 import {
   Alert,
@@ -52,7 +51,6 @@ import {
   grainPaymentMethodApi,
   grainPurchaseEntryApi,
   grainPurchaseEntrySnapshotApi,
-  grainPurchasePlaceApi,
   grainPurchaseTypeApi,
   grainStationApi,
   recognizeGrainCard,
@@ -85,8 +83,6 @@ type EntryFormValues = {
   unit?: string;
   amount?: number;
   unitPrice?: number;
-  placeId?: number;
-  place?: string;
   locationAddress?: string;
   paymentMethodId?: number;
   payType?: string;
@@ -105,6 +101,10 @@ type ChangeRow = {
   label: string;
   before: ReactNode;
   after: ReactNode;
+};
+
+type PaymentMethodOption = CrudOption & {
+  methodCode: string;
 };
 
 const statusOptions: CrudOption[] = [
@@ -160,6 +160,12 @@ function snapshotStatusTag(value: unknown) {
   return statusTag(value);
 }
 
+function isBankPaymentMethod(method?: { label?: unknown; methodCode?: unknown }, payType?: string) {
+  const code = String(method?.methodCode || "").toUpperCase();
+  const label = String(method?.label || payType || "");
+  return code.includes("BANK") || label.includes("银行") || label.includes("银行卡");
+}
+
 export function GrainPurchaseEntryPanel() {
   const [form] = Form.useForm<EntryFormValues>();
   const [records, setRecords] = useState<GrainPurchaseEntryRecord[]>([]);
@@ -174,8 +180,7 @@ export function GrainPurchaseEntryPanel() {
   const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [appUserOptions, setAppUserOptions] = useState<CrudOption[]>([]);
   const [purchaseTypeOptions, setPurchaseTypeOptions] = useState<CrudOption[]>([]);
-  const [placeOptions, setPlaceOptions] = useState<CrudOption[]>([]);
-  const [paymentMethodOptions, setPaymentMethodOptions] = useState<CrudOption[]>([]);
+  const [paymentMethodOptions, setPaymentMethodOptions] = useState<PaymentMethodOption[]>([]);
   const [farmerImages, setFarmerImages] = useState<GrainFarmerImagesRecord | null>(null);
   const [entryMaterials, setEntryMaterials] = useState<GrainEntryMaterialRecord[]>([]);
   const [ocrTarget, setOcrTarget] = useState<OcrTarget | null>(null);
@@ -190,6 +195,8 @@ export function GrainPurchaseEntryPanel() {
   const watchedAmount = Form.useWatch("amount", form);
   const watchedUnit = Form.useWatch("unit", form);
   const watchedUnitPrice = Form.useWatch("unitPrice", form);
+  const watchedPaymentMethodId = Form.useWatch("paymentMethodId", form);
+  const watchedPayType = Form.useWatch("payType", form);
 
   const loadRecords = async (nextQuery?: CrudListQuery) => {
     const mergedQuery = { ...query, ...nextQuery };
@@ -218,17 +225,17 @@ export function GrainPurchaseEntryPanel() {
       grainStationApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
       fetchAppUsers({ pageIndex: 1, pageSize: 200, status: "active" }),
       grainPurchaseTypeApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
-      grainPurchasePlaceApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
       grainPaymentMethodApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
     ])
-      .then(([stations, appUsers, purchaseTypes, places, paymentMethods]) => {
+      .then(([stations, appUsers, purchaseTypes, paymentMethods]) => {
         setStationOptions(stations.data.map((station) => ({ label: station.stationName, value: station.id })));
         setAppUserOptions(
           appUsers.data.map((user) => ({ label: user.name || user.username || `业务员 ${user.id}`, value: user.id })),
         );
         setPurchaseTypeOptions(purchaseTypes.data.map((type) => ({ label: type.typeName, value: type.id })));
-        setPlaceOptions(places.data.map((place) => ({ label: place.placeName, value: place.id })));
-        setPaymentMethodOptions(paymentMethods.data.map((method) => ({ label: method.methodName, value: method.id })));
+        setPaymentMethodOptions(
+          paymentMethods.data.map((method) => ({ label: method.methodName, value: method.id, methodCode: method.methodCode })),
+        );
       })
       .catch((error) => message.error(error instanceof Error ? error.message : "加载收粮选项失败"));
   }, []);
@@ -266,6 +273,12 @@ export function GrainPurchaseEntryPanel() {
     () => historySnapshots.find((item) => item.id === selectedSnapshotId) ?? historySnapshots[0] ?? null,
     [historySnapshots, selectedSnapshotId],
   );
+  const selectedPaymentMethod = useMemo(
+    () => paymentMethodOptions.find((option) => option.value === watchedPaymentMethodId),
+    [paymentMethodOptions, watchedPaymentMethodId],
+  );
+  const hasPaymentMethod = Boolean(watchedPaymentMethodId || watchedPayType);
+  const bankPaymentSelected = hasPaymentMethod && isBankPaymentMethod(selectedPaymentMethod, watchedPayType);
 
   const previousSnapshot = useMemo(() => {
     if (!selectedSnapshot) {
@@ -294,8 +307,7 @@ export function GrainPurchaseEntryPanel() {
       { key: "unit", label: "单位" },
       { key: "amount", label: "金额", render: (value) => `￥${normalizeMoney(Number(value))}` },
       { key: "unitPrice", label: "单价", render: (value) => `￥${normalizeMoney(Number(value))}` },
-      { key: "place", label: "地点" },
-      { key: "locationAddress", label: "定位地址" },
+      { key: "locationAddress", label: "收购地址" },
       { key: "payType", label: "付款方式" },
       { key: "entryStatus", label: "状态", render: snapshotStatusTag },
       { key: "entryRemark", label: "备注" },
@@ -388,8 +400,6 @@ export function GrainPurchaseEntryPanel() {
       unit: record.unit || "公斤",
       amount: record.amount,
       unitPrice: record.unitPrice,
-      placeId: record.placeId,
-      place: record.place,
       locationAddress: record.locationAddress,
       paymentMethodId: record.paymentMethodId,
       payType: record.payType,
@@ -500,8 +510,6 @@ export function GrainPurchaseEntryPanel() {
         unit: values.unit,
         amount: values.amount,
         unitPrice: values.unitPrice,
-        placeId: values.placeId,
-        place: values.place,
         locationAddress: values.locationAddress,
         paymentMethodId: values.paymentMethodId,
         payType: values.payType,
@@ -548,7 +556,7 @@ export function GrainPurchaseEntryPanel() {
     { title: "单位", dataIndex: "unit", width: 80 },
     { title: "金额", dataIndex: "amount", width: 120, render: (value) => normalizeMoney(Number(value)) },
     { title: "单价", dataIndex: "unitPrice", width: 120 },
-    { title: "地点", dataIndex: "place", width: 160 },
+    { title: "收购地址", dataIndex: "locationAddress", width: 220, render: renderValue },
     { title: "付款方式", dataIndex: "payType", width: 130 },
     { title: "状态", dataIndex: "status", width: 110, render: statusTag },
     {
@@ -618,6 +626,16 @@ export function GrainPurchaseEntryPanel() {
     { label: "身份证正面", value: farmerImages?.idCardFront },
     { label: "银行卡", value: farmerImages?.bankCard },
   ];
+  const formSections = [
+    { key: "ownership", index: "01", title: "业务归属", description: "确定粮站和负责业务员，用于本笔收粮记录归档。" },
+    {
+      key: "grain-farmer",
+      index: "02",
+      title: "粮食与农户身份信息",
+      description: "维护粮食收购信息、粮户身份与联系方式，可通过身份证识别快速回填。",
+    },
+    { key: "payment", index: "03", title: "收款与付款信息", description: "按收款方式录入对应账户信息，并补充付款状态和业务备注。" },
+  ];
 
   return (
     <div className="manager-page-stack">
@@ -638,7 +656,7 @@ export function GrainPurchaseEntryPanel() {
             <Input
               className="manager-filter-input"
               prefix={<SearchOutlined style={{ color: "var(--manager-text-faint)" }} />}
-              placeholder="收购类型/地点/付款方式/地址"
+              placeholder="收购类型/付款方式/地址"
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
               onPressEnter={() => void loadRecords(filterQuery())}
@@ -681,7 +699,7 @@ export function GrainPurchaseEntryPanel() {
           loading={loading}
           dataSource={records}
           columns={columns}
-          scroll={{ x: 2320 }}
+          scroll={{ x: 2380 }}
           pagination={{
             current: query.pageIndex,
             pageSize: query.pageSize,
@@ -693,10 +711,11 @@ export function GrainPurchaseEntryPanel() {
       </section>
 
       <Drawer
-        title={editingRecord ? `编辑收粮明细 #${editingRecord.id}` : "新增收粮明细"}
+        title={null}
         open={drawerOpen}
-        width={980}
+        width={1180}
         destroyOnClose
+        className="manager-crud-drawer"
         onClose={() => {
           setDrawerOpen(false);
           setEditingRecord(null);
@@ -704,224 +723,264 @@ export function GrainPurchaseEntryPanel() {
           setEntryMaterials([]);
           form.resetFields();
         }}
-        extra={
-          <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+        footer={
+          <div className="manager-crud-drawer-footer">
+            <Button
+              onClick={() => {
+                setDrawerOpen(false);
+                setEditingRecord(null);
+                setFarmerImages(null);
+                setEntryMaterials([]);
+                form.resetFields();
+              }}
+            >
+              取消
+            </Button>
             <Button type="primary" loading={submitting} onClick={() => void handleSubmit()}>
               保存
             </Button>
-          </Space>
+          </div>
         }
       >
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 280px", gap: 20, alignItems: "start" }}>
-          <Form form={form} layout="vertical" preserve={false}>
-            <Form.Item name="farmerId" hidden>
-              <InputNumber />
-            </Form.Item>
-            <section className="manager-data-card" style={{ marginBottom: 16 }}>
-              <Space align="center" style={{ marginBottom: 16 }}>
-                <EnvironmentOutlined style={{ color: "#237a4b" }} />
-                <Text strong>基础信息</Text>
-              </Space>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0 16px" }}>
-                <Form.Item name="stationId" label="粮站" rules={[{ required: true, message: "请选择粮站" }]}>
-                  <Select options={stationOptions} placeholder="请选择粮站" showSearch optionFilterProp="label" />
-                </Form.Item>
-                <Form.Item name="appUserId" label="业务员">
-                  <Select options={appUserOptions} placeholder="请选择业务员" allowClear showSearch optionFilterProp="label" />
-                </Form.Item>
-              </div>
-            </section>
+        <div className="manager-crud-drawer-head">
+          <div>
+            <div className="manager-section-label">{editingRecord ? "编辑记录" : "新增记录"}</div>
+            <Typography.Title level={3} style={{ margin: "6px 0 0" }}>
+              {editingRecord ? `编辑收粮明细 #${editingRecord.id}` : "新增收粮明细"}
+            </Typography.Title>
+          </div>
+          <Tag color={editingRecord ? "blue" : "green"}>{editingRecord ? `ID ${editingRecord.id}` : "新建"}</Tag>
+        </div>
 
-            <section className="manager-data-card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                <Space align="center">
-                  <UserOutlined style={{ color: "#237a4b" }} />
-                  <Text strong>粮户身份与收款信息</Text>
+        <Form form={form} layout="vertical" preserve={false} className="manager-crud-form">
+          <aside className="manager-crud-form-rail">
+            {formSections.map((section) => (
+              <a key={section.key} href={`#entry-${section.key}`}>
+                <span>{section.index}</span>
+                {section.title}
+              </a>
+            ))}
+          </aside>
+
+          <div className="manager-crud-form-main grain-entry-form-main">
+            <div className="grain-entry-form-fields">
+              <Form.Item name="farmerId" hidden>
+                <InputNumber />
+              </Form.Item>
+
+              <section id="entry-ownership" className="manager-form-section">
+                <div className="manager-form-section-head">
+                  <div>
+                    <Typography.Title level={5} style={{ margin: 0 }}>
+                      {formSections[0].title}
+                    </Typography.Title>
+                    <Text type="secondary">{formSections[0].description}</Text>
+                  </div>
+                </div>
+                <div className="manager-form-grid">
+                  <Form.Item name="stationId" label="粮站" rules={[{ required: true, message: "请选择粮站" }]}>
+                    <Select options={stationOptions} placeholder="请选择粮站" showSearch optionFilterProp="label" />
+                  </Form.Item>
+                  <Form.Item name="appUserId" label="业务员">
+                    <Select options={appUserOptions} placeholder="请选择业务员" allowClear showSearch optionFilterProp="label" />
+                  </Form.Item>
+                </div>
+              </section>
+
+              <section id="entry-grain-farmer" className="manager-form-section">
+                <div className="manager-form-section-head">
+                  <div>
+                    <Typography.Title level={5} style={{ margin: 0 }}>
+                      {formSections[1].title}
+                    </Typography.Title>
+                    <Text type="secondary">{formSections[1].description}</Text>
+                  </div>
+                  <Space wrap>
+                    <Tooltip title="识别身份证正面">
+                      <Button
+                        icon={<ScanOutlined />}
+                        onClick={() => setOcrTarget({ title: "识别身份证正面", cardType: "id-card", imageSide: "front" })}
+                      >
+                        身份证
+                      </Button>
+                    </Tooltip>
+                  </Space>
+                </div>
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message="可拍身份证后自动带入，也可以直接手动输入；编辑已有记录时识别结果会同步回粮户资料。"
+                />
+                <div className="manager-form-grid">
+                  <Form.Item name="farmerName" label="粮户姓名">
+                    <Input placeholder="拍身份证自动带入，或手动输入" prefix={<IdcardOutlined />} />
+                  </Form.Item>
+                  <Form.Item name="farmerPhone" label="手机号">
+                    <Input placeholder="请输入手机号" />
+                  </Form.Item>
+                  <Form.Item name="farmerIdNumber" label="身份证号">
+                    <Input placeholder="请输入身份证号" />
+                  </Form.Item>
+                  <Form.Item name="farmerAddress" label="身份证住址" className="manager-form-item-wide">
+                    <Input.TextArea rows={2} placeholder="请输入身份证住址" />
+                  </Form.Item>
+                  <Form.Item name="purchaseTypeId" label="收购类型">
+                    <Select
+                      options={purchaseTypeOptions}
+                      placeholder="请选择收购类型"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      onChange={(_, option) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        if (selected?.label) {
+                          form.setFieldValue("crop", String(selected.label));
+                        }
+                      }}
+                    />
+                  </Form.Item>
+                  <Form.Item name="crop" label="收购类型名称" rules={[{ required: true, message: "请输入收购类型名称" }]}>
+                    <Input placeholder="如：小麦、玉米" />
+                  </Form.Item>
+                  <Form.Item name="quantity" label="重量" rules={[{ required: true, message: "请输入重量" }]}>
+                    <InputNumber min={0} precision={3} style={{ width: "100%" }} addonAfter={watchedUnit || "公斤"} />
+                  </Form.Item>
+                  <Form.Item name="unit" label="单位">
+                    <Input placeholder="公斤" />
+                  </Form.Item>
+                  <Form.Item name="amount" label="金额" rules={[{ required: true, message: "请输入金额" }]}>
+                    <InputNumber min={0} precision={2} style={{ width: "100%" }} addonBefore="￥" />
+                  </Form.Item>
+                  <Form.Item name="unitPrice" label="单价">
+                    <InputNumber min={0} precision={4} style={{ width: "100%" }} addonBefore="￥" />
+                  </Form.Item>
+                  <Form.Item name="locationAddress" label="收购地址" className="manager-form-item-wide">
+                    <Input placeholder="请输入收购地址" />
+                  </Form.Item>
+                </div>
+              </section>
+
+              <section id="entry-payment" className="manager-form-section">
+                <div className="manager-form-section-head">
+                  <div>
+                    <Typography.Title level={5} style={{ margin: 0 }}>
+                      {formSections[2].title}
+                    </Typography.Title>
+                    <Text type="secondary">{formSections[2].description}</Text>
+                  </div>
+                  {bankPaymentSelected ? (
+                    <Tooltip title="识别银行卡">
+                      <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
+                        银行卡
+                      </Button>
+                    </Tooltip>
+                  ) : null}
+                </div>
+                <div className="manager-form-grid">
+                  <Form.Item name="paymentMethodId" label="付款方式">
+                    <Select
+                      options={paymentMethodOptions}
+                      placeholder="请选择付款方式"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      onChange={(_, option) => {
+                        const selected = Array.isArray(option) ? option[0] : option;
+                        if (selected?.label) {
+                          form.setFieldValue("payType", String(selected.label));
+                        }
+                      }}
+                    />
+                  </Form.Item>
+                  <Form.Item name="payType" label="付款方式名称">
+                    <Input placeholder="请输入付款方式" />
+                  </Form.Item>
+                  {hasPaymentMethod ? (
+                    <>
+                      <Form.Item name="farmerBankName" label={bankPaymentSelected ? "开户行" : "收款人姓名"}>
+                        <Input placeholder={bankPaymentSelected ? "请输入开户行" : "请输入收款人姓名"} />
+                      </Form.Item>
+                      <Form.Item name="farmerBankNumber" label={bankPaymentSelected ? "银行卡号" : "收款账号"}>
+                        <Input
+                          placeholder={bankPaymentSelected ? "拍银行卡自动带入，或手动输入" : "请输入收款账号"}
+                          prefix={bankPaymentSelected ? <BankOutlined /> : <WalletOutlined />}
+                        />
+                      </Form.Item>
+                    </>
+                  ) : null}
+                  <Form.Item name="status" label="状态">
+                    <Select options={statusOptions} placeholder="请选择状态" />
+                  </Form.Item>
+                  <Form.Item name="remark" label="备注" className="manager-form-item-wide">
+                    <Input.TextArea rows={3} placeholder="请输入备注" />
+                  </Form.Item>
+                </div>
+              </section>
+            </div>
+
+            <aside className="grain-entry-form-aside">
+              <section className="manager-form-assist">
+                <Text strong>单据预览</Text>
+                <Descriptions column={1} size="small" style={{ marginTop: 12 }}>
+                  <Descriptions.Item label="金额">
+                    <Text strong>￥{normalizeMoney(watchedAmount)}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="重量">{renderValue(watchedQuantity)}</Descriptions.Item>
+                  <Descriptions.Item label="单价">￥{renderValue(watchedUnitPrice)}</Descriptions.Item>
+                </Descriptions>
+              </section>
+
+              <section className="manager-form-section">
+                <Space align="center" style={{ marginBottom: 12 }}>
+                  <FileImageOutlined style={{ color: "#237a4b" }} />
+                  <Text strong>历史照片</Text>
                 </Space>
-                <Space wrap>
-                  <Button icon={<ScanOutlined />} onClick={() => setOcrTarget({ title: "识别身份证正面", cardType: "id-card", imageSide: "front" })}>
-                    身份证正面
-                  </Button>
-                  <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
-                    银行卡
-                  </Button>
+                {imageCards.some((item) => item.value) ? (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {imageCards.map((item) =>
+                      item.value ? (
+                        <div key={item.label}>
+                          <Text type="secondary">{item.label}</Text>
+                          <Image
+                            src={item.value}
+                            alt={item.label}
+                            style={{ marginTop: 6, width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
+                          />
+                        </div>
+                      ) : null,
+                    )}
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史照片" />
+                )}
+              </section>
+
+              <section className="manager-form-section">
+                <Space align="center" style={{ marginBottom: 12 }}>
+                  <CameraOutlined style={{ color: "#237a4b" }} />
+                  <Text strong>收粮材料</Text>
                 </Space>
-              </div>
-              <Alert
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message="可拍照识别后自动带入，也可以直接手动输入；编辑已有记录时识别结果会同步回粮户资料。"
-              />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0 16px" }}>
-                <Form.Item name="farmerName" label="粮户姓名">
-                  <Input placeholder="拍身份证自动带入，或手动输入" prefix={<IdcardOutlined />} />
-                </Form.Item>
-                <Form.Item name="farmerPhone" label="手机号">
-                  <Input placeholder="请输入手机号" />
-                </Form.Item>
-                <Form.Item name="farmerIdNumber" label="身份证号">
-                  <Input placeholder="请输入身份证号" />
-                </Form.Item>
-                <Form.Item name="farmerAddress" label="身份证住址" style={{ gridColumn: "1 / -1" }}>
-                  <Input.TextArea rows={2} placeholder="请输入身份证住址" />
-                </Form.Item>
-                <Form.Item name="farmerBankNumber" label="银行卡号">
-                  <Input placeholder="拍银行卡自动带入，或手动输入" prefix={<BankOutlined />} />
-                </Form.Item>
-                <Form.Item name="farmerBankName" label="开户行">
-                  <Input placeholder="请输入开户行" />
-                </Form.Item>
-              </div>
-            </section>
-
-            <section className="manager-data-card">
-              <Space align="center" style={{ marginBottom: 16 }}>
-                <CameraOutlined style={{ color: "#237a4b" }} />
-                <Text strong>收购与付款</Text>
-              </Space>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0 16px" }}>
-                <Form.Item name="purchaseTypeId" label="收购类型">
-                  <Select
-                    options={purchaseTypeOptions}
-                    placeholder="请选择收购类型"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    onChange={(_, option) => {
-                      const selected = Array.isArray(option) ? option[0] : option;
-                      if (selected?.label) {
-                        form.setFieldValue("crop", String(selected.label));
-                      }
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item name="crop" label="收购类型名称" rules={[{ required: true, message: "请输入收购类型名称" }]}>
-                  <Input placeholder="如：小麦、玉米" />
-                </Form.Item>
-                <Form.Item name="quantity" label="重量" rules={[{ required: true, message: "请输入重量" }]}>
-                  <InputNumber min={0} precision={3} style={{ width: "100%" }} addonAfter={watchedUnit || "公斤"} />
-                </Form.Item>
-                <Form.Item name="unit" label="单位">
-                  <Input placeholder="公斤" />
-                </Form.Item>
-                <Form.Item name="amount" label="金额" rules={[{ required: true, message: "请输入金额" }]}>
-                  <InputNumber min={0} precision={2} style={{ width: "100%" }} addonBefore="￥" />
-                </Form.Item>
-                <Form.Item name="unitPrice" label="单价">
-                  <InputNumber min={0} precision={4} style={{ width: "100%" }} addonBefore="￥" />
-                </Form.Item>
-                <Form.Item name="placeId" label="收购地点">
-                  <Select
-                    options={placeOptions}
-                    placeholder="请选择收购地点"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    onChange={(_, option) => {
-                      const selected = Array.isArray(option) ? option[0] : option;
-                      if (selected?.label) {
-                        form.setFieldValue("place", String(selected.label));
-                      }
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item name="place" label="地点名称">
-                  <Input placeholder="请输入地点名称" />
-                </Form.Item>
-                <Form.Item name="paymentMethodId" label="付款方式">
-                  <Select
-                    options={paymentMethodOptions}
-                    placeholder="请选择付款方式"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    onChange={(_, option) => {
-                      const selected = Array.isArray(option) ? option[0] : option;
-                      if (selected?.label) {
-                        form.setFieldValue("payType", String(selected.label));
-                      }
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item name="payType" label="付款方式名称">
-                  <Input placeholder="请输入付款方式" />
-                </Form.Item>
-                <Form.Item name="locationAddress" label="定位地址" style={{ gridColumn: "1 / -1" }}>
-                  <Input placeholder="请输入定位地址" />
-                </Form.Item>
-                <Form.Item name="status" label="状态">
-                  <Select options={statusOptions} placeholder="请选择状态" />
-                </Form.Item>
-                <Form.Item name="remark" label="备注" style={{ gridColumn: "1 / -1" }}>
-                  <Input.TextArea rows={3} placeholder="请输入备注" />
-                </Form.Item>
-              </div>
-            </section>
-          </Form>
-
-          <aside style={{ position: "sticky", top: 0 }}>
-            <section className="manager-data-card" style={{ marginBottom: 16 }}>
-              <Text strong>单据预览</Text>
-              <Descriptions column={1} size="small" style={{ marginTop: 12 }}>
-                <Descriptions.Item label="金额">
-                  <Text strong>￥{normalizeMoney(watchedAmount)}</Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="重量">{renderValue(watchedQuantity)}</Descriptions.Item>
-                <Descriptions.Item label="单价">￥{renderValue(watchedUnitPrice)}</Descriptions.Item>
-              </Descriptions>
-            </section>
-
-            <section className="manager-data-card">
-              <Space align="center" style={{ marginBottom: 12 }}>
-                <FileImageOutlined style={{ color: "#237a4b" }} />
-                <Text strong>历史图片</Text>
-              </Space>
-              {imageCards.some((item) => item.value) ? (
-                <div style={{ display: "grid", gap: 12 }}>
-                  {imageCards.map((item) =>
-                    item.value ? (
-                      <div key={item.label}>
-                        <Text type="secondary">{item.label}</Text>
+                {entryMaterials.length > 0 ? (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {entryMaterials.map((item) => (
+                      <div key={item.id}>
+                        <Text type="secondary">{item.fileName || item.materialType || `材料 #${item.id}`}</Text>
                         <Image
-                          src={item.value}
-                          alt={item.label}
+                          src={item.imageUrl}
+                          alt={item.fileName || "收粮材料"}
                           style={{ marginTop: 6, width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
                         />
                       </div>
-                    ) : null,
-                  )}
-                </div>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史图片" />
-              )}
-            </section>
-
-            <section className="manager-data-card" style={{ marginTop: 16 }}>
-              <Space align="center" style={{ marginBottom: 12 }}>
-                <CameraOutlined style={{ color: "#237a4b" }} />
-                <Text strong>收粮材料</Text>
-              </Space>
-              {entryMaterials.length > 0 ? (
-                <div style={{ display: "grid", gap: 12 }}>
-                  {entryMaterials.map((item) => (
-                    <div key={item.id}>
-                      <Text type="secondary">{item.fileName || item.materialType || `材料 #${item.id}`}</Text>
-                      <Image
-                        src={item.imageUrl}
-                        alt={item.fileName || "收粮材料"}
-                        style={{ marginTop: 6, width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无收粮材料图片" />
-              )}
-            </section>
-          </aside>
-        </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无收粮材料图片" />
+                )}
+              </section>
+            </aside>
+          </div>
+        </Form>
       </Drawer>
 
       <Drawer
@@ -1029,13 +1088,12 @@ export function GrainPurchaseEntryPanel() {
                   </Descriptions.Item>
                   <Descriptions.Item label="金额">￥{normalizeMoney(Number(selectedSnapshot.amount))}</Descriptions.Item>
                   <Descriptions.Item label="单价">￥{normalizeMoney(Number(selectedSnapshot.unitPrice))}</Descriptions.Item>
-                  <Descriptions.Item label="地点">{renderValue(selectedSnapshot.place)}</Descriptions.Item>
+                  <Descriptions.Item label="收购地址" span={2}>
+                    {renderValue(selectedSnapshot.locationAddress)}
+                  </Descriptions.Item>
                   <Descriptions.Item label="付款方式">{renderValue(selectedSnapshot.payType)}</Descriptions.Item>
                   <Descriptions.Item label="状态">{snapshotStatusTag(selectedSnapshot.entryStatus)}</Descriptions.Item>
                   <Descriptions.Item label="备注">{renderValue(selectedSnapshot.entryRemark)}</Descriptions.Item>
-                  <Descriptions.Item label="定位地址" span={2}>
-                    {renderValue(selectedSnapshot.locationAddress)}
-                  </Descriptions.Item>
                 </Descriptions>
               </>
             ) : (

@@ -25,7 +25,22 @@ func (r *UserRepository) FindByUsername(username string) (*User, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity User
-	if err := r.QueryOneBySQL(&entity, "SELECT * FROM user WHERE username = ? AND active = 1 ORDER BY id ASC LIMIT 1", username); err != nil {
+	if err := r.QueryOneBySQL(&entity, "SELECT * FROM user WHERE username = ? AND active = 1 ORDER BY id ASC LIMIT 1", strings.TrimSpace(username)); err != nil {
+		return nil, err
+	}
+	if entity.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &entity, nil
+}
+
+func (r *UserRepository) FindByUsernameOrPhone(account string) (*User, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity User
+	account = strings.TrimSpace(account)
+	if err := r.QueryOneBySQL(&entity, "SELECT * FROM user WHERE (username = ? OR phone = ?) AND active = 1 ORDER BY id ASC LIMIT 1", account, account); err != nil {
 		return nil, err
 	}
 	if entity.Id == 0 {

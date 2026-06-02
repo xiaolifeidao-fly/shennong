@@ -80,7 +80,7 @@ export async function getPage<T>(
   const response = await instance.get<ApiResponse<PageResult<T>>>(url, { params });
   const page = unwrapResponse(response.data);
   return {
-    total: page.total,
-    data: plainToInstance(cls, page.data ?? []),
+    total: page?.total ?? 0,
+    data: plainToInstance(cls, page?.data ?? []),
   };
 }

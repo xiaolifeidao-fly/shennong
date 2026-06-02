@@ -49,6 +49,12 @@
       }
     },
     {
+      "path": "pages/change-password/index",
+      "style": {
+        "navigationBarTitleText": "修改密码"
+      }
+    },
+    {
       "path": "pages/mine/index",
       "style": {
         "navigationBarTitleText": "我的"

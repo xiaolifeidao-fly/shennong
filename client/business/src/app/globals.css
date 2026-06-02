@@ -722,6 +722,10 @@ select {
   padding: 24px 32px 32px;
 }
 
+.manager-entry-form {
+  grid-template-columns: 172px minmax(0, 1fr) 280px;
+}
+
 .manager-crud-form-rail {
   position: sticky;
   top: 18px;

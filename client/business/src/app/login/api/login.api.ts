@@ -1,6 +1,7 @@
 "use client";
 
 import { instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
+import type { StoredCurrentAppUser } from "@/utils/auth";
 
 export interface LoginPayload {
   username: string;
@@ -9,6 +10,7 @@ export interface LoginPayload {
 
 export interface LoginResponse {
   token: string;
+  user?: StoredCurrentAppUser;
 }
 
 export async function login(payload: LoginPayload) {

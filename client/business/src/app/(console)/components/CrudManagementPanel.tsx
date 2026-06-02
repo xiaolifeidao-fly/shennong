@@ -64,6 +64,7 @@ export interface CrudField<R extends CrudRecord> {
   hiddenOnCreate?: boolean;
   hiddenOnEdit?: boolean;
   disabledOnEdit?: boolean;
+  disabled?: boolean;
   span?: 1 | 2;
   help?: string;
 }
@@ -115,7 +116,10 @@ interface CrudManagementPanelProps<R extends CrudRecord, P extends Record<string
   rowActions?: (record: R, context: CrudActionContext) => ReactNode;
   actionWidth?: number;
   modalWidth?: number;
+  showDrawerHeader?: boolean;
+  showDrawerRecordTag?: boolean;
   formSections?: CrudFormSection<R>[];
+  initialValues?: Partial<R>;
   formExtra?: (context: {
     form: FormInstance;
     editingRecord: R | null;
@@ -206,7 +210,10 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
   rowActions,
   actionWidth = 132,
   modalWidth = 720,
+  showDrawerHeader = true,
+  showDrawerRecordTag = true,
   formSections,
+  initialValues,
   formExtra,
 }: CrudManagementPanelProps<R, P>) {
   const [form] = Form.useForm();
@@ -370,7 +377,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
       : [{ key: "basic", title: "基础信息", fields: visibleFields }];
 
   const renderFormControl = (field: CrudField<R>) => {
-    const disabled = field.disabledOnEdit && Boolean(editingRecord);
+    const disabled = field.disabled || (field.disabledOnEdit && Boolean(editingRecord));
     if (field.type === "textarea") {
       return <Input.TextArea rows={4} placeholder={field.placeholder} disabled={disabled} />;
     }
@@ -495,6 +502,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
               onClick={() => {
                 setEditingRecord(null);
                 form.resetFields();
+                form.setFieldsValue(initialValues ?? {});
                 setModalOpen(true);
               }}
               style={{
@@ -554,15 +562,19 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
           </div>
         }
       >
-        <div className="manager-crud-drawer-head">
-          <div>
-            <div className="manager-section-label">{editingRecord ? "编辑记录" : "新增记录"}</div>
-            <Typography.Title level={3} style={{ margin: "6px 0 0" }}>
-              {editingRecord ? `编辑${title}` : createText}
-            </Typography.Title>
+        {showDrawerHeader ? (
+          <div className="manager-crud-drawer-head">
+            <div>
+              <div className="manager-section-label">{editingRecord ? "编辑记录" : "新增记录"}</div>
+              <Typography.Title level={3} style={{ margin: "6px 0 0" }}>
+                {editingRecord ? `编辑${title}` : createText}
+              </Typography.Title>
+            </div>
+            {showDrawerRecordTag ? (
+              <Tag color={editingRecord ? "blue" : "green"}>{editingRecord ? `ID ${editingRecord.id}` : "新建"}</Tag>
+            ) : null}
           </div>
-          <Tag color={editingRecord ? "blue" : "green"}>{editingRecord ? `ID ${editingRecord.id}` : "新建"}</Tag>
-        </div>
+        ) : null}
 
         <Form form={form} layout="vertical" preserve={false} className="manager-crud-form">
           <aside className="manager-crud-form-rail">

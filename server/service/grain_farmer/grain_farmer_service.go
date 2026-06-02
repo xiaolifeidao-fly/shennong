@@ -56,12 +56,15 @@ func (s *GrainFarmerService) CreateFarmerForAppUser(req *grainFarmerDTO.GrainFar
 
 func (s *GrainFarmerService) createFarmer(req *grainFarmerDTO.GrainFarmerDTO, scopedAppUserID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
 	entity := db.ToPO[grainFarmerRepository.GrainFarmer](req)
+	if scopedAppUserID > 0 {
+		entity.AppUserID = scopedAppUserID
+	}
 	normalizeFarmer(entity)
 	digest, err := farmerIDNumberDigest(entity.IDNumber)
 	if err != nil {
 		return nil, err
 	}
-	if existing, err := s.farmerRepository.FindActiveByIDNumberDigestForAppUser(digest, entity.IDNumber, entity.StationID, scopedAppUserID); err == nil {
+	if existing, err := s.farmerRepository.FindActiveByIDNumberDigestForAppUser(digest, entity.IDNumber, entity.StationID, entity.AppUserID); err == nil {
 		existingID := existing.Id
 		existingBase := existing.BaseEntity
 		copier.Copy(existing, entity)

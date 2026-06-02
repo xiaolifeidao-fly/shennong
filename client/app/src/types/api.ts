@@ -82,5 +82,6 @@ export interface AppUserProfile {
   wxNickname?: string
   wxAvatar?: string
   wxLastLoginTime?: string
+  hasOriginPassword?: boolean
   [key: string]: unknown
 }

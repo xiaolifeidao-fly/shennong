@@ -121,19 +121,22 @@ type AppUserStatsDTO struct {
 }
 
 type CurrentAppUserProfileDTO struct {
-	Id              int        `json:"id"`
-	Name            string     `json:"name"`
-	Username        string     `json:"username"`
-	Email           string     `json:"email"`
-	Phone           string     `json:"phone"`
-	Department      string     `json:"department"`
-	Remark          string     `json:"remark"`
-	LastLoginTime   *time.Time `json:"lastLoginTime"`
-	OpenUID         string     `json:"openUid"`
-	UnionID         string     `json:"unionId"`
-	WxNickname      string     `json:"wxNickname"`
-	WxAvatar        string     `json:"wxAvatar"`
-	WxLastLoginTime *time.Time `json:"wxLastLoginTime"`
+	Id                int        `json:"id"`
+	Name              string     `json:"name"`
+	Username          string     `json:"username"`
+	Email             string     `json:"email"`
+	Phone             string     `json:"phone"`
+	Department        string     `json:"department"`
+	Remark            string     `json:"remark"`
+	LastLoginTime     *time.Time `json:"lastLoginTime"`
+	OpenUID           string     `json:"openUid"`
+	UnionID           string     `json:"unionId"`
+	WxNickname        string     `json:"wxNickname"`
+	WxAvatar          string     `json:"wxAvatar"`
+	WxLastLoginTime   *time.Time `json:"wxLastLoginTime"`
+	HasOriginPassword bool       `json:"hasOriginPassword"`
+	StationID         uint64     `json:"stationId"`
+	StationName       string     `json:"stationName"`
 }
 
 type WechatLoginDTO struct {

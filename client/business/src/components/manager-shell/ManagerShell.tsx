@@ -6,7 +6,6 @@ import {
   CompassOutlined,
   DatabaseOutlined,
   DownOutlined,
-  HomeOutlined,
   LockOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -33,7 +32,7 @@ import {
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
-import { clearAuthToken } from "@/utils/auth";
+import { clearAuthToken, setCurrentAppUser } from "@/utils/auth";
 import {
   changeCurrentUserPassword,
   fetchCurrentUserProfile,
@@ -59,50 +58,14 @@ interface PasswordFormValues {
 }
 
 const pageTitleMap: Record<string, string> = {
-  "/manager-dashboard": "数据总览",
-  "/user/maintenance": "用户维护",
-  "/user/list": "用户列表",
-  "/user": "用户管理",
-  "/permission": "权限管理",
-  "/tenant": "租户管理",
-  "/grain/stations": "粮站列表",
-  "/grain/config": "基础设置",
-  "/grain/payment-methods": "付款方式",
+  "/manager-dashboard": "工作台",
   "/grain/farmers": "农户管理",
-  "/grain/dashboard": "收粮大盘",
-  "/grain/entries": "收粮明细",
+  "/grain/dashboard": "粮食大盘",
+  "/grain/entries": "粮食明细",
 };
 
 function getOpenKeys(pathname: string) {
-  if (pathname.startsWith("/user")) {
-    return ["/user"];
-  }
-  if (pathname.startsWith("/activation-code")) {
-    return ["/activation-code"];
-  }
-  if (pathname.startsWith("/product")) {
-    return ["/product"];
-  }
-  if (pathname.startsWith("/collect")) {
-    return ["/collect"];
-  }
-  if (pathname.startsWith("/shop")) {
-    return ["/shop"];
-  }
-  if (pathname.startsWith("/permission")) {
-    return ["/system-group"];
-  }
-  if (pathname.startsWith("/tenant")) {
-    return ["/system-group"];
-  }
   if (pathname.startsWith("/grain")) {
-    if (
-      pathname.startsWith("/grain/stations") ||
-      pathname.startsWith("/grain/config") ||
-      pathname.startsWith("/grain/payment-methods")
-    ) {
-      return ["/grain-station-group"];
-    }
     if (pathname.startsWith("/grain/farmers")) {
       return ["/grain-farmer-group"];
     }
@@ -141,7 +104,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
     () => [
       {
         key: "/manager-dashboard",
-        label: "数据总览",
+        label: "工作台",
         icon: <AppstoreOutlined />,
       },
       {
@@ -151,38 +114,12 @@ export function ManagerShell({ children }: ManagerShellProps) {
       },
       {
         key: "/grain/dashboard",
-        label: "收粮大盘",
+        label: "粮食大盘",
         icon: <BarChartOutlined />,
       },
       {
         key: "/grain/entries",
-        label: "收粮明细",
-        icon: <DatabaseOutlined />,
-      },
-    ],
-    [],
-  );
-
-  const sidebarShortcuts = useMemo(
-    () => [
-      {
-        key: "/manager-dashboard",
-        label: "首页",
-        icon: <HomeOutlined />,
-      },
-      {
-        key: "/grain/farmers",
-        label: "农户",
-        icon: <UsergroupAddOutlined />,
-      },
-      {
-        key: "/grain/dashboard",
-        label: "大盘",
-        icon: <BarChartOutlined />,
-      },
-      {
-        key: "/grain/entries",
-        label: "明细",
+        label: "粮食明细",
         icon: <DatabaseOutlined />,
       },
     ],
@@ -191,16 +128,10 @@ export function ManagerShell({ children }: ManagerShellProps) {
 
   const currentModule =
     activePath.startsWith("/grain/farmers")
-      ? "粮户运营"
+      ? "农户管理"
       : activePath.startsWith("/grain/dashboard") || activePath.startsWith("/grain/entries")
-        ? "收粮业务"
-        : activePath.startsWith("/grain")
-          ? "粮站配置"
-          : activePath.startsWith("/permission") || activePath.startsWith("/tenant")
-            ? "系统配置"
-            : activePath.startsWith("/user")
-              ? "用户中心"
-              : "经营总览";
+        ? "粮食管理"
+        : "工作台";
 
   const items = useMemo<MenuItem[]>(
     () => [
@@ -212,7 +143,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
       {
         key: "/manager-dashboard",
         icon: <AppstoreOutlined />,
-        label: renderMenuLabel("数据总览", "经营指标"),
+        label: renderMenuLabel("工作台", "经营指标"),
       },
       {
         type: "group",
@@ -237,18 +168,18 @@ export function ManagerShell({ children }: ManagerShellProps) {
         children: [
           {
             key: "/grain/dashboard",
-            label: "收粮大盘",
+            label: "粮食大盘",
           },
           {
             key: "/grain/entries",
-            label: "收粮明细",
+            label: "粮食明细",
           },
         ],
       },
     ],
     [],
   );
-  const selectedKey = activePath === "/activation-code" ? "/activation-code/admin" : activePath;
+  const selectedKey = activePath;
 
   const roleText = "业务账号";
 
@@ -259,6 +190,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
     try {
       const result = await fetchCurrentUserProfile();
       setProfile(result);
+      setCurrentAppUser(result);
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "获取个人信息失败");
     }
@@ -386,22 +318,6 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 <Tag bordered={false} className="manager-sidebar-env manager-collapse-hidden">
                   运营后台
                 </Tag>
-              </div>
-
-              <div className="manager-sidebar-shortcuts manager-collapse-hidden">
-                {sidebarShortcuts.map((shortcut) => {
-                  const active = activePath === shortcut.key;
-                  return (
-                    <Button
-                      key={shortcut.key}
-                      type={active ? "primary" : "text"}
-                      icon={shortcut.icon}
-                      onClick={() => router.push(shortcut.key)}
-                    >
-                      {shortcut.label}
-                    </Button>
-                  );
-                })}
               </div>
 
               <Menu

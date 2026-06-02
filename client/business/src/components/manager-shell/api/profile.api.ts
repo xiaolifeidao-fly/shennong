@@ -22,6 +22,10 @@ export class CurrentUserProfile {
   wxNickname = "";
 
   wxAvatar = "";
+
+  stationId = 0;
+
+  stationName = "";
 }
 
 export interface UpdateCurrentUserProfilePayload {

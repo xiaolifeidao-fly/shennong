@@ -1,78 +1,85 @@
 <template>
-  <view class="page entry-page">
-    <EntryNotice />
+  <view class="entry-root">
+    <view class="fixed-entry-actions">
+      <button class="clear-form-btn" :disabled="saving" @click="confirmClearForm">
+        <text class="clear-mini"></text>
+        <text>清空</text>
+      </button>
+      <button class="fixed-save-btn" :loading="saving" :disabled="saving" @click="saveEntry">
+        <text class="submit-icon"></text>
+        <text>{{ saving ? '正在保存...' : editingEntryId ? '保存修改并记录' : '保存本次录入' }}</text>
+      </button>
+    </view>
 
-    <SectionHeader title="新增收粮录入" action-text="查看今日汇总" @action="goFarmers" />
-    <view v-if="lastSavedEntry" class="card saved-card">
-      <view class="saved-head">
-        <view>
-          <text class="saved-title">{{ savedActionText }}</text>
-          <text class="saved-meta">{{ lastSavedEntry.buyTime }} · {{ lastSavedEntry.place || lastSavedEntry.locationName }}</text>
+    <view class="page entry-page">
+      <SectionHeader title="新增收粮录入" action-text="查看今日汇总" @action="goFarmers" />
+      <view v-if="lastSavedEntry" class="card saved-card">
+        <view class="saved-head">
+          <view>
+            <text class="saved-title">{{ savedActionText }}</text>
+            <text class="saved-meta">{{ lastSavedEntry.buyTime }} · {{ lastSavedEntry.place || lastSavedEntry.locationName }}</text>
+          </view>
+          <text class="saved-badge">{{ lastSavedEntry.crop }}</text>
         </view>
-        <text class="saved-badge">{{ lastSavedEntry.crop }}</text>
+        <view class="saved-grid">
+          <view class="kv"><text>农户</text><text class="value">{{ savedFarmerName }}</text></view>
+          <view class="kv"><text>重量</text><text class="value">{{ lastSavedEntry.quantity.toLocaleString('zh-CN') }} 公斤</text></view>
+          <view class="kv"><text>金额</text><text class="value">¥{{ lastSavedEntry.amount.toLocaleString('zh-CN') }}</text></view>
+          <view class="kv"><text>付款方式</text><text class="value">{{ lastSavedEntry.payType }}</text></view>
+        </view>
+        <view class="saved-actions">
+          <button class="secondary-btn" @click="editSavedEntry">
+            <text class="edit-mini"></text>
+            <text>查看/修改</text>
+          </button>
+          <button class="primary-btn" @click="startAnotherEntry">
+            <text class="plus-mini"></text>
+            <text>继续录入</text>
+          </button>
+        </view>
       </view>
-      <view class="saved-grid">
-        <view class="kv"><text>农户</text><text class="value">{{ savedFarmerName }}</text></view>
-        <view class="kv"><text>重量</text><text class="value">{{ lastSavedEntry.quantity.toLocaleString('zh-CN') }} 公斤</text></view>
-        <view class="kv"><text>金额</text><text class="value">¥{{ lastSavedEntry.amount.toLocaleString('zh-CN') }}</text></view>
-        <view class="kv"><text>付款方式</text><text class="value">{{ lastSavedEntry.payType }}</text></view>
+      <view class="card history-card">
+        <view class="field">
+          <text class="label">搜索历史提交</text>
+          <input v-model="historyKeyword" class="input" placeholder="输入农户、产品、地点，一键带出原录入" @focus="loadHistoryEntries" />
+        </view>
+        <view v-if="grainStore.entriesLoading" class="loading-strip">正在加载历史录入...</view>
+        <picker :value="historyIndex" :range="historyOptions" range-key="label" @click="loadHistoryEntries" @change="applyHistoryEntry">
+          <view class="picker-value">{{ activeHistoryLabel }}</view>
+        </picker>
+        <view v-if="editingEntryId" class="edit-strip">
+          <text>正在修改已提交记录，保存后会同步服务端并保留修改快照。</text>
+          <button class="clear-edit" @click="clearEditing">
+            <text class="plus-mini dark"></text>
+            <text>新增</text>
+          </button>
+        </view>
       </view>
-      <view class="saved-actions">
-        <button class="secondary-btn" @click="editSavedEntry">
-          <text class="edit-mini"></text>
-          <text>查看/修改</text>
-        </button>
-        <button class="primary-btn" @click="startAnotherEntry">
-          <text class="plus-mini"></text>
-          <text>继续录入</text>
-        </button>
-      </view>
-    </view>
-    <view class="card history-card">
-      <view class="field">
-        <text class="label">搜索历史提交</text>
-        <input v-model="historyKeyword" class="input" placeholder="输入农户、产品、地点，一键带出原录入" @focus="loadHistoryEntries" />
-      </view>
-      <view v-if="grainStore.entriesLoading" class="loading-strip">正在加载历史录入...</view>
-      <picker :value="historyIndex" :range="historyOptions" range-key="label" @click="loadHistoryEntries" @change="applyHistoryEntry">
-        <view class="picker-value">{{ activeHistoryLabel }}</view>
-      </picker>
-      <view v-if="editingEntryId" class="edit-strip">
-        <text>正在修改已提交记录，保存后会同步服务端并保留修改快照。</text>
-        <button class="clear-edit" @click="clearEditing">
-          <text class="plus-mini dark"></text>
-          <text>新增</text>
-        </button>
-      </view>
-    </view>
 
-    <FarmerIdentityForm
-      v-model="draft"
-      :farmers="grainStore.farmers"
-      :preset="grainStore.preset"
-      @farmer-change="handleFarmerChange"
-      @scan-id-front="() => applyIdScan('front')"
-      @scan-id-back="() => applyIdScan('back')"
-      @scan-bank="applyBankScan"
-    />
+      <FarmerIdentityForm
+        v-model="draft"
+        :farmers="grainStore.farmers"
+        :preset="grainStore.preset"
+        @farmer-change="handleFarmerChange"
+        @scan-id-front="() => applyIdScan('front')"
+        @scan-id-back="() => applyIdScan('back')"
+        @scan-bank="applyBankScan"
+      />
 
-    <SectionHeader title="本笔粮食信息" />
-    <view v-if="grainStore.presetLoading || grainStore.farmersLoading" class="loading-strip">正在加载录入配置...</view>
-    <GrainPurchaseForm
-      v-model="draft"
-      :preset="grainStore.preset"
-      :editing="Boolean(editingEntryId)"
-      :saving="saving"
-      @select-current-location="selectCurrentLocation"
-      @submit="saveEntry"
-    />
+      <SectionHeader title="本笔粮食信息" />
+      <view v-if="grainStore.presetLoading || grainStore.farmersLoading" class="loading-strip">正在加载录入配置...</view>
+      <GrainPurchaseForm
+        v-model="draft"
+        :preset="grainStore.preset"
+        @select-current-location="selectCurrentLocation"
+      />
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import EntryNotice from './components/EntryNotice.vue'
 import FarmerIdentityForm from './components/FarmerIdentityForm.vue'
 import GrainPurchaseForm from './components/GrainPurchaseForm.vue'
 import SectionHeader from '@/components/business/SectionHeader.vue'
@@ -167,6 +174,34 @@ function clearEditing() {
   editingEntryId.value = ''
   draft.value = grainStore.createEntryDraft(grainStore.selectedFarmerId)
   hasInitializedDraft.value = true
+}
+
+function confirmClearForm() {
+  if (saving.value) {
+    return
+  }
+
+  uni.showModal({
+    title: '清空当前表单',
+    content: '将清空已填写的农户、粮食、付款、地点和材料信息，是否继续？',
+    confirmText: '清空',
+    confirmColor: '#d14343',
+    success: (res) => {
+      if (res.confirm) {
+        clearCurrentForm()
+      }
+    },
+  })
+}
+
+function clearCurrentForm() {
+  historyKeyword.value = ''
+  editingEntryId.value = ''
+  lastSavedEntry.value = undefined
+  grainStore.selectFarmer('new')
+  draft.value = grainStore.createEntryDraft('new')
+  hasInitializedDraft.value = true
+  uni.showToast({ title: '表单已清空', icon: 'success' })
 }
 
 async function chooseCardPhoto(): Promise<string> {
@@ -349,13 +384,65 @@ function validateDraft(value: GrainEntryDraft) {
 </script>
 
 <style lang="scss" scoped>
+.entry-root {
+  min-height: 100vh;
+}
+
 .entry-page {
   display: flex;
   flex-direction: column;
+  padding-top: 132rpx;
 }
 
 .history-card {
   padding: 30rpx;
+}
+
+.fixed-entry-actions {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: 180rpx minmax(0, 1fr);
+  gap: 16rpx;
+  padding: 18rpx 28rpx 16rpx;
+  border-bottom: 1rpx solid rgba(216, 229, 214, 0.9);
+  background: rgba(247, 251, 244, 0.98);
+  box-shadow: 0 12rpx 30rpx rgba(31, 47, 31, 0.08);
+}
+
+.clear-form-btn,
+.fixed-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  height: 84rpx;
+  border-radius: 18rpx;
+  font-weight: 800;
+  line-height: 84rpx;
+}
+
+.clear-form-btn {
+  border: 1rpx solid #f2c6c6;
+  background: #ffffff;
+  color: #b42323;
+  font-size: 26rpx;
+}
+
+.fixed-save-btn {
+  border: 1rpx solid #237a4b;
+  background: linear-gradient(135deg, #237a4b, #145535);
+  color: #ffffff;
+  font-size: 28rpx;
+  box-shadow: 0 16rpx 30rpx rgba(35, 122, 75, 0.2);
+}
+
+.clear-form-btn[disabled],
+.fixed-save-btn[disabled] {
+  opacity: 0.55;
 }
 
 .saved-card {
@@ -522,7 +609,9 @@ function validateDraft(value: GrainEntryDraft) {
 }
 
 .edit-mini,
-.plus-mini {
+.clear-mini,
+.plus-mini,
+.submit-icon {
   position: relative;
   display: inline-block;
   flex: 0 0 auto;
@@ -544,6 +633,36 @@ function validateDraft(value: GrainEntryDraft) {
   height: 14rpx;
   border-radius: 4rpx;
   background: #ffb84d;
+  content: '';
+}
+
+.clear-mini {
+  width: 28rpx;
+  height: 28rpx;
+  border: 3rpx solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 7rpx 7rpx;
+}
+
+.clear-mini::before {
+  position: absolute;
+  left: 3rpx;
+  top: -7rpx;
+  width: 22rpx;
+  height: 4rpx;
+  border-radius: 999rpx;
+  background: currentColor;
+  content: '';
+}
+
+.clear-mini::after {
+  position: absolute;
+  left: 9rpx;
+  top: -12rpx;
+  width: 10rpx;
+  height: 4rpx;
+  border-radius: 999rpx;
+  background: currentColor;
   content: '';
 }
 
@@ -570,5 +689,13 @@ function validateDraft(value: GrainEntryDraft) {
 
 .plus-mini.dark {
   color: #9a3412;
+}
+
+.submit-icon {
+  width: 28rpx;
+  height: 18rpx;
+  border-left: 5rpx solid #ffffff;
+  border-bottom: 5rpx solid #ffffff;
+  transform: rotate(-45deg) translateY(-3rpx);
 }
 </style>

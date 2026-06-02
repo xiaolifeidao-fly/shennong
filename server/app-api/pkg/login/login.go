@@ -24,7 +24,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string                               `json:"token"`
+	User  *appUserDTO.CurrentAppUserProfileDTO `json:"user"`
 }
 
 type WechatLoginResponse struct {
@@ -70,12 +71,14 @@ func (h *LoginHandler) login(context *gin.Context) {
 		maxLoginErrorNum = 20
 	}
 
-	token, _, err := h.authService.Login(req.Username, req.Password, context.ClientIP(), maxLoginErrorNum)
+	token, loginUser, err := h.authService.Login(req.Username, req.Password, context.ClientIP(), maxLoginErrorNum)
 	if err != nil {
 		commonRouter.ToError(context, err.Error())
 		return
 	}
-	commonRouter.ToJson(context, &LoginResponse{Token: token}, nil)
+	service := appUserService.NewAppUserService()
+	profile, err := service.GetCurrentUserProfile(uint(loginUser.ID))
+	commonRouter.ToJson(context, &LoginResponse{Token: token, User: profile}, err)
 }
 
 func (h *LoginHandler) wechatLogin(context *gin.Context) {

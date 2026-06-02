@@ -15,7 +15,6 @@ import {
   ScanOutlined,
   SearchOutlined,
   StopOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
 import {
   Alert,
@@ -47,12 +46,11 @@ import {
   getGrainFarmerImages,
   grainEntryMaterialApi,
   grainFarmerApi,
-  grainPaymentMethodApi,
   grainPurchaseEntryApi,
   grainPurchaseEntrySnapshotApi,
-  grainPurchasePlaceApi,
-  grainPurchaseTypeApi,
   grainStationApi,
+  listActiveGrainPaymentMethods,
+  listActiveGrainPurchaseTypes,
   recognizeGrainCard,
   voidGrainPurchaseEntry,
   type GrainCardOcrResult,
@@ -63,6 +61,7 @@ import {
   type GrainPurchaseEntryRecord,
   type GrainPurchaseEntrySnapshotRecord,
 } from "../api/grain.api";
+import { getCurrentAppUser, type StoredCurrentAppUser } from "@/utils/auth";
 import { SensitiveValue } from "./SensitiveValue";
 
 const { Text } = Typography;
@@ -82,8 +81,6 @@ type EntryFormValues = {
   unit?: string;
   amount?: number;
   unitPrice?: number;
-  placeId?: number;
-  place?: string;
   locationAddress?: string;
   paymentMethodId?: number;
   payType?: string;
@@ -104,12 +101,23 @@ type ChangeRow = {
   after: ReactNode;
 };
 
+type PaymentMethodOption = CrudOption & {
+  methodCode?: string;
+};
+
 const statusOptions: CrudOption[] = [
   { label: "已提交", value: "submitted" },
   { label: "已作废", value: "voided" },
 ];
 
 const pageSize = 10;
+
+const entryFormSections = [
+  { key: "ownership", title: "基础信息" },
+  { key: "grain-farmer", title: "粮食与农户信息" },
+  { key: "payment", title: "收付款信息" },
+  { key: "materials", title: "图片材料" },
+] as const;
 
 function renderValue(value: unknown) {
   if (value === null || value === undefined || value === "") {
@@ -136,6 +144,29 @@ function formatTime(value?: string) {
     return "-";
   }
   return value.replace("T", " ").slice(0, 19);
+}
+
+function isBankPaymentMethod(option?: PaymentMethodOption, payType?: string) {
+  const text = `${option?.methodCode || ""} ${option?.label || ""} ${payType || ""}`.toLowerCase();
+  return text.includes("bank") || text.includes("银行卡") || text.includes("银行");
+}
+
+function receiptFieldMeta(isBankPayment: boolean, payType?: string) {
+  if (isBankPayment) {
+    return {
+      accountLabel: "银行卡号",
+      accountPlaceholder: "拍银行卡自动带入，或手动输入银行卡号",
+      nameLabel: "开户行",
+      namePlaceholder: "请输入开户行",
+    };
+  }
+  const methodName = payType || "收款";
+  return {
+    accountLabel: "收款账号",
+    accountPlaceholder: `请输入${methodName}账号`,
+    nameLabel: "收款人姓名",
+    namePlaceholder: "请输入收款人姓名",
+  };
 }
 
 function actionMeta(action: string) {
@@ -170,8 +201,7 @@ export function GrainPurchaseEntryPanel() {
   const [editingRecord, setEditingRecord] = useState<GrainPurchaseEntryRecord | null>(null);
   const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [purchaseTypeOptions, setPurchaseTypeOptions] = useState<CrudOption[]>([]);
-  const [placeOptions, setPlaceOptions] = useState<CrudOption[]>([]);
-  const [paymentMethodOptions, setPaymentMethodOptions] = useState<CrudOption[]>([]);
+  const [paymentMethodOptions, setPaymentMethodOptions] = useState<PaymentMethodOption[]>([]);
   const [farmerImages, setFarmerImages] = useState<GrainFarmerImagesRecord | null>(null);
   const [entryMaterials, setEntryMaterials] = useState<GrainEntryMaterialRecord[]>([]);
   const [ocrTarget, setOcrTarget] = useState<OcrTarget | null>(null);
@@ -181,11 +211,14 @@ export function GrainPurchaseEntryPanel() {
   const [historySnapshots, setHistorySnapshots] = useState<GrainPurchaseEntrySnapshotRecord[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [currentAppUser] = useState<StoredCurrentAppUser | null>(() => getCurrentAppUser());
 
   const watchedQuantity = Form.useWatch("quantity", form);
   const watchedAmount = Form.useWatch("amount", form);
   const watchedUnit = Form.useWatch("unit", form);
   const watchedUnitPrice = Form.useWatch("unitPrice", form);
+  const watchedPaymentMethodId = Form.useWatch("paymentMethodId", form);
+  const watchedPayType = Form.useWatch("payType", form);
 
   const loadRecords = async (nextQuery?: CrudListQuery) => {
     const mergedQuery = { ...query, ...nextQuery };
@@ -210,19 +243,12 @@ export function GrainPurchaseEntryPanel() {
   }, []);
 
   useEffect(() => {
-    Promise.all([
-      grainStationApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
-      grainPurchaseTypeApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
-      grainPurchasePlaceApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
-      grainPaymentMethodApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
-    ])
-      .then(([stations, purchaseTypes, places, paymentMethods]) => {
+    grainStationApi
+      .list({ pageIndex: 1, pageSize: 200, status: "active" })
+      .then((stations) => {
         setStationOptions(stations.data.map((station) => ({ label: station.stationName, value: station.id })));
-        setPurchaseTypeOptions(purchaseTypes.data.map((type) => ({ label: type.typeName, value: type.id })));
-        setPlaceOptions(places.data.map((place) => ({ label: place.placeName, value: place.id })));
-        setPaymentMethodOptions(paymentMethods.data.map((method) => ({ label: method.methodName, value: method.id })));
       })
-      .catch((error) => message.error(error instanceof Error ? error.message : "加载收粮选项失败"));
+      .catch((error) => message.error(error instanceof Error ? error.message : "加载粮站选项失败"));
   }, []);
 
   useEffect(() => {
@@ -236,10 +262,8 @@ export function GrainPurchaseEntryPanel() {
   const stats = useMemo(
     () => [
       { label: "收粮明细总数", value: total },
-      { label: "当前页重量", value: records.reduce((sum, item) => sum + Number(item.quantity || 0), 0).toFixed(3) },
-      { label: "当前页金额", value: records.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2) },
     ],
-    [records, total],
+    [total],
   );
 
   const filterQuery = () => ({
@@ -250,6 +274,43 @@ export function GrainPurchaseEntryPanel() {
 
   const optionLabel = (options: CrudOption[], value: unknown) =>
     options.find((option) => option.value === value)?.label ?? String(value || "-");
+  const storedStationId =
+    typeof currentAppUser?.stationId === "number" && currentAppUser.stationId > 0 ? currentAppUser.stationId : undefined;
+  const currentStationOption = useMemo(() => {
+    if (storedStationId) {
+      const option = stationOptions.find((item) => item.value === storedStationId);
+      return {
+        label: currentAppUser?.stationName || option?.label || `粮站 ${storedStationId}`,
+        value: storedStationId,
+      };
+    }
+    return stationOptions[0];
+  }, [currentAppUser?.stationName, stationOptions, storedStationId]);
+  const currentStationId = typeof currentStationOption?.value === "number" ? currentStationOption.value : undefined;
+
+  useEffect(() => {
+    if (!currentStationId) {
+      setPurchaseTypeOptions([]);
+      setPaymentMethodOptions([]);
+      return;
+    }
+    Promise.all([
+      listActiveGrainPurchaseTypes(currentStationId),
+      listActiveGrainPaymentMethods(currentStationId),
+    ])
+      .then(([purchaseTypes, paymentMethods]) => {
+        setPurchaseTypeOptions(purchaseTypes.map((type) => ({ label: type.typeName, value: type.id })));
+        setPaymentMethodOptions(paymentMethods.map((method) => ({ label: method.methodName, value: method.id, methodCode: method.methodCode })));
+      })
+      .catch((error) => message.error(error instanceof Error ? error.message : "加载收粮选项失败"));
+  }, [currentStationId]);
+
+  const selectedPaymentMethod = useMemo(
+    () => paymentMethodOptions.find((option) => option.value === watchedPaymentMethodId),
+    [paymentMethodOptions, watchedPaymentMethodId],
+  );
+  const isBankPayment = isBankPaymentMethod(selectedPaymentMethod, watchedPayType);
+  const receiptMeta = receiptFieldMeta(isBankPayment, watchedPayType);
 
   const stationLabel = (record: GrainPurchaseEntryRecord) =>
     renderValue(record.stationName || optionLabel(stationOptions, record.stationId));
@@ -286,7 +347,6 @@ export function GrainPurchaseEntryPanel() {
       { key: "unit", label: "单位" },
       { key: "amount", label: "金额", render: (value) => `￥${normalizeMoney(Number(value))}` },
       { key: "unitPrice", label: "单价", render: (value) => `￥${normalizeMoney(Number(value))}` },
-      { key: "place", label: "地点" },
       { key: "locationAddress", label: "定位地址" },
       { key: "payType", label: "付款方式" },
       { key: "entryStatus", label: "状态", render: snapshotStatusTag },
@@ -329,7 +389,7 @@ export function GrainPurchaseEntryPanel() {
     setFarmerImages(null);
     setEntryMaterials([]);
     form.resetFields();
-    form.setFieldsValue({ unit: "公斤", status: "submitted" });
+    form.setFieldsValue({ stationId: currentStationId, unit: "公斤", status: "submitted" });
     setDrawerOpen(true);
   };
 
@@ -365,7 +425,7 @@ export function GrainPurchaseEntryPanel() {
     setEditingRecord(record);
     form.resetFields();
     form.setFieldsValue({
-      stationId: record.stationId,
+      stationId: currentStationId ?? record.stationId,
       farmerId: record.farmerId,
       farmerName: record.farmerName,
       farmerPhone: record.farmerPhone,
@@ -379,8 +439,6 @@ export function GrainPurchaseEntryPanel() {
       unit: record.unit || "公斤",
       amount: record.amount,
       unitPrice: record.unitPrice,
-      placeId: record.placeId,
-      place: record.place,
       locationAddress: record.locationAddress,
       paymentMethodId: record.paymentMethodId,
       payType: record.payType,
@@ -429,7 +487,7 @@ export function GrainPurchaseEntryPanel() {
     }
     const stationId = form.getFieldValue("stationId");
     if (!stationId) {
-      message.warning("请先选择粮站，再进行识别");
+      message.warning("当前业务员未绑定粮站，无法识别");
       return;
     }
     setOcrLoading(true);
@@ -451,8 +509,11 @@ export function GrainPurchaseEntryPanel() {
   };
 
   const ensureFarmer = async (values: EntryFormValues) => {
+    const appUserId =
+      typeof currentAppUser?.id === "number" && currentAppUser.id > 0 ? currentAppUser.id : undefined;
     const farmerPayload: Partial<GrainFarmerRecord> = compactPayload({
       stationId: values.stationId,
+      appUserId,
       name: values.farmerName,
       phone: values.farmerPhone,
       idNumber: values.farmerIdNumber,
@@ -460,7 +521,7 @@ export function GrainPurchaseEntryPanel() {
       bankNumber: values.farmerBankNumber,
       bankName: values.farmerBankName,
     }) as Partial<GrainFarmerRecord>;
-    const hasFarmerFields = Object.keys(farmerPayload).some((key) => key !== "stationId");
+    const hasFarmerFields = Object.keys(farmerPayload).some((key) => !["stationId", "appUserId"].includes(key));
     if (values.farmerId) {
       if (hasFarmerFields) {
         await grainFarmerApi.update(values.farmerId, farmerPayload as GrainPayload);
@@ -475,7 +536,11 @@ export function GrainPurchaseEntryPanel() {
   };
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
+    const validatedValues = await form.validateFields();
+    const values = {
+      ...validatedValues,
+      stationId: currentStationId ?? validatedValues.stationId,
+    };
     setSubmitting(true);
     try {
       const farmerId = await ensureFarmer(values);
@@ -488,8 +553,6 @@ export function GrainPurchaseEntryPanel() {
         unit: values.unit,
         amount: values.amount,
         unitPrice: values.unitPrice,
-        placeId: values.placeId,
-        place: values.place,
         locationAddress: values.locationAddress,
         paymentMethodId: values.paymentMethodId,
         payType: values.payType,
@@ -535,7 +598,6 @@ export function GrainPurchaseEntryPanel() {
     { title: "单位", dataIndex: "unit", width: 80 },
     { title: "金额", dataIndex: "amount", width: 120, render: (value) => normalizeMoney(Number(value)) },
     { title: "单价", dataIndex: "unitPrice", width: 120 },
-    { title: "地点", dataIndex: "place", width: 160 },
     { title: "付款方式", dataIndex: "payType", width: 130 },
     { title: "状态", dataIndex: "status", width: 110, render: statusTag },
     {
@@ -603,7 +665,7 @@ export function GrainPurchaseEntryPanel() {
             <Input
               className="manager-filter-input"
               prefix={<SearchOutlined style={{ color: "var(--manager-text-faint)" }} />}
-              placeholder="收购类型/地点/付款方式/地址"
+              placeholder="收购类型/付款方式/地址"
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
               onPressEnter={() => void loadRecords(filterQuery())}
@@ -646,7 +708,7 @@ export function GrainPurchaseEntryPanel() {
           loading={loading}
           dataSource={records}
           columns={columns}
-          scroll={{ x: 2170 }}
+          scroll={{ x: 2010 }}
           pagination={{
             current: query.pageIndex,
             pageSize: query.pageSize,
@@ -660,7 +722,8 @@ export function GrainPurchaseEntryPanel() {
       <Drawer
         title={editingRecord ? `编辑收粮明细 #${editingRecord.id}` : "新增收粮明细"}
         open={drawerOpen}
-        width={980}
+        width={1120}
+        className="manager-crud-drawer"
         destroyOnClose
         onClose={() => {
           setDrawerOpen(false);
@@ -678,35 +741,57 @@ export function GrainPurchaseEntryPanel() {
           </Space>
         }
       >
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 280px", gap: 20, alignItems: "start" }}>
-          <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          className="manager-crud-form manager-entry-form"
+        >
+          <aside className="manager-crud-form-rail">
+            {entryFormSections.map((section, index) => (
+              <a key={section.key} href={`#entry-form-${section.key}`}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                {section.title}
+              </a>
+            ))}
+          </aside>
+
+          <div className="manager-crud-form-main">
             <Form.Item name="farmerId" hidden>
               <InputNumber />
             </Form.Item>
-            <section className="manager-data-card" style={{ marginBottom: 16 }}>
-              <Space align="center" style={{ marginBottom: 16 }}>
+            <section id="entry-form-ownership" className="manager-form-section">
+              <div className="manager-form-section-head">
+                <div>
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    基础信息
+                  </Typography.Title>
+                  <Text type="secondary">确认粮站归属，保存后用于收粮记录归档。</Text>
+                </div>
                 <EnvironmentOutlined style={{ color: "#237a4b" }} />
-                <Text strong>基础信息</Text>
-              </Space>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0 16px" }}>
+              </div>
+              <div className="manager-form-grid">
                 <Form.Item name="stationId" label="粮站" rules={[{ required: true, message: "请选择粮站" }]}>
-                  <Select options={stationOptions} placeholder="请选择粮站" showSearch optionFilterProp="label" />
+                  <Select
+                    options={currentStationOption ? [currentStationOption] : []}
+                    placeholder={currentStationOption ? undefined : "当前业务员未绑定粮站"}
+                    disabled
+                  />
                 </Form.Item>
               </div>
             </section>
 
-            <section className="manager-data-card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                <Space align="center">
-                  <UserOutlined style={{ color: "#237a4b" }} />
-                  <Text strong>粮户身份与收款信息</Text>
-                </Space>
+            <section id="entry-form-grain-farmer" className="manager-form-section">
+              <div className="manager-form-section-head">
+                <div>
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    粮食与农户身份信息
+                  </Typography.Title>
+                  <Text type="secondary">把本笔粮食品类、重量金额和农户身份资料放在一起核对。</Text>
+                </div>
                 <Space wrap>
                   <Button icon={<ScanOutlined />} onClick={() => setOcrTarget({ title: "识别身份证正面", cardType: "id-card", imageSide: "front" })}>
                     身份证正面
-                  </Button>
-                  <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
-                    银行卡
                   </Button>
                 </Space>
               </div>
@@ -714,36 +799,9 @@ export function GrainPurchaseEntryPanel() {
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}
-                message="可拍照识别后自动带入，也可以直接手动输入；编辑已有记录时识别结果会同步回粮户资料。"
+                message="身份证可拍照识别后自动带入，也可以直接手动输入；编辑已有记录时识别结果会同步回粮户资料。"
               />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0 16px" }}>
-                <Form.Item name="farmerName" label="粮户姓名">
-                  <Input placeholder="拍身份证自动带入，或手动输入" prefix={<IdcardOutlined />} />
-                </Form.Item>
-                <Form.Item name="farmerPhone" label="手机号">
-                  <Input placeholder="请输入手机号" />
-                </Form.Item>
-                <Form.Item name="farmerIdNumber" label="身份证号">
-                  <Input placeholder="请输入身份证号" />
-                </Form.Item>
-                <Form.Item name="farmerAddress" label="身份证住址" style={{ gridColumn: "1 / -1" }}>
-                  <Input.TextArea rows={2} placeholder="请输入身份证住址" />
-                </Form.Item>
-                <Form.Item name="farmerBankNumber" label="银行卡号">
-                  <Input placeholder="拍银行卡自动带入，或手动输入" prefix={<BankOutlined />} />
-                </Form.Item>
-                <Form.Item name="farmerBankName" label="开户行">
-                  <Input placeholder="请输入开户行" />
-                </Form.Item>
-              </div>
-            </section>
-
-            <section className="manager-data-card">
-              <Space align="center" style={{ marginBottom: 16 }}>
-                <CameraOutlined style={{ color: "#237a4b" }} />
-                <Text strong>收购与付款</Text>
-              </Space>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0 16px" }}>
+              <div className="manager-form-grid">
                 <Form.Item name="purchaseTypeId" label="收购类型">
                   <Select
                     options={purchaseTypeOptions}
@@ -774,24 +832,39 @@ export function GrainPurchaseEntryPanel() {
                 <Form.Item name="unitPrice" label="单价">
                   <InputNumber min={0} precision={4} style={{ width: "100%" }} addonBefore="￥" />
                 </Form.Item>
-                <Form.Item name="placeId" label="收购地点">
-                  <Select
-                    options={placeOptions}
-                    placeholder="请选择收购地点"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    onChange={(_, option) => {
-                      const selected = Array.isArray(option) ? option[0] : option;
-                      if (selected?.label) {
-                        form.setFieldValue("place", String(selected.label));
-                      }
-                    }}
-                  />
+                <Divider className="manager-form-item-wide" style={{ margin: "4px 0 16px" }} />
+                <Form.Item name="farmerName" label="粮户姓名">
+                  <Input placeholder="拍身份证自动带入，或手动输入" prefix={<IdcardOutlined />} />
                 </Form.Item>
-                <Form.Item name="place" label="地点名称">
-                  <Input placeholder="请输入地点名称" />
+                <Form.Item name="farmerPhone" label="手机号">
+                  <Input placeholder="请输入手机号" />
                 </Form.Item>
+                <Form.Item name="farmerIdNumber" label="身份证号">
+                  <Input placeholder="请输入身份证号" />
+                </Form.Item>
+                <Form.Item name="farmerAddress" label="身份证住址" className="manager-form-item-wide">
+                  <Input.TextArea rows={2} placeholder="请输入身份证住址" />
+                </Form.Item>
+              </div>
+            </section>
+
+            <section id="entry-form-payment" className="manager-form-section">
+              <div className="manager-form-section-head">
+                <div>
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    收付款信息
+                  </Typography.Title>
+                  <Text type="secondary">先选择付款方式，再按对应方式填写收款账号信息。</Text>
+                </div>
+                {isBankPayment ? (
+                  <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
+                    银行卡识别
+                  </Button>
+                ) : (
+                  <BankOutlined style={{ color: "#237a4b" }} />
+                )}
+              </div>
+              <div className="manager-form-grid">
                 <Form.Item name="paymentMethodId" label="付款方式">
                   <Select
                     options={paymentMethodOptions}
@@ -803,6 +876,8 @@ export function GrainPurchaseEntryPanel() {
                       const selected = Array.isArray(option) ? option[0] : option;
                       if (selected?.label) {
                         form.setFieldValue("payType", String(selected.label));
+                      } else {
+                        form.setFieldValue("payType", undefined);
                       }
                     }}
                   />
@@ -810,21 +885,30 @@ export function GrainPurchaseEntryPanel() {
                 <Form.Item name="payType" label="付款方式名称">
                   <Input placeholder="请输入付款方式" />
                 </Form.Item>
-                <Form.Item name="locationAddress" label="定位地址" style={{ gridColumn: "1 / -1" }}>
+                <Form.Item name="farmerBankNumber" label={receiptMeta.accountLabel}>
+                  <Input
+                    placeholder={receiptMeta.accountPlaceholder}
+                    prefix={isBankPayment ? <BankOutlined /> : undefined}
+                  />
+                </Form.Item>
+                <Form.Item name="farmerBankName" label={receiptMeta.nameLabel}>
+                  <Input placeholder={receiptMeta.namePlaceholder} />
+                </Form.Item>
+                <Form.Item name="locationAddress" label="定位地址" className="manager-form-item-wide">
                   <Input placeholder="请输入定位地址" />
                 </Form.Item>
                 <Form.Item name="status" label="状态">
                   <Select options={statusOptions} placeholder="请选择状态" />
                 </Form.Item>
-                <Form.Item name="remark" label="备注" style={{ gridColumn: "1 / -1" }}>
+                <Form.Item name="remark" label="备注" className="manager-form-item-wide">
                   <Input.TextArea rows={3} placeholder="请输入备注" />
                 </Form.Item>
               </div>
             </section>
-          </Form>
+          </div>
 
-          <aside style={{ position: "sticky", top: 0 }}>
-            <section className="manager-data-card" style={{ marginBottom: 16 }}>
+          <aside id="entry-form-materials" style={{ position: "sticky", top: 18, alignSelf: "start" }}>
+            <section className="manager-form-section" style={{ marginBottom: 16 }}>
               <Text strong>单据预览</Text>
               <Descriptions column={1} size="small" style={{ marginTop: 12 }}>
                 <Descriptions.Item label="金额">
@@ -835,7 +919,7 @@ export function GrainPurchaseEntryPanel() {
               </Descriptions>
             </section>
 
-            <section className="manager-data-card">
+            <section className="manager-form-section">
               <Space align="center" style={{ marginBottom: 12 }}>
                 <FileImageOutlined style={{ color: "#237a4b" }} />
                 <Text strong>历史图片</Text>
@@ -860,7 +944,7 @@ export function GrainPurchaseEntryPanel() {
               )}
             </section>
 
-            <section className="manager-data-card" style={{ marginTop: 16 }}>
+            <section className="manager-form-section" style={{ marginTop: 16 }}>
               <Space align="center" style={{ marginBottom: 12 }}>
                 <CameraOutlined style={{ color: "#237a4b" }} />
                 <Text strong>收粮材料</Text>
@@ -883,7 +967,7 @@ export function GrainPurchaseEntryPanel() {
               )}
             </section>
           </aside>
-        </div>
+        </Form>
       </Drawer>
 
       <Drawer
@@ -991,7 +1075,6 @@ export function GrainPurchaseEntryPanel() {
                   </Descriptions.Item>
                   <Descriptions.Item label="金额">￥{normalizeMoney(Number(selectedSnapshot.amount))}</Descriptions.Item>
                   <Descriptions.Item label="单价">￥{normalizeMoney(Number(selectedSnapshot.unitPrice))}</Descriptions.Item>
-                  <Descriptions.Item label="地点">{renderValue(selectedSnapshot.place)}</Descriptions.Item>
                   <Descriptions.Item label="付款方式">{renderValue(selectedSnapshot.payType)}</Descriptions.Item>
                   <Descriptions.Item label="状态">{snapshotStatusTag(selectedSnapshot.entryStatus)}</Descriptions.Item>
                   <Descriptions.Item label="备注">{renderValue(selectedSnapshot.entryRemark)}</Descriptions.Item>

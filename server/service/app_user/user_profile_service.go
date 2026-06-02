@@ -7,6 +7,7 @@ import (
 	appUserDTO "service/app_user/dto"
 	appUserPassword "service/app_user/password"
 	appUserRepository "service/app_user/repository"
+	grainConfigRepository "service/grain_config/repository"
 	"strings"
 
 	"gorm.io/gorm"
@@ -123,8 +124,8 @@ func (s *AppUserService) ChangeCurrentUserPassword(id uint, req *appUserDTO.Chan
 
 	oldPassword := strings.TrimSpace(req.OldPassword)
 	newPassword := strings.TrimSpace(req.NewPassword)
-	hasPassword := strings.TrimSpace(entity.Password) != ""
-	if hasPassword && oldPassword == "" {
+	hasOriginPassword := strings.TrimSpace(entity.OriginPassword) != ""
+	if hasOriginPassword && oldPassword == "" {
 		return fmt.Errorf("old password is required")
 	}
 	if err := validateAppUserPassword(newPassword); err != nil {
@@ -134,7 +135,7 @@ func (s *AppUserService) ChangeCurrentUserPassword(id uint, req *appUserDTO.Chan
 		return fmt.Errorf("new password must be different from old password")
 	}
 
-	if hasPassword {
+	if hasOriginPassword {
 		expectedPassword := appUserPassword.Encrypt(entity.Username, oldPassword)
 		if !strings.EqualFold(expectedPassword, strings.TrimSpace(entity.Password)) {
 			return fmt.Errorf("old password is incorrect")
@@ -493,21 +494,32 @@ func toCurrentAppUserProfileDTO(entity *appUserRepository.AppUser) *appUserDTO.C
 	if entity == nil {
 		return nil
 	}
-	return &appUserDTO.CurrentAppUserProfileDTO{
-		Id:              entity.Id,
-		Name:            entity.Name,
-		Username:        entity.Username,
-		Email:           entity.Email,
-		Phone:           entity.Phone,
-		Department:      entity.Department,
-		Remark:          entity.Remark,
-		LastLoginTime:   entity.LastLoginTime,
-		OpenUID:         entity.OpenUID,
-		UnionID:         entity.UnionID,
-		WxNickname:      entity.WxNickname,
-		WxAvatar:        entity.WxAvatar,
-		WxLastLoginTime: entity.WxLastLoginTime,
+	result := &appUserDTO.CurrentAppUserProfileDTO{
+		Id:                entity.Id,
+		Name:              entity.Name,
+		Username:          entity.Username,
+		Email:             entity.Email,
+		Phone:             entity.Phone,
+		Department:        entity.Department,
+		Remark:            entity.Remark,
+		LastLoginTime:     entity.LastLoginTime,
+		OpenUID:           entity.OpenUID,
+		UnionID:           entity.UnionID,
+		WxNickname:        entity.WxNickname,
+		WxAvatar:          entity.WxAvatar,
+		WxLastLoginTime:   entity.WxLastLoginTime,
+		HasOriginPassword: strings.TrimSpace(entity.OriginPassword) != "",
 	}
+	repo := db.GetRepository[grainConfigRepository.GrainStationUserRepository]()
+	stationUser, err := repo.FindActiveByAppUserID(uint64(entity.Id))
+	if err == nil && stationUser != nil {
+		result.StationID = stationUser.StationID
+		station, stationErr := db.GetRepository[grainConfigRepository.GrainStationRepository]().FindById(uint(stationUser.StationID))
+		if stationErr == nil && station != nil && station.Active == 1 {
+			result.StationName = station.StationName
+		}
+	}
+	return result
 }
 
 func (s *AppUserService) toAppUserDTO(entity *appUserRepository.AppUser) (*appUserDTO.AppUserDTO, error) {

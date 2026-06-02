@@ -8,7 +8,7 @@ import {
   IdcardOutlined,
   ScanOutlined,
 } from "@ant-design/icons";
-import { Button, Descriptions, Drawer, Empty, Image, message, Space, Tabs, Tag, Tooltip, Typography, Upload } from "antd";
+import { Button, Descriptions, Drawer, Empty, Form, Image, InputNumber, message, Space, Tabs, Tag, Tooltip, Typography, Upload } from "antd";
 import type { FormInstance } from "antd";
 import type { RcFile } from "antd/es/upload";
 import {
@@ -34,6 +34,7 @@ import {
   type RegionTreeRecord,
 } from "../api/grain.api";
 import { SensitiveValue } from "./SensitiveValue";
+import { getCurrentAppUser, type StoredCurrentAppUser } from "@/utils/auth";
 
 const { Text } = Typography;
 
@@ -183,6 +184,7 @@ export function GrainFarmerPanel() {
   const [archiveImages, setArchiveImages] = useState<GrainFarmerImagesRecord | null>(null);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [ocrLoadingKey, setOcrLoadingKey] = useState<string | null>(null);
+  const [currentAppUser] = useState<StoredCurrentAppUser | null>(() => getCurrentAppUser());
 
   useEffect(() => {
     grainStationApi
@@ -200,6 +202,10 @@ export function GrainFarmerPanel() {
 
   const stationLabel = (stationId: unknown) =>
     stationOptions.find((option) => option.value === stationId)?.label ?? String(stationId || "-");
+  const currentStationOption = stationOptions[0];
+  const currentStationId = typeof currentStationOption?.value === "number" ? currentStationOption.value : undefined;
+  const currentAppUserId =
+    typeof currentAppUser?.id === "number" && currentAppUser.id > 0 ? currentAppUser.id : undefined;
 
   const openArchive = async (record: GrainFarmerRecord) => {
     setArchiveRecord(record);
@@ -289,8 +295,10 @@ export function GrainFarmerPanel() {
       label: "粮站",
       type: "select",
       required: true,
-      placeholder: "请选择粮站",
-      options: stationOptions,
+      placeholder: currentStationOption ? undefined : "当前业务员未绑定粮站",
+      options: currentStationOption ? [currentStationOption] : [],
+      disabled: true,
+      help: currentStationOption ? "由当前业务员所属粮站自动填充" : undefined,
     },
     ...fields,
   ];
@@ -346,6 +354,9 @@ export function GrainFarmerPanel() {
               statusOptions={statusOptions}
               actionWidth={180}
               modalWidth={920}
+              showDrawerHeader={false}
+              showDrawerRecordTag={false}
+              initialValues={{ stationId: currentStationId, appUserId: currentAppUserId } as Partial<GrainFarmerRecord>}
               rowActions={(record) => (
                 <Tooltip title="证件档案">
                   <Button type="text" icon={<FileImageOutlined />} onClick={() => void openArchive(record)} />
@@ -353,6 +364,9 @@ export function GrainFarmerPanel() {
               )}
               formExtra={({ form, editingRecord }) => (
                 <section className="manager-form-assist">
+                  <Form.Item name="appUserId" hidden>
+                    <InputNumber />
+                  </Form.Item>
                   <Space align="start" style={{ width: "100%", justifyContent: "space-between" }} wrap>
                     <Space direction="vertical" size={2}>
                       <Text strong>证件与银行卡识别</Text>
