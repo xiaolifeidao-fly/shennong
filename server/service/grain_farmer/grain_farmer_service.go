@@ -46,13 +46,22 @@ func (s *GrainFarmerService) ListFarmers(query grainFarmerDTO.GrainFarmerQueryDT
 }
 
 func (s *GrainFarmerService) CreateFarmer(req *grainFarmerDTO.GrainFarmerDTO) (*grainFarmerDTO.GrainFarmerDTO, error) {
+	return s.createFarmer(req, 0)
+}
+
+func (s *GrainFarmerService) CreateFarmerForAppUser(req *grainFarmerDTO.GrainFarmerDTO, appUserID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
+	req.AppUserID = appUserID
+	return s.createFarmer(req, appUserID)
+}
+
+func (s *GrainFarmerService) createFarmer(req *grainFarmerDTO.GrainFarmerDTO, scopedAppUserID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
 	entity := db.ToPO[grainFarmerRepository.GrainFarmer](req)
 	normalizeFarmer(entity)
 	digest, err := farmerIDNumberDigest(entity.IDNumber)
 	if err != nil {
 		return nil, err
 	}
-	if existing, err := s.farmerRepository.FindActiveByIDNumberDigest(digest, entity.IDNumber, entity.StationID); err == nil {
+	if existing, err := s.farmerRepository.FindActiveByIDNumberDigestForAppUser(digest, entity.IDNumber, entity.StationID, scopedAppUserID); err == nil {
 		existingID := existing.Id
 		existingBase := existing.BaseEntity
 		copier.Copy(existing, entity)
@@ -88,13 +97,34 @@ func (s *GrainFarmerService) CreateFarmer(req *grainFarmerDTO.GrainFarmerDTO) (*
 	return dto, nil
 }
 
+func (s *GrainFarmerService) GetFarmer(id uint) (*grainFarmerDTO.GrainFarmerDTO, error) {
+	entity, err := s.farmerRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	dto := db.ToDTO[grainFarmerDTO.GrainFarmerDTO](entity)
+	if err := decryptFarmerDTO(dto); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
 func (s *GrainFarmerService) UpdateFarmer(id uint, req *grainFarmerDTO.GrainFarmerDTO) (*grainFarmerDTO.GrainFarmerDTO, error) {
-	return s.updateFarmer(id, req, 0)
+	return s.updateFarmer(id, req, 0, 0)
 }
 
 func (s *GrainFarmerService) UpdateFarmerInStation(id uint, req *grainFarmerDTO.GrainFarmerDTO, stationID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
 	req.StationID = stationID
-	return s.updateFarmer(id, req, stationID)
+	return s.updateFarmer(id, req, stationID, 0)
+}
+
+func (s *GrainFarmerService) UpdateFarmerInStationForAppUser(id uint, req *grainFarmerDTO.GrainFarmerDTO, stationID, appUserID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
+	req.StationID = stationID
+	req.AppUserID = appUserID
+	return s.updateFarmer(id, req, stationID, appUserID)
 }
 
 func (s *GrainFarmerService) UpdateFarmerCardInfoInStation(id uint, result *ocrDTO.RecognizeCardResult, stationID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
@@ -141,12 +171,12 @@ func (s *GrainFarmerService) UpdateFarmerCardInfoInStation(id uint, result *ocrD
 	return dto, nil
 }
 
-func (s *GrainFarmerService) updateFarmer(id uint, req *grainFarmerDTO.GrainFarmerDTO, stationID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
+func (s *GrainFarmerService) updateFarmer(id uint, req *grainFarmerDTO.GrainFarmerDTO, stationID, appUserID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
 	entity, err := s.farmerRepository.FindById(id)
 	if err != nil {
 		return nil, err
 	}
-	if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) {
+	if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) || (appUserID > 0 && entity.AppUserID != appUserID) {
 		return nil, gorm.ErrRecordNotFound
 	}
 	previousBase := entity.BaseEntity

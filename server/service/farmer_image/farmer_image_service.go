@@ -5,7 +5,12 @@ import (
 	"common/middleware/storage/oss"
 	"crypto/sha256"
 	"fmt"
+	"mime"
+	"net/http"
+	"net/url"
+	"path/filepath"
 	farmerImageRepository "service/farmer_image/repository"
+	"strings"
 	"time"
 )
 
@@ -14,6 +19,12 @@ type FarmerImagesResult struct {
 	IDCardFront string `json:"idCardFront"`
 	IDCardBack  string `json:"idCardBack"`
 	BankCard    string `json:"bankCard"`
+}
+
+type FarmerImageContent struct {
+	Data     []byte
+	MimeType string
+	FileName string
 }
 
 type FarmerImageService struct {
@@ -90,6 +101,53 @@ func (s *FarmerImageService) GetLatestFarmerImages(farmerID, appUserID uint64) *
 	return result
 }
 
+func (s *FarmerImageService) HasLatestFarmerImage(farmerID, appUserID uint64, imageType string) bool {
+	_, _, _, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
+	return err == nil
+}
+
+func (s *FarmerImageService) GetLatestFarmerImageContent(farmerID, appUserID uint64, imageType string) (*FarmerImageContent, error) {
+	imageName, objectKey, ossURL, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
+	if err != nil {
+		return nil, err
+	}
+	data, err := getOssObject(objectKey, ossURL)
+	if err != nil {
+		return nil, err
+	}
+	mimeType := detectImageMimeType(data, imageName)
+	return &FarmerImageContent{
+		Data:     data,
+		MimeType: mimeType,
+		FileName: imageName,
+	}, nil
+}
+
+func (s *FarmerImageService) findLatestImageRecord(farmerID, appUserID uint64, imageType string) (string, string, string, error) {
+	switch strings.TrimSpace(imageType) {
+	case "id-card-front", "front":
+		image, err := s.idcardRepo.FindLatestBySide(farmerID, appUserID, "front")
+		if err != nil {
+			return "", "", "", err
+		}
+		return image.ImageName, image.OssObjectKey, image.OssURL, nil
+	case "id-card-back", "back":
+		image, err := s.idcardRepo.FindLatestBySide(farmerID, appUserID, "back")
+		if err != nil {
+			return "", "", "", err
+		}
+		return image.ImageName, image.OssObjectKey, image.OssURL, nil
+	case "bank-card", "bank":
+		image, err := s.bankcardRepo.FindLatest(farmerID, appUserID)
+		if err != nil {
+			return "", "", "", err
+		}
+		return image.ImageName, image.OssObjectKey, image.OssURL, nil
+	default:
+		return "", "", "", fmt.Errorf("unsupported image type")
+	}
+}
+
 func refreshOssURL(ossObjectKey, fallbackURL string, expiry time.Duration) string {
 	if ossObjectKey != "" {
 		if oss.Oss != nil {
@@ -102,6 +160,44 @@ func refreshOssURL(ossObjectKey, fallbackURL string, expiry time.Duration) strin
 		}
 	}
 	return fallbackURL
+}
+
+func getOssObject(ossObjectKey, fallbackURL string) ([]byte, error) {
+	key := strings.TrimSpace(ossObjectKey)
+	if key == "" {
+		key = objectKeyFromURL(fallbackURL)
+	}
+	if key == "" {
+		return nil, fmt.Errorf("oss object key is empty")
+	}
+	if data, err := oss.GetByKey(key); err == nil {
+		return data, nil
+	}
+	return oss.Get(key)
+}
+
+func objectKeyFromURL(rawURL string) string {
+	value := strings.TrimSpace(rawURL)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Path == "" {
+		return ""
+	}
+	return strings.TrimLeft(parsed.Path, "/")
+}
+
+func detectImageMimeType(data []byte, fileName string) string {
+	if ext := strings.ToLower(filepath.Ext(fileName)); ext != "" {
+		if mimeType := mime.TypeByExtension(ext); strings.HasPrefix(mimeType, "image/") {
+			return mimeType
+		}
+	}
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return "application/octet-stream"
 }
 
 // IDCardBusinessID 生成身份证OCR业务唯一ID

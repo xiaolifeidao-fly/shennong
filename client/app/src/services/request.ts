@@ -1,6 +1,5 @@
 import { expireLogin } from '@/utils/authGuard'
 import { getToken } from '@/utils/token'
-import { DEFAULT_GRAIN_STATION_ID } from '@/config/app'
 import type { ApiResponse } from '@/types/api'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -14,22 +13,9 @@ interface RequestOptions<TBody = RequestData> {
 
 const baseURL = import.meta.env.VITE_APP_API_BASE_URL
 
-function stationHeaders() {
-  if (!DEFAULT_GRAIN_STATION_ID) {
-    return {}
-  }
-
-  const stationId = String(DEFAULT_GRAIN_STATION_ID)
-  return {
-    stationId,
-    'X-Station-Id': stationId,
-  }
-}
-
 function authHeaders() {
   const token = getToken()
   return {
-    ...stationHeaders(),
     ...(token ? { token, Authorization: `Bearer ${token}` } : {}),
   }
 }

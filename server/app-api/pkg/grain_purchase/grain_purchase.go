@@ -26,6 +26,7 @@ func NewGrainPurchaseHandler() *GrainPurchaseHandler {
 }
 
 func (h *GrainPurchaseHandler) RegisterHandler(engine *gin.RouterGroup) {
+	engine.GET("/grain-purchase-dashboard", h.getDashboard)
 	engine.GET("/grain-purchase-entries", h.listEntries)
 	engine.POST("/grain-purchase-entries", h.createEntry)
 	engine.PUT("/grain-purchase-entries/:id", h.updateEntry)
@@ -34,15 +35,29 @@ func (h *GrainPurchaseHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-farmer-daily-summaries", h.listDailyFarmerSummaries)
 }
 
+func (h *GrainPurchaseHandler) getDashboard(context *gin.Context) {
+	var query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO
+	if err := context.ShouldBindQuery(&query); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
+	stationID, ok := requiredStationID(context)
+	if !ok {
+		return
+	}
+	query.StationID = stationID
+	result, err := h.grainPurchaseService.GetDashboard(query)
+	commonRouter.ToJson(context, result, err)
+}
+
 func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
 	var query grainPurchaseDTO.GrainPurchaseEntryQueryDTO
 	if err := context.ShouldBindQuery(&query); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
@@ -59,9 +74,7 @@ func (h *GrainPurchaseHandler) createEntry(context *gin.Context) {
 		return
 	}
 	userID, _ := appCtx.CurrentAppUserID(context)
-	if req.AppUserID == 0 {
-		req.AppUserID = userID
-	}
+	req.AppUserID = userID
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
@@ -82,14 +95,12 @@ func (h *GrainPurchaseHandler) updateEntry(context *gin.Context) {
 		return
 	}
 	userID, _ := appCtx.CurrentAppUserID(context)
-	if req.AppUserID == 0 {
-		req.AppUserID = userID
-	}
+	req.AppUserID = userID
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
 	}
-	result, err := h.grainPurchaseService.UpdateEntryInStation(id, &req, userID, appCtx.CurrentAppUserName(context), stationID)
+	result, err := h.grainPurchaseService.UpdateEntryInStationForAppUser(id, &req, userID, appCtx.CurrentAppUserName(context), stationID)
 	if err == gorm.ErrRecordNotFound {
 		commonRouter.ToError(context, "grain purchase entry not found")
 		return
@@ -107,7 +118,7 @@ func (h *GrainPurchaseHandler) voidEntry(context *gin.Context) {
 	if !ok {
 		return
 	}
-	err := h.grainPurchaseService.VoidEntryInStation(id, userID, appCtx.CurrentAppUserName(context), stationID)
+	err := h.grainPurchaseService.VoidEntryInStationForAppUser(id, userID, appCtx.CurrentAppUserName(context), stationID)
 	if err == gorm.ErrRecordNotFound {
 		commonRouter.ToError(context, "grain purchase entry not found")
 		return
@@ -121,9 +132,7 @@ func (h *GrainPurchaseHandler) listFarmerPurchaseSummaries(context *gin.Context)
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
@@ -139,9 +148,7 @@ func (h *GrainPurchaseHandler) listDailyFarmerSummaries(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return

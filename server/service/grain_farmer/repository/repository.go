@@ -34,6 +34,10 @@ func (r *GrainFarmerRepository) ListByQuery(query grainFarmerDTO.GrainFarmerQuer
 }
 
 func (r *GrainFarmerRepository) FindActiveByIDNumberDigest(idNumberDigest, plainIDNumber string, stationID uint64) (*GrainFarmer, error) {
+	return r.FindActiveByIDNumberDigestForAppUser(idNumberDigest, plainIDNumber, stationID, 0)
+}
+
+func (r *GrainFarmerRepository) FindActiveByIDNumberDigestForAppUser(idNumberDigest, plainIDNumber string, stationID, appUserID uint64) (*GrainFarmer, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
 	}
@@ -41,6 +45,9 @@ func (r *GrainFarmerRepository) FindActiveByIDNumberDigest(idNumberDigest, plain
 	dbQuery := r.Db.Where("active = ?", 1)
 	if stationID > 0 {
 		dbQuery = dbQuery.Where("station_id = ?", stationID)
+	}
+	if appUserID > 0 {
+		dbQuery = dbQuery.Where("app_user_id = ?", appUserID)
 	}
 	idNumberDigest = strings.TrimSpace(idNumberDigest)
 	plainIDNumber = strings.TrimSpace(plainIDNumber)

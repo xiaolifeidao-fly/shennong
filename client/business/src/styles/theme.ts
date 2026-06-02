@@ -1,0 +1,126 @@
+import type { ThemeConfig } from "antd";
+
+export const modernTheme: ThemeConfig = {
+  token: {
+    colorPrimary: "#237a4b",
+    colorSuccess: "#237a4b",
+    colorWarning: "#b98225",
+    colorError: "#c34b42",
+    colorInfo: "#315f9f",
+    fontFamily: `"Avenir Next","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif`,
+    fontSize: 14,
+    borderRadius: 8,
+    borderRadiusLG: 8,
+    borderRadiusSM: 6,
+    boxShadow: "0 12px 32px rgba(26, 42, 34, 0.09)",
+    boxShadowSecondary: "0 22px 60px rgba(26, 42, 34, 0.14)",
+    padding: 16,
+    margin: 16,
+    colorBgContainer: "#ffffff",
+    colorBgElevated: "#ffffff",
+    colorBgLayout: "#f5f7f2",
+    colorBorder: "#dce5d8",
+    colorBorderSecondary: "#edf2e8",
+    colorText: "#17241d",
+    colorTextSecondary: "#617066",
+    colorTextTertiary: "#839188",
+    colorTextQuaternary: "#a7b2ab",
+    colorLink: "#237a4b",
+    colorLinkHover: "#185b38",
+    colorLinkActive: "#104229",
+  },
+  components: {
+    Button: {
+      controlHeight: 40,
+      controlHeightLG: 48,
+      controlHeightSM: 32,
+      fontWeight: 600,
+      borderRadius: 8,
+      primaryShadow: "0 12px 26px rgba(35, 122, 75, 0.2)",
+      defaultBg: "#ffffff",
+      defaultBorderColor: "#dfe7dd",
+      defaultColor: "#17231d",
+    },
+    Input: {
+      controlHeight: 40,
+      controlHeightLG: 48,
+      controlHeightSM: 32,
+      paddingBlock: 10,
+      paddingBlockLG: 12,
+      paddingBlockSM: 8,
+      activeBorderColor: "#1f7a4d",
+      hoverBorderColor: "#1f7a4d",
+      colorBgContainer: "#ffffff",
+    },
+    Select: {
+      controlHeight: 40,
+      controlHeightLG: 48,
+      controlHeightSM: 32,
+      colorBgContainer: "#ffffff",
+    },
+    Card: {
+      borderRadiusLG: 8,
+      paddingLG: 24,
+    },
+    DatePicker: {
+      controlHeight: 40,
+      controlHeightLG: 48,
+      controlHeightSM: 32,
+      activeBorderColor: "#237a4b",
+      hoverBorderColor: "#237a4b",
+    },
+    Dropdown: {
+      borderRadiusLG: 8,
+    },
+    Modal: {
+      borderRadiusLG: 8,
+    },
+    Message: {
+      contentBg: "#ffffff",
+      contentPadding: "12px 16px",
+    },
+    Tag: {
+      borderRadiusSM: 999,
+    },
+    Layout: {
+      headerBg: "#f5f7f2",
+      headerHeight: 76,
+      headerPadding: "0 24px",
+      siderBg: "#10251a",
+      bodyBg: "#f5f7f2",
+    },
+    Table: {
+      borderColor: "#edf2e8",
+      headerBg: "#f8faf5",
+      headerColor: "#617066",
+      rowHoverBg: "#f6fbf7",
+      headerSortHoverBg: "#eef5eb",
+      rowSelectedBg: "#edf8ef",
+    },
+    Tabs: {
+      itemSelectedColor: "#185b38",
+      inkBarColor: "#237a4b",
+    },
+    Tree: {
+      nodeHoverBg: "#f2f7ef",
+      nodeSelectedBg: "#e7f3e8",
+    },
+  },
+};
+export const whatsappTheme: ThemeConfig = {
+  token: {
+    colorPrimary: "#25D366",
+    colorSuccess: "#25D366",
+    colorBgContainer: "#FFFFFF",
+    colorBgLayout: "#F0F2F5",
+    borderRadius: 8,
+    fontFamily: `"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif`,
+  },
+  components: {
+    Layout: {
+      headerBg: "#FFFFFF",
+      siderBg: "#FFFFFF",
+      bodyBg: "#F0F2F5",
+    },
+  },
+};

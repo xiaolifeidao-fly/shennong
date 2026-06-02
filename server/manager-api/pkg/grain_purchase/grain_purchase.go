@@ -3,9 +3,11 @@ package grain_purchase
 import (
 	commonRouter "common/middleware/routers"
 	"manager-api/pkg/internal/tenantctx"
+	"net/http"
 	grainPurchaseService "service/grain_purchase"
 	grainPurchaseDTO "service/grain_purchase/dto"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -23,6 +25,7 @@ func NewGrainPurchaseHandler() *GrainPurchaseHandler {
 }
 
 func (h *GrainPurchaseHandler) RegisterHandler(engine *gin.RouterGroup) {
+	engine.GET("/grain-purchase-dashboard", h.getDashboard)
 	engine.GET("/grain-purchase-entries", h.listEntries)
 	engine.POST("/grain-purchase-entries", h.createEntry)
 	engine.PUT("/grain-purchase-entries/:id", h.updateEntry)
@@ -31,8 +34,24 @@ func (h *GrainPurchaseHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-farmer-purchase-summaries", h.listFarmerPurchaseSummaries)
 	engine.GET("/grain-entry-snapshots", h.listSnapshots)
 	engine.GET("/grain-entry-materials", h.listMaterials)
+	engine.GET("/grain-entry-materials/:id/image", h.getMaterialImage)
 	engine.POST("/grain-entry-materials", h.createMaterial)
 	engine.DELETE("/grain-entry-materials/:id", h.deleteMaterial)
+}
+
+func (h *GrainPurchaseHandler) getDashboard(context *gin.Context) {
+	var query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO
+	if err := context.ShouldBindQuery(&query); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
+	}
+	result, err := h.service.GetDashboard(query)
+	commonRouter.ToJson(context, result, err)
 }
 
 func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
@@ -135,6 +154,15 @@ func (h *GrainPurchaseHandler) listFarmerPurchaseSummaries(context *gin.Context)
 }
 
 func (h *GrainPurchaseHandler) listMaterials(context *gin.Context) {
+	if imageID := strings.TrimSpace(context.Query("imageId")); imageID != "" {
+		id, err := strconv.ParseUint(imageID, 10, 32)
+		if err != nil || id == 0 {
+			commonRouter.ToError(context, "imageId必须是正整数")
+			return
+		}
+		h.streamMaterialImage(context, uint(id))
+		return
+	}
 	var query grainPurchaseDTO.GrainEntryMaterialQueryDTO
 	if err := context.ShouldBindQuery(&query); err != nil {
 		commonRouter.ToError(context, "参数错误")
@@ -159,6 +187,34 @@ func (h *GrainPurchaseHandler) createMaterial(context *gin.Context) {
 	commonRouter.ToJson(context, result, err)
 }
 
+func (h *GrainPurchaseHandler) getMaterialImage(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	h.streamMaterialImage(context, id)
+}
+
+func (h *GrainPurchaseHandler) streamMaterialImage(context *gin.Context, id uint) {
+	content, err := h.service.GetMaterialImageContent(id)
+	if err == gorm.ErrRecordNotFound {
+		context.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 && !stationAllowed(content.StationID, stationIDs) {
+		context.Status(http.StatusNotFound)
+		return
+	}
+	context.Header("Cache-Control", "private, max-age=300")
+	context.Data(http.StatusOK, content.MimeType, content.Data)
+}
+
 func (h *GrainPurchaseHandler) deleteMaterial(context *gin.Context) {
 	id, ok := parseID(context)
 	if !ok {
@@ -170,6 +226,15 @@ func (h *GrainPurchaseHandler) deleteMaterial(context *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(context, gin.H{"deleted": true}, err)
+}
+
+func stationAllowed(stationID uint64, stationIDs []uint64) bool {
+	for _, scopedStationID := range stationIDs {
+		if stationID == scopedStationID {
+			return true
+		}
+	}
+	return false
 }
 
 func parseID(context *gin.Context) (uint, bool) {

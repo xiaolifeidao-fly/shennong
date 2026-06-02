@@ -116,6 +116,41 @@ type GrainFarmerDailySummaryDTO struct {
 	LatestTime     *time.Time `json:"latestTime"`
 }
 
+type GrainPurchaseDashboardMetricDTO struct {
+	NewFarmerCount    int     `json:"newFarmerCount"`
+	ActiveUserCount   int     `json:"activeUserCount"`
+	TotalQuantity     float64 `json:"totalQuantity"`
+	TotalAmount       float64 `json:"totalAmount"`
+	EntryCount        int     `json:"entryCount"`
+	AverageUnitPrice  float64 `json:"averageUnitPrice"`
+	AverageFarmerDeal float64 `json:"averageFarmerDeal"`
+}
+
+type GrainPurchaseDashboardDimensionDTO struct {
+	Key              string  `json:"key"`
+	Name             string  `json:"name"`
+	StationID        uint64  `json:"stationId"`
+	PurchaseTypeID   uint64  `json:"purchaseTypeId"`
+	EntryCount       int     `json:"entryCount"`
+	FarmerCount      int     `json:"farmerCount"`
+	ActiveUserCount  int     `json:"activeUserCount"`
+	TotalQuantity    float64 `json:"totalQuantity"`
+	TotalAmount      float64 `json:"totalAmount"`
+	AverageUnitPrice float64 `json:"averageUnitPrice"`
+	AmountShare      float64 `json:"amountShare"`
+	QuantityShare    float64 `json:"quantityShare"`
+}
+
+type GrainPurchaseDashboardDTO struct {
+	StartDate string                                `json:"startDate"`
+	EndDate   string                                `json:"endDate"`
+	StationID uint64                                `json:"stationId"`
+	Overview  GrainPurchaseDashboardMetricDTO       `json:"overview"`
+	ByStation []*GrainPurchaseDashboardDimensionDTO `json:"byStation"`
+	ByCrop    []*GrainPurchaseDashboardDimensionDTO `json:"byCrop"`
+	Generated *time.Time                            `json:"generated"`
+}
+
 type GrainEntryMaterialDTO struct {
 	baseDTO.BaseDTO
 	StationID       uint64 `json:"stationId"`
@@ -127,6 +162,7 @@ type GrainEntryMaterialDTO struct {
 	OssBucket       string `json:"ossBucket"`
 	OssObjectKey    string `json:"ossObjectKey"`
 	OssURL          string `json:"ossUrl"`
+	ImageURL        string `json:"imageUrl"`
 	FileName        string `json:"fileName"`
 	ImageHash       string `json:"imageHash"`
 	FileSize        int64  `json:"fileSize"`
@@ -183,6 +219,14 @@ type GrainFarmerDailySummaryQueryDTO struct {
 	StartDate  *time.Time `form:"startDate" time_format:"2006-01-02"`
 	EndDate    *time.Time `form:"endDate" time_format:"2006-01-02"`
 	Search     string     `form:"search"`
+}
+
+type GrainPurchaseDashboardQueryDTO struct {
+	StationID  uint64     `form:"stationId"`
+	StationIDs []uint64   `form:"-"`
+	AppUserID  uint64     `form:"appUserId"`
+	StartDate  *time.Time `form:"startDate" time_format:"2006-01-02"`
+	EndDate    *time.Time `form:"endDate" time_format:"2006-01-02"`
 }
 
 type GrainEntryMaterialQueryDTO struct {

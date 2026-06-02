@@ -29,6 +29,17 @@ func (r *AppUserRepository) FindByUsername(username string) (*AppUser, error) {
 	return &entity, nil
 }
 
+func (r *AppUserRepository) FindByPhone(phone string) (*AppUser, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity AppUser
+	if err := r.Db.Where("phone = ? AND active = ?", strings.TrimSpace(phone), 1).First(&entity).Error; err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
 func (r *AppUserRepository) FindByOpenUID(openUID string) (*AppUser, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")

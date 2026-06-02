@@ -17,7 +17,6 @@ import {
   updateGrainPurchaseEntry,
 } from '@/services/grainPurchase'
 import { recognizeGrainCard, type IDCardSide } from '@/services/grainOcr'
-import { DEFAULT_GRAIN_STATION_ID } from '@/config/app'
 import type {
   FarmerProfile,
   FarmerStatus,
@@ -334,12 +333,8 @@ function applyCardImage(draft: GrainEntryDraft, image: GrainDraftCardImage): Gra
   return cardImages
 }
 
-function buildFarmerPayload(draft: GrainEntryDraft, stationId: number): Partial<GrainFarmerDTO> {
-  const userStore = useUserStore()
-
+function buildFarmerPayload(draft: GrainEntryDraft): Partial<GrainFarmerDTO> {
   return {
-    stationId,
-    appUserId: userStore.profile?.id || 0,
     name: draft.farmerName,
     idNumber: draft.idNumber,
     phone: draft.phone,
@@ -351,15 +346,12 @@ function buildFarmerPayload(draft: GrainEntryDraft, stationId: number): Partial<
   }
 }
 
-function buildEntryPayload(draft: GrainEntryDraft, farmerId: number, stationId: number): Partial<GrainPurchaseEntryDTO> {
-  const userStore = useUserStore()
+function buildEntryPayload(draft: GrainEntryDraft, farmerId: number): Partial<GrainPurchaseEntryDTO> {
   const displayUnit = draft.unit || '公斤'
   const rawQuantity = Number(draft.quantity) || 0
   const quantityKg = displayUnit === '吨' ? rawQuantity * 1000 : rawQuantity
 
   return {
-    stationId,
-    appUserId: userStore.profile?.id || 0,
     farmerId,
     purchaseTypeId: draft.purchaseTypeId || 0,
     crop: draft.crop,
@@ -409,7 +401,7 @@ export const useGrainStore = defineStore('grain', {
     selectedFarmerId: 'new',
     selectedEntryId: '',
     farmerImages: {},
-    stationId: DEFAULT_GRAIN_STATION_ID,
+    stationId: 0,
     loading: false,
     presetLoading: false,
     farmersLoading: false,
@@ -455,12 +447,11 @@ export const useGrainStore = defineStore('grain', {
       if (!userStore.profile) {
         await userStore.refreshProfile().catch(() => null)
       }
-      const appUserId = userStore.profile?.id || 0
       if (!this.stationId) {
-        const stationPage = await listGrainStations({ pageIndex: 1, pageSize: 1, status: 'active', appUserId: appUserId || undefined })
+        const stationPage = await listGrainStations({ pageIndex: 1, pageSize: 1, status: 'active' })
         this.stationId = pageItems(stationPage)[0]?.id || 0
       }
-      return { appUserId, stationId: this.stationId }
+      return { stationId: this.stationId }
     },
     async loadPreset(force = false) {
       if (this.presetLoading || (this.presetLoaded && !force)) {
@@ -468,11 +459,11 @@ export const useGrainStore = defineStore('grain', {
       }
       this.presetLoading = true
       try {
-        const { appUserId, stationId } = await this.ensureUserAndStation()
+        await this.ensureUserAndStation()
         const [purchaseTypes, paymentMethods, purchasePlaces] = await Promise.all([
-          listGrainPurchaseTypes(stationId),
+          listGrainPurchaseTypes(),
           listGrainPaymentMethods(),
-          listGrainPurchasePlaces(appUserId),
+          listGrainPurchasePlaces(),
         ])
         this.preset = buildPreset(safeArray(purchaseTypes), safeArray(paymentMethods), safeArray(purchasePlaces))
         this.presetLoaded = true
@@ -488,8 +479,8 @@ export const useGrainStore = defineStore('grain', {
       }
       this.farmersLoading = true
       try {
-        const { appUserId, stationId } = await this.ensureUserAndStation()
-        const farmerPage = await listGrainFarmers({ pageIndex: 1, pageSize: 200, stationId: stationId || undefined, appUserId: appUserId || undefined })
+        await this.ensureUserAndStation()
+        const farmerPage = await listGrainFarmers({ pageIndex: 1, pageSize: 200 })
         this.farmers = pageItems(farmerPage).map(toFarmerProfile)
         if (this.selectedFarmerId !== 'new' && !this.farmers.some((item) => item.id === this.selectedFarmerId)) {
           this.selectedFarmerId = this.farmers[0]?.id || 'new'
@@ -507,12 +498,10 @@ export const useGrainStore = defineStore('grain', {
       }
       this.summariesLoading = true
       try {
-        const { appUserId, stationId } = await this.ensureUserAndStation()
+        await this.ensureUserAndStation()
         const summaryPage = await listGrainFarmerPurchaseSummaries({
           pageIndex: 1,
           pageSize: 200,
-          stationId: stationId || undefined,
-          appUserId: appUserId || undefined,
           farmerId: farmerId ? Number(farmerId) : undefined,
         })
         const nextSummaries = pageItems(summaryPage).map(toSummary)
@@ -537,14 +526,12 @@ export const useGrainStore = defineStore('grain', {
       }
       this.dailySummaryLoading = true
       try {
-        const { appUserId, stationId } = await this.ensureUserAndStation()
+        await this.ensureUserAndStation()
         const pageIndex = force ? 1 : this.dailySummaryPageIndex + 1
         const { startDate, endDate } = getDateRangeForFilter(dateFilter)
         const summaryPage = await listGrainFarmerDailySummaries({
           pageIndex,
           pageSize: this.dailySummaryPageSize,
-          stationId: stationId || undefined,
-          appUserId: appUserId || undefined,
           startDate,
           endDate,
           search: search.trim() || undefined,
@@ -566,12 +553,10 @@ export const useGrainStore = defineStore('grain', {
       }
       this.entriesLoading = true
       try {
-        const { appUserId, stationId } = await this.ensureUserAndStation()
+        await this.ensureUserAndStation()
         const entryPage = await listGrainPurchaseEntries({
           pageIndex: 1,
           pageSize: 200,
-          stationId: stationId || undefined,
-          appUserId: appUserId || undefined,
           farmerId: farmerId ? Number(farmerId) : undefined,
         })
         const nextEntries = pageItems(entryPage).map(toEntry)
@@ -600,13 +585,11 @@ export const useGrainStore = defineStore('grain', {
 
       this.entriesLoading = true
       try {
-        const { appUserId, stationId } = await this.ensureUserAndStation()
+        await this.ensureUserAndStation()
         const pageIndex = force || !isSameFarmer ? 1 : this.entriesPageIndex + 1
         const entryPage = await listGrainPurchaseEntries({
           pageIndex,
           pageSize: this.entriesPageSize,
-          stationId: stationId || undefined,
-          appUserId: appUserId || undefined,
           farmerId: Number(targetFarmerId),
         })
         const nextEntries = pageItems(entryPage).map(toEntry)
@@ -713,14 +696,14 @@ export const useGrainStore = defineStore('grain', {
       let farmerId = Number(draft.farmerId)
 
       if (draft.farmerId === 'new' || !farmerId) {
-        const farmer = await createGrainFarmer(buildFarmerPayload(draft, this.stationId))
+        const farmer = await createGrainFarmer(buildFarmerPayload(draft))
         farmerId = farmer.id
       } else {
-        await updateGrainFarmer(farmerId, buildFarmerPayload(draft, this.stationId))
+        await updateGrainFarmer(farmerId, buildFarmerPayload(draft))
       }
 
       await this.saveFarmerCardImages(farmerId, draft.cardImages)
-      const entry = await createGrainPurchaseEntry(buildEntryPayload(draft, farmerId, this.stationId))
+      const entry = await createGrainPurchaseEntry(buildEntryPayload(draft, farmerId))
       await this.saveEntryMaterials(entry, draft.materialImages)
       this.selectedFarmerId = String(farmerId)
       await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true), this.loadSummaries(true, String(farmerId)), this.loadEntries(true, String(farmerId))])
@@ -734,9 +717,9 @@ export const useGrainStore = defineStore('grain', {
         return this.saveEntry(draft)
       }
 
-      await updateGrainFarmer(farmerId, buildFarmerPayload(draft, this.stationId))
+      await updateGrainFarmer(farmerId, buildFarmerPayload(draft))
       await this.saveFarmerCardImages(farmerId, draft.cardImages)
-      const entry = await updateGrainPurchaseEntry(entryId, buildEntryPayload(draft, farmerId, this.stationId))
+      const entry = await updateGrainPurchaseEntry(entryId, buildEntryPayload(draft, farmerId))
       await this.saveEntryMaterials(entry, draft.materialImages)
       this.selectedFarmerId = String(farmerId)
       await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true), this.loadSummaries(true, String(farmerId)), this.loadEntries(true, String(farmerId))])
@@ -770,8 +753,6 @@ export const useGrainStore = defineStore('grain', {
     },
     async updateFarmer(farmerId: string, patch: Partial<FarmerProfile>) {
       const result = await updateGrainFarmer(farmerId, {
-        stationId: this.stationId,
-        appUserId: useUserStore().profile?.id || 0,
         name: patch.name,
         idNumber: patch.idNumber,
         phone: patch.phone,

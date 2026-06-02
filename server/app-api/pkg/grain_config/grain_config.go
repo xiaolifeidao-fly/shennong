@@ -5,7 +5,6 @@ import (
 	commonRouter "common/middleware/routers"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,9 +40,7 @@ func (h *GrainConfigHandler) listStations(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
@@ -103,7 +100,8 @@ func (h *GrainConfigHandler) createPaymentMethod(context *gin.Context) {
 }
 
 func (h *GrainConfigHandler) listPurchasePlaces(context *gin.Context) {
-	result, err := h.grainConfigService.ListPurchasePlaces(parseAppUserID(context))
+	appUserID, _ := appCtx.CurrentAppUserID(context)
+	result, err := h.grainConfigService.ListPurchasePlaces(appUserID)
 	commonRouter.ToJson(context, result, err)
 }
 
@@ -113,16 +111,9 @@ func (h *GrainConfigHandler) createPurchasePlace(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if req.AppUserID == 0 {
-		req.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	req.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	result, err := h.grainConfigService.CreatePurchasePlace(&req)
 	commonRouter.ToJson(context, result, err)
-}
-
-func parseAppUserID(context *gin.Context) uint64 {
-	id, _ := strconv.ParseUint(context.Query("appUserId"), 10, 64)
-	return id
 }
 
 func requiredStationID(context *gin.Context) (uint64, bool) {

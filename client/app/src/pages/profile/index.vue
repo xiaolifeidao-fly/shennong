@@ -46,6 +46,26 @@
         <text>返回我的</text>
       </button>
     </view>
+
+    <view class="card profile-card">
+      <text class="card-title">登录密码</text>
+      <view class="field">
+        <text class="label">原密码</text>
+        <input v-model="passwordForm.oldPassword" class="input" password placeholder="可留空" />
+      </view>
+      <view class="field">
+        <text class="label">新密码</text>
+        <input v-model="passwordForm.newPassword" class="input" password placeholder="至少 6 位" />
+      </view>
+      <view class="field">
+        <text class="label">确认密码</text>
+        <input v-model="passwordForm.confirmPassword" class="input" password placeholder="再次输入新密码" />
+      </view>
+      <button class="submit icon-text-btn" :loading="passwordSubmitting" @click="savePassword">
+        <text class="check-icon"></text>
+        <text>保存密码</text>
+      </button>
+    </view>
   </view>
 </template>
 
@@ -69,11 +89,17 @@ interface GetPhoneNumberEvent {
 
 const userStore = useUserStore()
 const submitting = ref(false)
+const passwordSubmitting = ref(false)
 const form = reactive({
   name: '',
   wxNickname: '',
   wxAvatar: '',
   phone: '',
+})
+const passwordForm = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
 })
 
 onShow(() => {
@@ -137,6 +163,44 @@ async function saveProfile() {
   }
 }
 
+async function savePassword() {
+  const oldPassword = passwordForm.oldPassword.trim()
+  const newPassword = passwordForm.newPassword.trim()
+  const confirmPassword = passwordForm.confirmPassword.trim()
+
+  if (!newPassword) {
+    uni.showToast({ title: '请输入新密码', icon: 'none' })
+    return
+  }
+  if (newPassword.length < 6) {
+    uni.showToast({ title: '密码至少 6 位', icon: 'none' })
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    uni.showToast({ title: '两次输入的密码不一致', icon: 'none' })
+    return
+  }
+
+  passwordSubmitting.value = true
+  try {
+    await userStore.changePassword({
+      oldPassword,
+      newPassword,
+    })
+    passwordForm.oldPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    uni.showToast({ title: '密码已保存', icon: 'success' })
+  } catch (error) {
+    uni.showToast({
+      title: error instanceof Error ? error.message : '密码保存失败',
+      icon: 'none',
+    })
+  } finally {
+    passwordSubmitting.value = false
+  }
+}
+
 function goMine() {
   uni.switchTab({ url: '/pages/mine/index' })
 }
@@ -173,6 +237,13 @@ function goMine() {
 
 .profile-card {
   padding: 32rpx;
+}
+
+.card-title {
+  display: block;
+  color: #172018;
+  font-size: 32rpx;
+  font-weight: 800;
 }
 
 .avatar-button {

@@ -93,6 +93,28 @@ func (a *AliyunOss) Get(path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// GetByKey reads an OSS object using the full object key stored in the database.
+func (a *AliyunOss) GetByKey(key string) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, errors.New("file key is nil")
+	}
+
+	bucket, err := a.ossClient.Bucket(a.BucketName)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := bucket.GetObject(key)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	buf := new(bytes.Buffer)
+	io.Copy(buf, body)
+	return buf.Bytes(), nil
+}
+
 // 获取有效期的URL
 func (a *AliyunOss) GetUrl(path string, duration *time.Duration) (string, error) {
 	if len(path) == 0 {

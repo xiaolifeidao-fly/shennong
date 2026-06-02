@@ -84,6 +84,9 @@ func (s *AppUserService) UpdateCurrentUserProfile(id uint, req *appUserDTO.Updat
 	if err != nil {
 		return nil, err
 	}
+	if err := s.managerUserService.EnsureSalesmanUser(saved.Username, saved.Name, saved.Phone, saved.OriginPassword); err != nil {
+		return nil, err
+	}
 	return toCurrentAppUserProfileDTO(saved), nil
 }
 
@@ -98,6 +101,9 @@ func (s *AppUserService) UpdateCurrentUserPhone(id uint, phone string) (*appUser
 	entity.Phone = strings.TrimSpace(phone)
 	saved, err := s.appUserRepository.SaveOrUpdate(entity)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.managerUserService.EnsureSalesmanUser(saved.Username, saved.Name, saved.Phone, saved.OriginPassword); err != nil {
 		return nil, err
 	}
 	return toCurrentAppUserProfileDTO(saved), nil
@@ -117,25 +123,30 @@ func (s *AppUserService) ChangeCurrentUserPassword(id uint, req *appUserDTO.Chan
 
 	oldPassword := strings.TrimSpace(req.OldPassword)
 	newPassword := strings.TrimSpace(req.NewPassword)
-	if oldPassword == "" {
+	hasPassword := strings.TrimSpace(entity.Password) != ""
+	if hasPassword && oldPassword == "" {
 		return fmt.Errorf("old password is required")
 	}
 	if err := validateAppUserPassword(newPassword); err != nil {
 		return err
 	}
-	if strings.EqualFold(oldPassword, newPassword) {
+	if oldPassword != "" && strings.EqualFold(oldPassword, newPassword) {
 		return fmt.Errorf("new password must be different from old password")
 	}
 
-	expectedPassword := appUserPassword.Encrypt(entity.Username, oldPassword)
-	if !strings.EqualFold(expectedPassword, strings.TrimSpace(entity.Password)) {
-		return fmt.Errorf("old password is incorrect")
+	if hasPassword {
+		expectedPassword := appUserPassword.Encrypt(entity.Username, oldPassword)
+		if !strings.EqualFold(expectedPassword, strings.TrimSpace(entity.Password)) {
+			return fmt.Errorf("old password is incorrect")
+		}
 	}
 
 	entity.OriginPassword = newPassword
 	entity.Password = appUserPassword.Encrypt(entity.Username, newPassword)
-	_, err = s.appUserRepository.SaveOrUpdate(entity)
-	return err
+	if _, err = s.appUserRepository.SaveOrUpdate(entity); err != nil {
+		return err
+	}
+	return s.managerUserService.EnsureSalesmanUser(entity.Username, entity.Name, entity.Phone, newPassword)
 }
 
 func (s *AppUserService) ListUsers(query appUserDTO.AppUserQueryDTO) (*baseDTO.PageDTO[appUserDTO.AppUserDTO], error) {
@@ -318,6 +329,9 @@ func (s *AppUserService) RegisterUser(req *appUserDTO.RegisterAppUserDTO) (*appU
 		LastLoginTime:  nil,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := s.managerUserService.EnsureSalesmanUser(created.Username, created.Name, created.Phone, rawPassword); err != nil {
 		return nil, err
 	}
 	return s.toAppUserDTO(created)

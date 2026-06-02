@@ -4,6 +4,8 @@ import (
 	"common/middleware/db"
 	"fmt"
 	"net/mail"
+	permission "service/manager_permission"
+	permissionRepository "service/manager_permission/repository"
 	userRepository "service/manager_user/repository"
 	"strings"
 
@@ -14,6 +16,7 @@ type UserService struct {
 	userRepository            *userRepository.UserRepository
 	userLoginRecordRepository *userRepository.UserLoginRecordRepository
 	userRoleRepository        *userRepository.UserRoleRepository
+	roleRepository            *permissionRepository.RoleRepository
 }
 
 func NewUserService() *UserService {
@@ -21,6 +24,7 @@ func NewUserService() *UserService {
 		userRepository:            db.GetRepository[userRepository.UserRepository](),
 		userLoginRecordRepository: db.GetRepository[userRepository.UserLoginRecordRepository](),
 		userRoleRepository:        db.GetRepository[userRepository.UserRoleRepository](),
+		roleRepository:            db.GetRepository[permissionRepository.RoleRepository](),
 	}
 }
 
@@ -32,6 +36,9 @@ func (s *UserService) EnsureTable() error {
 		return err
 	}
 	if err := s.userRoleRepository.EnsureTable(); err != nil {
+		return err
+	}
+	if err := s.roleRepository.EnsureTable(); err != nil {
 		return err
 	}
 	return nil
@@ -76,6 +83,8 @@ func normalizeUserRole(role string) string {
 		return "manager"
 	case "auditor":
 		return "auditor"
+	case string(permission.RoleCodeSalesman):
+		return string(permission.RoleCodeSalesman)
 	default:
 		return ""
 	}
@@ -88,6 +97,17 @@ func validateEmail(email string) error {
 	_, err := mail.ParseAddress(email)
 	if err != nil {
 		return fmt.Errorf("email format is invalid")
+	}
+	return nil
+}
+
+func validateUserPassword(password string) error {
+	password = strings.TrimSpace(password)
+	if len(password) < 6 {
+		return fmt.Errorf("password must be at least 6 characters")
+	}
+	if len(password) > 50 {
+		return fmt.Errorf("password must be at most 50 characters")
 	}
 	return nil
 }

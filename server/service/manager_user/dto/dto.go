@@ -88,6 +88,33 @@ type UserStatsDTO struct {
 	ActiveUsers      int `json:"activeUsers"`
 }
 
+type CurrentUserProfileDTO struct {
+	Id         int    `json:"id"`
+	Name       string `json:"name"`
+	Username   string `json:"username"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Department string `json:"department"`
+	TenantID   uint64 `json:"tenantId"`
+	Role       string `json:"role"`
+	Status     string `json:"status"`
+	Remark     string `json:"remark"`
+}
+
+type UpdateCurrentUserProfileDTO struct {
+	Name       string `json:"name"`
+	Username   string `json:"username"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	Department string `json:"department"`
+	Remark     string `json:"remark"`
+}
+
+type ChangeCurrentUserPasswordDTO struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
+}
+
 type UserLoginRecordDTO struct {
 	baseDTO.BaseDTO
 	IP     string `json:"ip"`

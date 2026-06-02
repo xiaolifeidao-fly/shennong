@@ -1,8 +1,23 @@
 import { defineStore } from 'pinia'
-import { getAuthState, getCurrentUserProfile, login, logout, updateCurrentUserProfile, updateWechatPhone } from '@/services/auth'
-import { loginWithWechatCodeOnly, loginWithWechatProfile } from '@/services/wechat'
+import {
+  changeCurrentUserPassword,
+  getAuthState,
+  getCurrentUserProfile,
+  login,
+  logout,
+  updateCurrentUserProfile,
+  updateWechatPhone,
+  wechatPhoneLogin,
+} from '@/services/auth'
+import { loginWithWechatProfile } from '@/services/wechat'
 import { clearToken, getToken, setToken } from '@/utils/token'
-import type { AppUserProfile, AuthState, LoginRequest, UpdateAppUserProfileRequest } from '@/types/api'
+import type {
+  AppUserProfile,
+  AuthState,
+  ChangePasswordRequest,
+  LoginRequest,
+  UpdateAppUserProfileRequest,
+} from '@/types/api'
 
 interface UserState {
   token: string
@@ -43,11 +58,10 @@ export const useUserStore = defineStore('user', {
       await this.refreshAuthState()
     },
     async loginWithWechatPhone(phoneCode: string) {
-      const result = await loginWithWechatCodeOnly()
+      const result = await wechatPhoneLogin({ code: phoneCode })
       this.token = result.token
       this.profile = result.user || null
       setToken(result.token)
-      await this.bindWechatPhone(phoneCode)
       await this.refreshAuthState()
     },
     async refreshAuthState() {
@@ -62,6 +76,9 @@ export const useUserStore = defineStore('user', {
       this.profile = await updateCurrentUserProfile(data)
       await this.refreshAuthState()
       return this.profile
+    },
+    async changePassword(data: ChangePasswordRequest) {
+      return changeCurrentUserPassword(data)
     },
     async bindWechatPhone(code: string) {
       await updateWechatPhone({ code })

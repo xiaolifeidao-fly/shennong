@@ -2,9 +2,9 @@ package appctx
 
 import (
 	webAuth "app-api/auth"
+	"common/middleware/db"
 	authService "service/auth"
-	"strconv"
-	"strings"
+	grainConfigRepository "service/grain_config/repository"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,15 +46,14 @@ func CurrentAppUserName(context *gin.Context) string {
 }
 
 func CurrentStationID(context *gin.Context) (uint64, bool) {
-	for _, name := range []string{"stationId", "X-Station-Id", "X-Grain-Station-Id"} {
-		value := strings.TrimSpace(context.GetHeader(name))
-		if value == "" {
-			continue
-		}
-		id, err := strconv.ParseUint(value, 10, 64)
-		if err == nil && id > 0 {
-			return id, true
-		}
+	appUserID, ok := CurrentAppUserID(context)
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	repo := db.GetRepository[grainConfigRepository.GrainStationUserRepository]()
+	stationUser, err := repo.FindActiveByAppUserID(appUserID)
+	if err != nil || stationUser == nil || stationUser.StationID == 0 {
+		return 0, false
+	}
+	return stationUser.StationID, true
 }

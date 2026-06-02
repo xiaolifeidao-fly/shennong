@@ -81,7 +81,9 @@ async function handleWechatPhoneLogin(event: GetPhoneNumberEvent) {
 }
 
 async function handleLogin() {
-  if (!form.username || !form.password) {
+  const username = form.username.trim()
+  const password = form.password.trim()
+  if (!username || !password) {
     uni.showToast({ title: '请输入账号和密码', icon: 'none' })
     return
   }
@@ -89,8 +91,8 @@ async function handleLogin() {
   submitting.value = true
   try {
     await userStore.loginWithPassword({
-      username: form.username,
-      password: form.password,
+      username,
+      password,
     })
     uni.showToast({ title: '登录成功', icon: 'success' })
     uni.switchTab({ url: '/pages/mine/index' })
@@ -103,6 +105,7 @@ async function handleLogin() {
     submitting.value = false
   }
 }
+
 </script>
 
 <style lang="scss" scoped>

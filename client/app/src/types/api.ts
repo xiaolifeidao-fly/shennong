@@ -52,6 +52,11 @@ export interface UpdateAppUserProfileRequest {
   wxAvatar?: string
 }
 
+export interface ChangePasswordRequest {
+  oldPassword?: string
+  newPassword: string
+}
+
 export interface WechatPhoneRequest {
   code: string
 }

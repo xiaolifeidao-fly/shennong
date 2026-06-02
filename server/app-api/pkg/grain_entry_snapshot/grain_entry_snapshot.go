@@ -33,9 +33,7 @@ func (h *GrainEntrySnapshotHandler) listEntrySnapshots(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return

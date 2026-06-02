@@ -2,6 +2,7 @@ package login
 
 import (
 	webAuth "app-api/auth"
+	"bytes"
 	commonRouter "common/middleware/routers"
 	"common/middleware/vipper"
 	"encoding/json"
@@ -18,12 +19,6 @@ import (
 )
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type RegisterRequest struct {
-	Name     string `json:"name"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
@@ -58,7 +53,7 @@ func NewLoginHandler() *LoginHandler {
 func (h *LoginHandler) RegisterHandler(engine *gin.RouterGroup) {
 	webAuth.PublicPOST(engine, "/login", h.login)
 	webAuth.PublicPOST(engine, "/wechat-login", h.wechatLogin)
-	webAuth.PublicPOST(engine, "/register", h.register)
+	webAuth.PublicPOST(engine, "/wechat-phone-login", h.wechatPhoneLogin)
 	engine.GET("/auth-state", h.authState)
 	engine.POST("/logout", h.logout)
 }
@@ -97,9 +92,9 @@ func (h *LoginHandler) wechatLogin(context *gin.Context) {
 	}
 
 	service := appUserService.NewAppUserService()
-	user, err := service.UpsertWechatUser(session.OpenID, session.UnionID, session.SessionKey, req.UserInfo)
+	user, err := service.FindActiveWechatUser(session.OpenID)
 	if err != nil {
-		commonRouter.ToError(context, err.Error())
+		commonRouter.ToError(context, "微信账号未开通业务员账号")
 		return
 	}
 
@@ -109,6 +104,33 @@ func (h *LoginHandler) wechatLogin(context *gin.Context) {
 		return
 	}
 
+	profile, err := service.GetCurrentUserProfile(uint(user.Id))
+	commonRouter.ToJson(context, &WechatLoginResponse{Token: token, User: profile}, err)
+}
+
+func (h *LoginHandler) wechatPhoneLogin(context *gin.Context) {
+	var req appUserDTO.WechatPhoneDTO
+	if err := context.ShouldBindJSON(&req); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	phone, err := getWechatPhoneNumber(strings.TrimSpace(req.Code))
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
+
+	service := appUserService.NewAppUserService()
+	user, err := service.FindActiveUserByPhone(phone)
+	if err != nil {
+		commonRouter.ToError(context, "手机号未开通业务员账号")
+		return
+	}
+	token, _, err := h.authService.LoginAppUser(user, context.ClientIP())
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
 	profile, err := service.GetCurrentUserProfile(uint(user.Id))
 	commonRouter.ToJson(context, &WechatLoginResponse{Token: token, User: profile}, err)
 }
@@ -145,22 +167,6 @@ func (h *LoginHandler) authState(context *gin.Context) {
 		Username:      user.Username,
 		DisplayName:   user.Name,
 	}, nil)
-}
-
-func (h *LoginHandler) register(context *gin.Context) {
-	var req RegisterRequest
-	if err := context.ShouldBindJSON(&req); err != nil {
-		commonRouter.ToError(context, "参数错误")
-		return
-	}
-
-	service := appUserService.NewAppUserService()
-	result, err := service.RegisterUser(&appUserDTO.RegisterAppUserDTO{
-		Name:     req.Name,
-		Username: req.Username,
-		Password: req.Password,
-	})
-	commonRouter.ToJson(context, result, err)
 }
 
 type wechatSessionResponse struct {
@@ -205,4 +211,88 @@ func code2Session(code string) (*wechatSessionResponse, error) {
 		return nil, fmt.Errorf("微信未返回 openid")
 	}
 	return &session, nil
+}
+
+type wechatAccessTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	ErrCode     int    `json:"errcode"`
+	ErrMsg      string `json:"errmsg"`
+}
+
+type wechatPhoneResponse struct {
+	ErrCode   int    `json:"errcode"`
+	ErrMsg    string `json:"errmsg"`
+	PhoneInfo struct {
+		PhoneNumber     string `json:"phoneNumber"`
+		PurePhoneNumber string `json:"purePhoneNumber"`
+	} `json:"phone_info"`
+}
+
+func getWechatPhoneNumber(code string) (string, error) {
+	if code == "" {
+		return "", fmt.Errorf("手机号授权 code 不能为空")
+	}
+	accessToken, err := getWechatAccessToken()
+	if err != nil {
+		return "", err
+	}
+	body, err := json.Marshal(gin.H{"code": code})
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{Timeout: 8 * time.Second}
+	apiURL := "https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=" + url.QueryEscape(accessToken)
+	response, err := client.Post(apiURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	var result wechatPhoneResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if result.ErrCode != 0 {
+		return "", fmt.Errorf("获取微信手机号失败: %s", result.ErrMsg)
+	}
+	phone := strings.TrimSpace(result.PhoneInfo.PurePhoneNumber)
+	if phone == "" {
+		phone = strings.TrimSpace(result.PhoneInfo.PhoneNumber)
+	}
+	if phone == "" {
+		return "", fmt.Errorf("微信未返回手机号")
+	}
+	return phone, nil
+}
+
+func getWechatAccessToken() (string, error) {
+	appID := strings.TrimSpace(vipper.GetString("wechat.appid"))
+	secret := strings.TrimSpace(vipper.GetString("wechat.secret"))
+	if appID == "" || secret == "" {
+		return "", fmt.Errorf("未配置 wechat.appid 或 wechat.secret")
+	}
+
+	values := url.Values{}
+	values.Set("grant_type", "client_credential")
+	values.Set("appid", appID)
+	values.Set("secret", secret)
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	response, err := client.Get("https://api.weixin.qq.com/cgi-bin/token?" + values.Encode())
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	var result wechatAccessTokenResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	if result.ErrCode != 0 {
+		return "", fmt.Errorf("获取微信 access_token 失败: %s", result.ErrMsg)
+	}
+	if strings.TrimSpace(result.AccessToken) == "" {
+		return "", fmt.Errorf("微信未返回 access_token")
+	}
+	return result.AccessToken, nil
 }

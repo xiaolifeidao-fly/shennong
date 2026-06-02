@@ -3,8 +3,13 @@ package grain_purchase
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"common/middleware/storage/oss"
 	"crypto/sha256"
 	"fmt"
+	"mime"
+	"net/http"
+	"net/url"
+	"path/filepath"
 	grainFarmerService "service/grain_farmer"
 	grainFarmerRepository "service/grain_farmer/repository"
 	grainPurchaseDTO "service/grain_purchase/dto"
@@ -23,6 +28,13 @@ type GrainPurchaseService struct {
 	summaryRepository        *grainPurchaseRepository.GrainFarmerPurchaseSummaryRepository
 	stationSummaryRepository *grainPurchaseRepository.GrainStationPurchaseSummaryRepository
 	materialRepository       *grainPurchaseRepository.GrainEntryMaterialRepository
+}
+
+type GrainEntryMaterialContent struct {
+	Data      []byte
+	MimeType  string
+	FileName  string
+	StationID uint64
 }
 
 func NewGrainPurchaseService() *GrainPurchaseService {
@@ -99,14 +111,24 @@ func (s *GrainPurchaseService) UpdateEntryInStation(id uint, req *grainPurchaseD
 	return s.updateEntry(id, req, operatorAppUserID, operatorName, stationID)
 }
 
+func (s *GrainPurchaseService) UpdateEntryInStationForAppUser(id uint, req *grainPurchaseDTO.GrainPurchaseEntryDTO, operatorAppUserID uint64, operatorName string, stationID uint64) (*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
+	req.StationID = stationID
+	req.AppUserID = operatorAppUserID
+	return s.updateEntryForAppUser(id, req, operatorAppUserID, operatorName, stationID, operatorAppUserID)
+}
+
 func (s *GrainPurchaseService) updateEntry(id uint, req *grainPurchaseDTO.GrainPurchaseEntryDTO, operatorAppUserID uint64, operatorName string, stationID uint64) (*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
+	return s.updateEntryForAppUser(id, req, operatorAppUserID, operatorName, stationID, 0)
+}
+
+func (s *GrainPurchaseService) updateEntryForAppUser(id uint, req *grainPurchaseDTO.GrainPurchaseEntryDTO, operatorAppUserID uint64, operatorName string, stationID, ownerAppUserID uint64) (*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
 	var result *grainPurchaseRepository.GrainPurchaseEntry
 	err := s.withTransaction(func(txService *GrainPurchaseService) error {
 		entity, err := txService.entryRepository.FindById(id)
 		if err != nil {
 			return err
 		}
-		if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) {
+		if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) || (ownerAppUserID > 0 && entity.AppUserID != ownerAppUserID) {
 			return gorm.ErrRecordNotFound
 		}
 		previous := *entity
@@ -142,13 +164,21 @@ func (s *GrainPurchaseService) VoidEntryInStation(id uint, operatorAppUserID uin
 	return s.voidEntry(id, operatorAppUserID, operatorName, stationID)
 }
 
+func (s *GrainPurchaseService) VoidEntryInStationForAppUser(id uint, operatorAppUserID uint64, operatorName string, stationID uint64) error {
+	return s.voidEntryForAppUser(id, operatorAppUserID, operatorName, stationID, operatorAppUserID)
+}
+
 func (s *GrainPurchaseService) voidEntry(id uint, operatorAppUserID uint64, operatorName string, stationID uint64) error {
+	return s.voidEntryForAppUser(id, operatorAppUserID, operatorName, stationID, 0)
+}
+
+func (s *GrainPurchaseService) voidEntryForAppUser(id uint, operatorAppUserID uint64, operatorName string, stationID, ownerAppUserID uint64) error {
 	return s.withTransaction(func(txService *GrainPurchaseService) error {
 		entity, err := txService.entryRepository.FindById(id)
 		if err != nil {
 			return err
 		}
-		if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) {
+		if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) || (ownerAppUserID > 0 && entity.AppUserID != ownerAppUserID) {
 			return gorm.ErrRecordNotFound
 		}
 		previous := *entity
@@ -232,6 +262,57 @@ func (s *GrainPurchaseService) ListDailyFarmerSummaries(query grainPurchaseDTO.G
 	return baseDTO.BuildPage(int(total), summaries), nil
 }
 
+func (s *GrainPurchaseService) GetDashboard(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (*grainPurchaseDTO.GrainPurchaseDashboardDTO, error) {
+	applyTodayDefault(&query.StartDate, &query.EndDate)
+	if s.stationSummaryRepository == nil || s.stationSummaryRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	overview, err := s.stationSummaryRepository.DashboardOverview(query)
+	if err != nil {
+		return nil, err
+	}
+	newFarmerCount, err := s.summaryRepository.DashboardNewFarmerCount(query)
+	if err != nil {
+		return nil, err
+	}
+	overview.NewFarmerCount = newFarmerCount
+	if overview.NewFarmerCount > 0 {
+		overview.AverageFarmerDeal = overview.TotalAmount / float64(overview.NewFarmerCount)
+	}
+	byStation, err := s.stationSummaryRepository.DashboardByStation(query)
+	if err != nil {
+		return nil, err
+	}
+	stationFarmerCount, err := s.summaryRepository.DashboardFarmerCountByStation(query)
+	if err != nil {
+		return nil, err
+	}
+	byCrop, err := s.stationSummaryRepository.DashboardByCrop(query)
+	if err != nil {
+		return nil, err
+	}
+	cropFarmerCount, err := s.summaryRepository.DashboardFarmerCountByCrop(query)
+	if err != nil {
+		return nil, err
+	}
+	enrichDashboardRows(byStation, overview, func(row *grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int {
+		return stationFarmerCount[row.StationID]
+	})
+	enrichDashboardRows(byCrop, overview, func(row *grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int {
+		return cropFarmerCount[row.Name]
+	})
+	now := time.Now()
+	return &grainPurchaseDTO.GrainPurchaseDashboardDTO{
+		StartDate: formatDashboardDate(query.StartDate),
+		EndDate:   formatDashboardDate(query.EndDate),
+		StationID: query.StationID,
+		Overview:  *overview,
+		ByStation: byStation,
+		ByCrop:    byCrop,
+		Generated: &now,
+	}, nil
+}
+
 func (s *GrainPurchaseService) ListMaterials(query grainPurchaseDTO.GrainEntryMaterialQueryDTO) (*baseDTO.PageDTO[grainPurchaseDTO.GrainEntryMaterialDTO], error) {
 	pageIndex, pageSize := normalizePage(query.Page, query.PageIndex, query.PageSize)
 	total, err := s.materialRepository.CountByQuery(query)
@@ -242,7 +323,13 @@ func (s *GrainPurchaseService) ListMaterials(query grainPurchaseDTO.GrainEntryMa
 	if err != nil {
 		return nil, err
 	}
-	return baseDTO.BuildPage(int(total), db.ToDTOs[grainPurchaseDTO.GrainEntryMaterialDTO](entities)), nil
+	dtos := db.ToDTOs[grainPurchaseDTO.GrainEntryMaterialDTO](entities)
+	for _, dto := range dtos {
+		if dto != nil && dto.Id > 0 {
+			dto.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", dto.Id)
+		}
+	}
+	return baseDTO.BuildPage(int(total), dtos), nil
 }
 
 func (s *GrainPurchaseService) CreateMaterial(req *grainPurchaseDTO.GrainEntryMaterialDTO) (*grainPurchaseDTO.GrainEntryMaterialDTO, error) {
@@ -317,6 +404,68 @@ func (s *GrainPurchaseService) DeleteMaterial(id uint) error {
 	entity.Active = 0
 	_, err = s.materialRepository.SaveOrUpdate(entity)
 	return err
+}
+
+func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMaterialContent, error) {
+	entity, err := s.materialRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	data, err := getOssObject(entity.OssObjectKey, entity.OssURL)
+	if err != nil {
+		return nil, err
+	}
+	mimeType := strings.TrimSpace(entity.MimeType)
+	if !strings.HasPrefix(mimeType, "image/") {
+		mimeType = detectImageMimeType(data, entity.FileName)
+	}
+	return &GrainEntryMaterialContent{
+		Data:      data,
+		MimeType:  mimeType,
+		FileName:  entity.FileName,
+		StationID: entity.StationID,
+	}, nil
+}
+
+func getOssObject(ossObjectKey, fallbackURL string) ([]byte, error) {
+	key := strings.TrimSpace(ossObjectKey)
+	if key == "" {
+		key = objectKeyFromURL(fallbackURL)
+	}
+	if key == "" {
+		return nil, fmt.Errorf("oss object key is empty")
+	}
+	if data, err := oss.GetByKey(key); err == nil {
+		return data, nil
+	}
+	return oss.Get(key)
+}
+
+func objectKeyFromURL(rawURL string) string {
+	value := strings.TrimSpace(rawURL)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Path == "" {
+		return ""
+	}
+	return strings.TrimLeft(parsed.Path, "/")
+}
+
+func detectImageMimeType(data []byte, fileName string) string {
+	if ext := strings.ToLower(filepath.Ext(fileName)); ext != "" {
+		if mimeType := mime.TypeByExtension(ext); strings.HasPrefix(mimeType, "image/") {
+			return mimeType
+		}
+	}
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return "application/octet-stream"
 }
 
 func (s *GrainPurchaseService) withTransaction(fn func(*GrainPurchaseService) error) error {
@@ -524,6 +673,34 @@ func applyTodayDefault(startDate, endDate **time.Time) {
 	today := summaryDay(nil)
 	*startDate = &today
 	*endDate = &today
+}
+
+func enrichDashboardRows(rows []*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO, overview *grainPurchaseDTO.GrainPurchaseDashboardMetricDTO, farmerCount func(*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int) {
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		if strings.TrimSpace(row.Key) == "" {
+			row.Key = row.Name
+		}
+		row.FarmerCount = farmerCount(row)
+		if row.TotalQuantity > 0 {
+			row.AverageUnitPrice = row.TotalAmount / row.TotalQuantity
+		}
+		if overview.TotalAmount > 0 {
+			row.AmountShare = row.TotalAmount / overview.TotalAmount
+		}
+		if overview.TotalQuantity > 0 {
+			row.QuantityShare = row.TotalQuantity / overview.TotalQuantity
+		}
+	}
+}
+
+func formatDashboardDate(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.In(grainBusinessLocation()).Format("2006-01-02")
 }
 
 func grainBusinessLocation() *time.Location {

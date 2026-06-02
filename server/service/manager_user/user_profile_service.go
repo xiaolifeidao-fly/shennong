@@ -5,12 +5,126 @@ import (
 	"common/middleware/db"
 	"fmt"
 	userDTO "service/manager_user/dto"
+	userPassword "service/manager_user/password"
 	userRepository "service/manager_user/repository"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+func (s *UserService) GetCurrentUserProfile(id uint) (*userDTO.CurrentUserProfileDTO, error) {
+	entity, err := s.userRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return toCurrentUserProfileDTO(entity), nil
+}
+
+func (s *UserService) UpdateCurrentUserProfile(id uint, req *userDTO.UpdateCurrentUserProfileDTO) (*userDTO.CurrentUserProfileDTO, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	entity, err := s.userRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	name := strings.TrimSpace(req.Name)
+	username := strings.TrimSpace(req.Username)
+	email := strings.TrimSpace(req.Email)
+	if name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	if username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	if err := validateEmail(email); err != nil {
+		return nil, err
+	}
+
+	if username != entity.Username {
+		existing, err := s.userRepository.FindByUsername(username)
+		if err == nil && existing != nil && existing.Active == 1 && existing.Id != entity.Id {
+			return nil, fmt.Errorf("username already exists")
+		}
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return nil, err
+		}
+		entity.Username = username
+		if strings.TrimSpace(entity.OriginPassword) != "" {
+			entity.Password = userPassword.Encrypt(entity.Username, entity.OriginPassword)
+		}
+	}
+
+	entity.Name = name
+	entity.Email = email
+	entity.Phone = strings.TrimSpace(req.Phone)
+	entity.Department = strings.TrimSpace(req.Department)
+	entity.Remark = strings.TrimSpace(req.Remark)
+
+	saved, err := s.userRepository.SaveOrUpdate(entity)
+	if err != nil {
+		return nil, err
+	}
+	return toCurrentUserProfileDTO(saved), nil
+}
+
+func (s *UserService) ChangeCurrentUserPassword(id uint, req *userDTO.ChangeCurrentUserPasswordDTO) error {
+	if req == nil {
+		return fmt.Errorf("request is nil")
+	}
+	entity, err := s.userRepository.FindById(id)
+	if err != nil {
+		return err
+	}
+	if entity.Active == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	oldPassword := strings.TrimSpace(req.OldPassword)
+	newPassword := strings.TrimSpace(req.NewPassword)
+	if oldPassword == "" {
+		return fmt.Errorf("old password is required")
+	}
+	if err := validateUserPassword(newPassword); err != nil {
+		return err
+	}
+	if strings.EqualFold(oldPassword, newPassword) {
+		return fmt.Errorf("new password must be different from old password")
+	}
+
+	expectedPassword := userPassword.Encrypt(entity.Username, oldPassword)
+	if !strings.EqualFold(expectedPassword, strings.TrimSpace(entity.Password)) {
+		return fmt.Errorf("old password is incorrect")
+	}
+
+	return s.saveCurrentUserPassword(entity, newPassword)
+}
+
+func (s *UserService) saveCurrentUserPassword(entity *userRepository.User, rawPassword string) error {
+	if s.userRepository.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	if entity == nil {
+		return fmt.Errorf("user is nil")
+	}
+	rawPassword = strings.TrimSpace(rawPassword)
+	if err := validateUserPassword(rawPassword); err != nil {
+		return err
+	}
+
+	entity.OriginPassword = rawPassword
+	entity.Password = userPassword.Encrypt(entity.Username, rawPassword)
+	_, err := s.userRepository.SaveOrUpdate(entity)
+	return err
+}
 
 func (s *UserService) GetUserStats() (*userDTO.UserStatsDTO, error) {
 	if s.userRepository.Db == nil {
@@ -304,4 +418,19 @@ func (s *UserService) DeleteUser(id uint) error {
 	entity.Active = 0
 	_, err = s.userRepository.SaveOrUpdate(entity)
 	return err
+}
+
+func toCurrentUserProfileDTO(entity *userRepository.User) *userDTO.CurrentUserProfileDTO {
+	return &userDTO.CurrentUserProfileDTO{
+		Id:         entity.Id,
+		Name:       entity.Name,
+		Username:   entity.Username,
+		Email:      entity.Email,
+		Phone:      entity.Phone,
+		Department: entity.Department,
+		TenantID:   entity.TenantID,
+		Role:       entity.Role,
+		Status:     entity.Status,
+		Remark:     entity.Remark,
+	}
 }

@@ -1,6 +1,5 @@
 import { http } from './request'
 import { buildQuery } from './query'
-import { DEFAULT_GRAIN_STATION_ID } from '@/config/app'
 import type { PageResponse } from '@/types/api'
 import type { GrainPaymentMethod, GrainPurchasePlace, GrainPurchaseType, GrainStation } from '@/types/grain'
 
@@ -21,8 +20,8 @@ export function createGrainStation(data: Partial<GrainStation>) {
   return http.post<GrainStation, Partial<GrainStation>>('/grain-stations', data)
 }
 
-export function listGrainPurchaseTypes(stationId = DEFAULT_GRAIN_STATION_ID) {
-  return http.get<GrainPurchaseType[]>(`/grain-purchase-types${buildQuery({ stationId })}`)
+export function listGrainPurchaseTypes() {
+  return http.get<GrainPurchaseType[]>('/grain-purchase-types')
 }
 
 export function createGrainPurchaseType(data: Partial<GrainPurchaseType>) {
@@ -37,8 +36,8 @@ export function createGrainPaymentMethod(data: Partial<GrainPaymentMethod>) {
   return http.post<GrainPaymentMethod, Partial<GrainPaymentMethod>>('/grain-payment-methods', data)
 }
 
-export function listGrainPurchasePlaces(appUserId = 0) {
-  return http.get<GrainPurchasePlace[]>(`/grain-purchase-places${buildQuery({ appUserId })}`)
+export function listGrainPurchasePlaces() {
+  return http.get<GrainPurchasePlace[]>('/grain-purchase-places')
 }
 
 export function createGrainPurchasePlace(data: Partial<GrainPurchasePlace>) {

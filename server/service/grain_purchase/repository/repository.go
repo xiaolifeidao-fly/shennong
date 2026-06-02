@@ -186,6 +186,71 @@ func (r *GrainStationPurchaseSummaryRepository) FindByDimension(entity *GrainSta
 	return &summary, err
 }
 
+func (r *GrainStationPurchaseSummaryRepository) DashboardOverview(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (*grainPurchaseDTO.GrainPurchaseDashboardMetricDTO, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var metric grainPurchaseDTO.GrainPurchaseDashboardMetricDTO
+	err := applyDashboardSummaryQuery(r.Db.Table("grain_station_purchase_summary AS s"), query).
+		Select(`
+			COALESCE(SUM(s.entry_count), 0) AS entry_count,
+			COALESCE(SUM(s.total_quantity), 0) AS total_quantity,
+			COALESCE(SUM(s.total_amount), 0) AS total_amount,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.app_user_id END) AS active_user_count`,
+		).
+		Scan(&metric).Error
+	if err != nil {
+		return nil, err
+	}
+	if metric.TotalQuantity > 0 {
+		metric.AverageUnitPrice = metric.TotalAmount / metric.TotalQuantity
+	}
+	return &metric, nil
+}
+
+func (r *GrainStationPurchaseSummaryRepository) DashboardByStation(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) ([]*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var rows []*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO
+	err := applyDashboardSummaryQuery(r.Db.Table("grain_station_purchase_summary AS s"), query).
+		Joins("LEFT JOIN grain_station AS gs ON gs.id = s.station_id").
+		Select(`
+			CAST(s.station_id AS CHAR) AS ` + "`key`" + `,
+			s.station_id AS station_id,
+			COALESCE(NULLIF(gs.station_name, ''), CONCAT('粮站 ', s.station_id)) AS name,
+			COALESCE(SUM(s.entry_count), 0) AS entry_count,
+			COALESCE(SUM(s.total_quantity), 0) AS total_quantity,
+			COALESCE(SUM(s.total_amount), 0) AS total_amount,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.app_user_id END) AS active_user_count`,
+		).
+		Group("s.station_id, gs.station_name").
+		Order("total_amount DESC, total_quantity DESC").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func (r *GrainStationPurchaseSummaryRepository) DashboardByCrop(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) ([]*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var rows []*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO
+	err := applyDashboardSummaryQuery(r.Db.Table("grain_station_purchase_summary AS s"), query).
+		Select(`
+			COALESCE(NULLIF(s.crop, ''), '未命名粮食') AS ` + "`key`" + `,
+			COALESCE(NULLIF(s.crop, ''), '未命名粮食') AS name,
+			MAX(s.purchase_type_id) AS purchase_type_id,
+			COALESCE(SUM(s.entry_count), 0) AS entry_count,
+			COALESCE(SUM(s.total_quantity), 0) AS total_quantity,
+			COALESCE(SUM(s.total_amount), 0) AS total_amount,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.app_user_id END) AS active_user_count`,
+		).
+		Group("COALESCE(NULLIF(s.crop, ''), '未命名粮食')").
+		Order("total_amount DESC, total_quantity DESC").
+		Scan(&rows).Error
+	return rows, err
+}
+
 type GrainEntryMaterialRepository struct {
 	db.Repository[*GrainEntryMaterial]
 }
@@ -326,6 +391,103 @@ func applyDailySummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainFarmer
 	if value := strings.TrimSpace(query.Search); value != "" {
 		likeValue := "%" + value + "%"
 		dbQuery = dbQuery.Where("(f.name LIKE ? OR f.id_number = ? OR f.phone LIKE ? OR f.address LIKE ? OR s.crop LIKE ? OR s.pay_type LIKE ?)", likeValue, value, likeValue, likeValue, likeValue, likeValue)
+	}
+	return dbQuery
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) DashboardNewFarmerCount(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (int, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
+	var total int64
+	err := applyDashboardFarmerSummaryQuery(r.Db.Table("grain_farmer_purchase_summary AS s"), query).
+		Distinct("s.farmer_id").
+		Count(&total).Error
+	return int(total), err
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) DashboardFarmerCountByStation(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (map[uint64]int, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	type row struct {
+		StationID   uint64
+		FarmerCount int
+	}
+	var rows []row
+	err := applyDashboardFarmerSummaryQuery(r.Db.Table("grain_farmer_purchase_summary AS s"), query).
+		Select("s.station_id AS station_id, COUNT(DISTINCT s.farmer_id) AS farmer_count").
+		Group("s.station_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[uint64]int, len(rows))
+	for _, item := range rows {
+		result[item.StationID] = item.FarmerCount
+	}
+	return result, nil
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) DashboardFarmerCountByCrop(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (map[string]int, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	type row struct {
+		Name        string
+		FarmerCount int
+	}
+	var rows []row
+	err := applyDashboardFarmerSummaryQuery(r.Db.Table("grain_farmer_purchase_summary AS s"), query).
+		Select("COALESCE(NULLIF(s.crop, ''), '未命名粮食') AS name, COUNT(DISTINCT s.farmer_id) AS farmer_count").
+		Group("COALESCE(NULLIF(s.crop, ''), '未命名粮食')").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]int, len(rows))
+	for _, item := range rows {
+		result[item.Name] = item.FarmerCount
+	}
+	return result, nil
+}
+
+func applyDashboardSummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) *gorm.DB {
+	dbQuery = dbQuery.Where("s.active = ? AND s.entry_count > ?", 1, 0)
+	if query.StationID > 0 {
+		dbQuery = dbQuery.Where("s.station_id = ?", query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("s.station_id IN ?", query.StationIDs)
+	}
+	if query.AppUserID > 0 {
+		dbQuery = dbQuery.Where("s.app_user_id = ?", query.AppUserID)
+	}
+	if query.StartDate != nil {
+		dbQuery = dbQuery.Where("s.summary_date >= ?", query.StartDate)
+	}
+	if query.EndDate != nil {
+		dbQuery = dbQuery.Where("s.summary_date <= ?", query.EndDate)
+	}
+	return dbQuery
+}
+
+func applyDashboardFarmerSummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) *gorm.DB {
+	dbQuery = dbQuery.Where("s.active = ? AND s.entry_count > ?", 1, 0)
+	if query.StationID > 0 {
+		dbQuery = dbQuery.Where("s.station_id = ?", query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("s.station_id IN ?", query.StationIDs)
+	}
+	if query.AppUserID > 0 {
+		dbQuery = dbQuery.Where("s.app_user_id = ?", query.AppUserID)
+	}
+	if query.StartDate != nil {
+		dbQuery = dbQuery.Where("s.summary_date >= ?", query.StartDate)
+	}
+	if query.EndDate != nil {
+		dbQuery = dbQuery.Where("s.summary_date <= ?", query.EndDate)
 	}
 	return dbQuery
 }

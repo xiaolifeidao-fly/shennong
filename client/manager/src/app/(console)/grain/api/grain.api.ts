@@ -1,6 +1,7 @@
 "use client";
 
-import { getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
+import { getData, getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
+import { getAuthToken } from "@/utils/auth";
 import type { CrudListQuery } from "../../components/CrudManagementPanel";
 
 export class GrainStationRecord {
@@ -119,6 +120,64 @@ export class GrainFarmerImagesRecord {
   bankCard = "";
 }
 
+export class GrainEntryMaterialRecord {
+  id!: number;
+  stationId = 0;
+  entryId = 0;
+  farmerId = 0;
+  appUserId = 0;
+  materialBizType = "";
+  materialType = "";
+  ossBucket = "";
+  ossObjectKey = "";
+  ossUrl = "";
+  imageUrl = "";
+  fileName = "";
+  imageHash = "";
+  fileSize = 0;
+  mimeType = "";
+  etag = "";
+  sortOrder = 0;
+  createdTime?: string;
+  updatedTime?: string;
+  [key: string]: unknown;
+}
+
+export class GrainPurchaseDashboardMetricRecord {
+  newFarmerCount = 0;
+  activeUserCount = 0;
+  totalQuantity = 0;
+  totalAmount = 0;
+  entryCount = 0;
+  averageUnitPrice = 0;
+  averageFarmerDeal = 0;
+}
+
+export class GrainPurchaseDashboardDimensionRecord {
+  key = "";
+  name = "";
+  stationId = 0;
+  purchaseTypeId = 0;
+  entryCount = 0;
+  farmerCount = 0;
+  activeUserCount = 0;
+  totalQuantity = 0;
+  totalAmount = 0;
+  averageUnitPrice = 0;
+  amountShare = 0;
+  quantityShare = 0;
+}
+
+export class GrainPurchaseDashboardRecord {
+  startDate = "";
+  endDate = "";
+  stationId = 0;
+  overview = new GrainPurchaseDashboardMetricRecord();
+  byStation: GrainPurchaseDashboardDimensionRecord[] = [];
+  byCrop: GrainPurchaseDashboardDimensionRecord[] = [];
+  generated?: string;
+}
+
 export class GrainCardOcrResult {
   cardType = "";
   mock = false;
@@ -208,6 +267,18 @@ export const grainPurchaseEntryApi = crudApi(GrainPurchaseEntryRecord, "/grain-p
 export const grainPurchaseEntrySnapshotApi = {
   list: (query: CrudListQuery) => getPage(GrainPurchaseEntrySnapshotRecord, "/grain-entry-snapshots", query),
 };
+export const grainEntryMaterialApi = {
+  list: async (query: CrudListQuery) => {
+    const page = await getPage(GrainEntryMaterialRecord, "/grain-entry-materials", query);
+    return {
+      total: page.total,
+      data: page.data.map((item) => ({
+        ...item,
+        imageUrl: imageApiUrl(item.imageUrl || `/grain-entry-materials?imageId=${item.id}`),
+      })),
+    };
+  },
+};
 export const grainPurchaseTypeApi = crudApi(GrainPurchaseTypeRecord, "/grain-purchase-types");
 export const grainPaymentMethodApi = crudApi(GrainPaymentMethodRecord, "/grain-payment-methods");
 export const grainPurchasePlaceApi = crudApi(GrainPurchasePlaceRecord, "/grain-purchase-places");
@@ -217,11 +288,41 @@ export async function voidGrainPurchaseEntry(id: number) {
   return unwrapApiResponse(response.data);
 }
 
+export async function getGrainPurchaseDashboard(params: {
+  startDate?: string;
+  endDate?: string;
+  stationId?: number;
+}) {
+  return getData(GrainPurchaseDashboardRecord, "/grain-purchase-dashboard", params);
+}
+
 export async function getGrainFarmerImages(farmerId: number, appUserId?: number) {
   const response = await instance.get<ApiResponse<GrainFarmerImagesRecord>>(`/grain-farmers/${farmerId}/images`, {
     params: { appUserId },
   });
-  return unwrapApiResponse(response.data);
+  const images = unwrapApiResponse(response.data);
+  return {
+    idCardFront: imageApiUrl(images.idCardFront),
+    idCardBack: imageApiUrl(images.idCardBack),
+    bankCard: imageApiUrl(images.bankCard),
+  };
+}
+
+function imageApiUrl(path: string) {
+  if (!path) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(path) || path.startsWith("data:") || path.startsWith("blob:")) {
+    return path;
+  }
+  const [rawPath, rawQuery = ""] = path.split("?");
+  const params = new URLSearchParams(rawQuery);
+  const token = getAuthToken();
+  if (token) {
+    params.set("token", token);
+  }
+  const query = params.toString();
+  return `/api${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}${query ? `?${query}` : ""}`;
 }
 
 export async function recognizeGrainCard(

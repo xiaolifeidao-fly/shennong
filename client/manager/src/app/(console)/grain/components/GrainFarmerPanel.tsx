@@ -6,7 +6,6 @@ import {
   CameraOutlined,
   FileImageOutlined,
   IdcardOutlined,
-  SafetyCertificateOutlined,
   ScanOutlined,
 } from "@ant-design/icons";
 import { Button, Descriptions, Drawer, Empty, Image, message, Space, Tabs, Tag, Tooltip, Typography, Upload } from "antd";
@@ -16,6 +15,7 @@ import {
   CrudManagementPanel,
   type CrudCascaderOption,
   type CrudField,
+  type CrudFormSection,
   type CrudOption,
   type CrudTableColumn,
 } from "../../components/CrudManagementPanel";
@@ -45,15 +45,15 @@ const statusOptions: CrudOption[] = [
 ];
 
 const fields: CrudField<GrainFarmerRecord>[] = [
-  { name: "name", label: "农户姓名", required: true },
-  { name: "idNumber", label: "身份证号" },
-  { name: "phone", label: "手机号" },
-  { name: "address", label: "地址" },
-  { name: "bankNumber", label: "银行卡号" },
-  { name: "bankName", label: "开户行" },
-  { name: "status", label: "状态", type: "select", options: statusOptions },
-  { name: "statusText", label: "状态说明" },
-  { name: "remark", label: "备注", type: "textarea" },
+  { name: "name", label: "农户姓名", required: true, placeholder: "请输入身份证上的姓名" },
+  { name: "idNumber", label: "身份证号", placeholder: "可通过身份证识别自动回填" },
+  { name: "phone", label: "手机号", placeholder: "请输入农户联系电话" },
+  { name: "address", label: "户籍或联系地址", span: 2, placeholder: "可通过身份证识别自动回填" },
+  { name: "bankNumber", label: "银行卡号", placeholder: "可通过银行卡识别自动回填" },
+  { name: "bankName", label: "开户行", placeholder: "请输入开户银行名称" },
+  { name: "status", label: "资料状态", type: "select", options: statusOptions, placeholder: "请选择资料状态" },
+  { name: "statusText", label: "状态说明", placeholder: "例如：银行卡待补充" },
+  { name: "remark", label: "备注", type: "textarea", span: 2, placeholder: "记录补充材料、沟通情况或特殊说明" },
 ];
 
 const columns: CrudTableColumn<GrainFarmerRecord>[] = [
@@ -313,7 +313,6 @@ export function GrainFarmerPanel() {
 
   const imageCards = [
     { label: "身份证人像面", value: archiveImages?.idCardFront, icon: <IdcardOutlined /> },
-    { label: "身份证国徽面", value: archiveImages?.idCardBack, icon: <SafetyCertificateOutlined /> },
     { label: "银行卡", value: archiveImages?.bankCard, icon: <BankOutlined /> },
   ];
 
@@ -334,6 +333,33 @@ export function GrainFarmerPanel() {
       options: appUserOptions,
     },
     ...fields,
+  ];
+
+  const farmerFormSections: CrudFormSection<GrainFarmerRecord>[] = [
+    {
+      key: "ownership",
+      title: "业务归属",
+      description: "确定农户所属粮站和负责业务员，便于后续收购记录归档。",
+      fields: ["stationId", "appUserId"],
+    },
+    {
+      key: "identity",
+      title: "身份资料",
+      description: "维护农户实名信息和常用联系方式。",
+      fields: ["name", "idNumber", "phone", "address"],
+    },
+    {
+      key: "bank",
+      title: "收款账户",
+      description: "保存银行卡号与开户行，用于粮款结算核对。",
+      fields: ["bankNumber", "bankName"],
+    },
+    {
+      key: "status",
+      title: "状态备注",
+      description: "标记资料完整度，记录补充说明。",
+      fields: ["status", "statusText", "remark"],
+    },
   ];
 
   const farmerColumns: CrudTableColumn<GrainFarmerRecord>[] = [
@@ -367,31 +393,23 @@ export function GrainFarmerPanel() {
                 </Tooltip>
               )}
               formExtra={({ form, editingRecord }) => (
-                <section
-                  className="manager-data-card"
-                  style={{
-                    marginBottom: 18,
-                    padding: 16,
-                    boxShadow: "none",
-                    background: "var(--manager-panel-muted)",
-                  }}
-                >
+                <section className="manager-form-assist">
                   <Space align="start" style={{ width: "100%", justifyContent: "space-between" }} wrap>
                     <Space direction="vertical" size={2}>
                       <Text strong>证件与银行卡识别</Text>
                       <Text type="secondary">
-                        上传身份证或银行卡照片可自动回填表单；识别结果仍可手动修正后保存。
+                        上传身份证人像面或银行卡照片可自动回填表单；识别结果仍可手动修正后保存。
                       </Text>
                     </Space>
                     <Space wrap>
                       {renderOcrUpload({ title: "身份证人像面", cardType: "id-card", imageSide: "front" }, form, editingRecord)}
-                      {renderOcrUpload({ title: "身份证国徽面", cardType: "id-card", imageSide: "back" }, form, editingRecord)}
                       {renderOcrUpload({ title: "银行卡", cardType: "bank-card" }, form, editingRecord)}
                     </Space>
                   </Space>
                 </section>
               )}
               api={grainFarmerApi}
+              formSections={farmerFormSections}
             />
           ),
         },

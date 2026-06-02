@@ -37,9 +37,7 @@ func (h *GrainFarmerHandler) listFarmers(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
@@ -55,15 +53,14 @@ func (h *GrainFarmerHandler) createFarmer(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if req.AppUserID == 0 {
-		req.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	appUserID, _ := appCtx.CurrentAppUserID(context)
+	req.AppUserID = appUserID
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
 	}
 	req.StationID = stationID
-	result, err := h.grainFarmerService.CreateFarmer(&req)
+	result, err := h.grainFarmerService.CreateFarmerForAppUser(&req, appUserID)
 	commonRouter.ToJson(context, result, err)
 }
 
@@ -77,14 +74,13 @@ func (h *GrainFarmerHandler) updateFarmer(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if req.AppUserID == 0 {
-		req.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	appUserID, _ := appCtx.CurrentAppUserID(context)
+	req.AppUserID = appUserID
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
 	}
-	result, err := h.grainFarmerService.UpdateFarmerInStation(id, &req, stationID)
+	result, err := h.grainFarmerService.UpdateFarmerInStationForAppUser(id, &req, stationID, appUserID)
 	if err == gorm.ErrRecordNotFound {
 		commonRouter.ToError(context, "grain farmer not found")
 		return

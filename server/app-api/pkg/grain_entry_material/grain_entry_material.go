@@ -36,9 +36,7 @@ func (h *GrainEntryMaterialHandler) listMaterials(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if query.AppUserID == 0 {
-		query.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	query.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return
@@ -54,9 +52,7 @@ func (h *GrainEntryMaterialHandler) createMaterial(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if req.AppUserID == 0 {
-		req.AppUserID, _ = appCtx.CurrentAppUserID(context)
-	}
+	req.AppUserID, _ = appCtx.CurrentAppUserID(context)
 	stationID, ok := requiredStationID(context)
 	if !ok {
 		return

@@ -32,6 +32,13 @@ func Get(path string) ([]byte, error) {
 	return Oss.Get(path)
 }
 
+func GetByKey(key string) ([]byte, error) {
+	if Oss == nil {
+		return nil, errors.New("oss not init")
+	}
+	return Oss.GetByKey(key)
+}
+
 func GetUrl(path string, duration *time.Duration) (string, error) {
 	if Oss == nil {
 		return "", errors.New("oss not init")

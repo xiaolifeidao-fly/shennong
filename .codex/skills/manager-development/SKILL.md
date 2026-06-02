@@ -9,6 +9,8 @@ license: Complete terms in LICENSE.txt
 ## Overview
 
 本项目是一个管理界面的前端层，基于 **React 18 + Ant Design 5 + Next.js 14 (App Router)** 构建。
+项目目录位于client/manager
+
 ## Skill Behavior
 
 当用户请求涉及前端开发时，遵循本技能指引。

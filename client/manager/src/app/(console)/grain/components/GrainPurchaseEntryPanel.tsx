@@ -47,6 +47,7 @@ import { fetchAppUsers } from "../../app-user/api/app-user.api";
 import type { CrudListQuery, CrudOption } from "../../components/CrudManagementPanel";
 import {
   getGrainFarmerImages,
+  grainEntryMaterialApi,
   grainFarmerApi,
   grainPaymentMethodApi,
   grainPurchaseEntryApi,
@@ -60,6 +61,7 @@ import {
   type GrainFarmerImagesRecord,
   type GrainFarmerRecord,
   type GrainPayload,
+  type GrainEntryMaterialRecord,
   type GrainPurchaseEntryRecord,
   type GrainPurchaseEntrySnapshotRecord,
 } from "../api/grain.api";
@@ -175,6 +177,7 @@ export function GrainPurchaseEntryPanel() {
   const [placeOptions, setPlaceOptions] = useState<CrudOption[]>([]);
   const [paymentMethodOptions, setPaymentMethodOptions] = useState<CrudOption[]>([]);
   const [farmerImages, setFarmerImages] = useState<GrainFarmerImagesRecord | null>(null);
+  const [entryMaterials, setEntryMaterials] = useState<GrainEntryMaterialRecord[]>([]);
   const [ocrTarget, setOcrTarget] = useState<OcrTarget | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -332,6 +335,7 @@ export function GrainPurchaseEntryPanel() {
   const openCreate = () => {
     setEditingRecord(null);
     setFarmerImages(null);
+    setEntryMaterials([]);
     form.resetFields();
     form.setFieldsValue({ unit: "公斤", status: "submitted" });
     setDrawerOpen(true);
@@ -348,6 +352,20 @@ export function GrainPurchaseEntryPanel() {
     } catch (error) {
       setFarmerImages(null);
       message.warning(error instanceof Error ? error.message : "粮户历史图片加载失败");
+    }
+  };
+
+  const loadEntryMaterials = async (entryId?: number) => {
+    if (!entryId) {
+      setEntryMaterials([]);
+      return;
+    }
+    try {
+      const result = await grainEntryMaterialApi.list({ entryId, pageIndex: 1, pageSize: 50 });
+      setEntryMaterials(result.data);
+    } catch (error) {
+      setEntryMaterials([]);
+      message.warning(error instanceof Error ? error.message : "收粮材料图片加载失败");
     }
   };
 
@@ -380,6 +398,7 @@ export function GrainPurchaseEntryPanel() {
     });
     setDrawerOpen(true);
     void loadFarmerImages(record.farmerId, record.appUserId);
+    void loadEntryMaterials(record.id);
   };
 
   const applyOcrResult = (result: GrainCardOcrResult) => {
@@ -597,7 +616,6 @@ export function GrainPurchaseEntryPanel() {
 
   const imageCards = [
     { label: "身份证正面", value: farmerImages?.idCardFront },
-    { label: "身份证背面", value: farmerImages?.idCardBack },
     { label: "银行卡", value: farmerImages?.bankCard },
   ];
 
@@ -683,6 +701,7 @@ export function GrainPurchaseEntryPanel() {
           setDrawerOpen(false);
           setEditingRecord(null);
           setFarmerImages(null);
+          setEntryMaterials([]);
           form.resetFields();
         }}
         extra={
@@ -723,9 +742,6 @@ export function GrainPurchaseEntryPanel() {
                 <Space wrap>
                   <Button icon={<ScanOutlined />} onClick={() => setOcrTarget({ title: "识别身份证正面", cardType: "id-card", imageSide: "front" })}>
                     身份证正面
-                  </Button>
-                  <Button icon={<ScanOutlined />} onClick={() => setOcrTarget({ title: "识别身份证背面", cardType: "id-card", imageSide: "back" })}>
-                    身份证背面
                   </Button>
                   <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
                     银行卡
@@ -881,6 +897,29 @@ export function GrainPurchaseEntryPanel() {
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史图片" />
               )}
             </section>
+
+            <section className="manager-data-card" style={{ marginTop: 16 }}>
+              <Space align="center" style={{ marginBottom: 12 }}>
+                <CameraOutlined style={{ color: "#237a4b" }} />
+                <Text strong>收粮材料</Text>
+              </Space>
+              {entryMaterials.length > 0 ? (
+                <div style={{ display: "grid", gap: 12 }}>
+                  {entryMaterials.map((item) => (
+                    <div key={item.id}>
+                      <Text type="secondary">{item.fileName || item.materialType || `材料 #${item.id}`}</Text>
+                      <Image
+                        src={item.imageUrl}
+                        alt={item.fileName || "收粮材料"}
+                        style={{ marginTop: 6, width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无收粮材料图片" />
+              )}
+            </section>
           </aside>
         </div>
       </Drawer>
@@ -1027,7 +1066,7 @@ export function GrainPurchaseEntryPanel() {
             <ScanOutlined />
           </p>
           <p className="ant-upload-text">{ocrLoading ? "正在识别，请稍候" : "点击或拖拽图片到这里识别"}</p>
-          <p className="ant-upload-hint">支持身份证正反面和银行卡照片；识别失败时可直接回到表单手动输入。</p>
+          <p className="ant-upload-hint">支持身份证正面和银行卡照片；识别失败时可直接回到表单手动输入。</p>
         </Upload.Dragger>
       </Modal>
     </div>

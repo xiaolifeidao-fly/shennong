@@ -131,6 +131,13 @@ func (s *AuthService) ValidateToken(token, requestURL string) (*LoginUser, error
 		return nil, ErrNotLogin
 	}
 
+	if isSelfServiceResource(requestURL) {
+		if err := s.flushExpireTime(token); err != nil {
+			return nil, err
+		}
+		return loginUser, nil
+	}
+
 	roleIDs, err := s.findRoleIDsByUserID(loginUser.ID)
 	if err != nil {
 		return nil, err
@@ -343,6 +350,16 @@ func buildResourceURLCandidates(resourceURL string) []string {
 		candidates = append(candidates, "/"+strings.TrimPrefix(resourceURL, "api/"))
 	}
 	return uniqueStrings(candidates)
+}
+
+func isSelfServiceResource(resourceURL string) bool {
+	for _, candidate := range buildResourceURLCandidates(resourceURL) {
+		switch candidate {
+		case "/user-profile", "/user-profile/password":
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeResourceURL(resourceURL string) string {
