@@ -246,9 +246,11 @@ async function saveEntry() {
       lastSavedAction.value = 'create'
       uni.showToast({ title: '保存成功', icon: 'success' })
     }
-    lastSavedEntry.value = saved
+    lastSavedEntry.value = undefined
+    grainStore.selectEntry(saved.id)
     draft.value = grainStore.createEntryDraft(grainStore.selectedFarmerId)
     hasInitializedDraft.value = true
+    uni.navigateTo({ url: `/pages/farmers/entry-detail?entryId=${saved.id}` })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '保存失败', icon: 'none' })
   } finally {

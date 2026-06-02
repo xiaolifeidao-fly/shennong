@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircleOutlined,
   EditOutlined,
@@ -8,14 +8,13 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  SettingOutlined,
   StopOutlined,
   TeamOutlined,
-  WalletOutlined,
 } from "@ant-design/icons";
 import {
   Button,
   Input,
-  InputNumber,
   message,
   Modal,
   Select,
@@ -26,12 +25,8 @@ import {
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  createAccount,
-  updateAccount,
-  type UserPayload,
-  type UserRecord,
-} from "../api/user.api";
+import { tenantApi, type TenantRecord } from "../../tenant/api/tenant.api";
+import { createAccount, updateAccount, type UserPayload, type UserRecord } from "../api/user.api";
 import { UserFormModal } from "./UserFormModal";
 import { useUserManagement } from "../hooks/useUserManagement";
 
@@ -56,7 +51,11 @@ const statusColors: Record<string, string> = {
   disabled: "rgba(239,107,120,0.14)",
 };
 
-export function UserManagementDemo() {
+interface UserManagementDemoProps {
+  mode?: "maintenance" | "list";
+}
+
+export function UserManagementDemo({ mode = "maintenance" }: UserManagementDemoProps) {
   const {
     users,
     stats,
@@ -72,6 +71,11 @@ export function UserManagementDemo() {
   const [searchValue, setSearchValue] = useState(query.search);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
+  const [tenantConfigUser, setTenantConfigUser] = useState<UserRecord | null>(null);
+  const [tenantConfigTenantId, setTenantConfigTenantId] = useState<number | undefined>();
+  const [tenantConfigTenants, setTenantConfigTenants] = useState<TenantRecord[]>([]);
+  const [tenantConfigLoading, setTenantConfigLoading] = useState(false);
+  const showTenantConfig = mode === "maintenance";
 
   const activeCount = users.filter((item) => resolveUserStatus(item) === "normal").length;
   const totalBalance = users.reduce((sum, item) => sum + resolveBalance(item), 0);
@@ -177,40 +181,9 @@ export function UserManagementDemo() {
     });
   };
 
-  const handleRecharge = (record: UserRecord) => {
-    let amount = 0;
-    Modal.confirm({
-      title: "充值",
-      content: (
-        <InputNumber<number>
-          min={0}
-          step={1}
-          precision={2}
-          placeholder="请输入充值金额"
-          style={{ width: "100%", marginTop: 16 }}
-          onChange={(value) => {
-            amount = Number(value ?? 0);
-          }}
-        />
-      ),
-      onOk: async () => {
-        if (amount <= 0) {
-          throw new Error("请输入大于 0 的金额");
-        }
-        const nextBalance = (resolveBalance(record) + amount).toFixed(2);
-        if (record.accountId) {
-          await updateAccount(record.accountId, { balanceAmount: nextBalance });
-        } else {
-          await createAccount({
-            userId: record.id,
-            accountStatus: "normal",
-            balanceAmount: nextBalance,
-          });
-        }
-        await refresh();
-        message.success("充值成功");
-      },
-    });
+  const handleOpenTenantConfig = (record: UserRecord) => {
+    setTenantConfigUser(record);
+    setTenantConfigTenantId(record.tenantId || undefined);
   };
 
   const handleToggleFreeze = (record: UserRecord) => {
@@ -268,6 +241,13 @@ export function UserManagementDemo() {
       render: (value: string) => value || "-",
     },
     {
+      title: "租户ID",
+      dataIndex: "tenantId",
+      key: "tenantId",
+      width: 100,
+      render: (value: number) => value || "全局",
+    },
+    {
       title: "角色",
       dataIndex: "role",
       key: "role",
@@ -317,7 +297,7 @@ export function UserManagementDemo() {
     {
       title: "操作",
       key: "actions",
-      width: 248,
+      width: showTenantConfig ? 248 : 208,
       fixed: "right",
       render: (_, record) => {
         const frozen = resolveUserStatus(record) === "frozen";
@@ -348,14 +328,16 @@ export function UserManagementDemo() {
                 onClick={() => handleChangePassword(record)}
               />
             </Tooltip>
-            <Tooltip title="充值">
-              <Button
-                size="small"
-                type="text"
-                icon={<WalletOutlined />}
-                onClick={() => handleRecharge(record)}
-              />
-            </Tooltip>
+            {showTenantConfig ? (
+              <Tooltip title="租户配置">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<SettingOutlined />}
+                  onClick={() => handleOpenTenantConfig(record)}
+                />
+              </Tooltip>
+            ) : null}
             <Tooltip title={frozen ? "解冻" : "冻结"}>
               <Button
                 size="small"
@@ -370,6 +352,23 @@ export function UserManagementDemo() {
       },
     },
   ];
+
+  const tenantConfigOptions = useMemo(
+    () => tenantConfigTenants.map((tenant) => ({ label: tenant.tenantName, value: tenant.id })),
+    [tenantConfigTenants],
+  );
+
+  useEffect(() => {
+    if (!tenantConfigUser) {
+      return;
+    }
+    setTenantConfigLoading(true);
+    tenantApi
+      .list({ pageIndex: 1, pageSize: 200, status: "active" })
+      .then((result) => setTenantConfigTenants(result.data))
+      .catch((error) => message.error(error instanceof Error ? error.message : "加载租户失败"))
+      .finally(() => setTenantConfigLoading(false));
+  }, [tenantConfigUser]);
 
   return (
     <div className="manager-page-stack">
@@ -488,12 +487,49 @@ export function UserManagementDemo() {
         open={modalOpen}
         submitting={submitting}
         user={editingUser}
+        showTenantField={mode === "maintenance"}
         onCancel={() => {
           setModalOpen(false);
           setEditingUser(null);
         }}
         onSubmit={handleSubmit}
       />
+      <Modal
+        wrapClassName="manager-form-skin"
+        destroyOnClose
+        open={Boolean(tenantConfigUser)}
+        title={tenantConfigUser ? `租户配置：${tenantConfigUser.username}` : "租户配置"}
+        okText="保存配置"
+        cancelText="取消"
+        confirmLoading={submitting}
+        onCancel={() => {
+          setTenantConfigUser(null);
+          setTenantConfigTenantId(undefined);
+        }}
+        onOk={async () => {
+          if (!tenantConfigUser) {
+            return;
+          }
+          try {
+            await patchUser(tenantConfigUser.id, { tenantId: tenantConfigTenantId ?? 0 });
+            message.success("租户配置已更新");
+            setTenantConfigUser(null);
+            setTenantConfigTenantId(undefined);
+          } catch (error) {
+            message.error(error instanceof Error ? error.message : "保存租户配置失败");
+          }
+        }}
+      >
+        <Select<number>
+          allowClear
+          loading={tenantConfigLoading}
+          options={tenantConfigOptions}
+          placeholder="请选择租户"
+          style={{ width: "100%" }}
+          value={tenantConfigTenantId}
+          onChange={(value) => setTenantConfigTenantId(value)}
+        />
+      </Modal>
     </div>
   );
 }

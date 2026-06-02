@@ -25,6 +25,7 @@ import {
   Typography,
   message,
 } from "antd";
+import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { PageResult } from "@/utils/axios";
 
@@ -55,6 +56,7 @@ export interface CrudField<R extends CrudRecord> {
   required?: boolean;
   placeholder?: string;
   options?: CrudOption[];
+  mode?: "multiple";
   cascaderOptions?: CrudCascaderOption[];
   linkedNames?: [Extract<keyof R, string>, Extract<keyof R, string>, Extract<keyof R, string>];
   min?: number;
@@ -103,6 +105,14 @@ interface CrudManagementPanelProps<R extends CrudRecord, P extends Record<string
   statusOptions?: CrudOption[];
   rowActions?: (record: R, context: CrudActionContext) => ReactNode;
   actionWidth?: number;
+  modalWidth?: number;
+  formExtra?: (context: {
+    form: FormInstance;
+    editingRecord: R | null;
+    submitting: boolean;
+    setSubmitting: (submitting: boolean) => void;
+    reload: () => Promise<void>;
+  }) => ReactNode;
 }
 
 const defaultPageSize = 10;
@@ -185,6 +195,8 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
   statusOptions,
   rowActions,
   actionWidth = 132,
+  modalWidth = 720,
+  formExtra,
 }: CrudManagementPanelProps<R, P>) {
   const [form] = Form.useForm();
   const [records, setRecords] = useState<R[]>([]);
@@ -449,9 +461,16 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
         }}
         onOk={() => void form.validateFields().then(handleSubmit)}
         destroyOnClose
-        width={720}
+        width={modalWidth}
       >
         <Form form={form} layout="vertical" preserve={false} style={{ marginTop: 16 }}>
+          {formExtra?.({
+            form,
+            editingRecord,
+            submitting,
+            setSubmitting,
+            reload: () => loadRecords({ pageIndex: query.pageIndex }),
+          })}
           {fields
             .filter((field) => !(field.hiddenOnCreate && !editingRecord))
             .filter((field) => !(field.hiddenOnEdit && editingRecord))
@@ -475,6 +494,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
                 ) : field.type === "select" ? (
                   <Select
                     allowClear
+                    mode={field.mode}
                     placeholder={field.placeholder}
                     options={field.options}
                     disabled={field.disabledOnEdit && Boolean(editingRecord)}

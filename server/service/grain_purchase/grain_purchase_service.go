@@ -3,6 +3,7 @@ package grain_purchase
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"crypto/sha256"
 	"fmt"
 	grainFarmerService "service/grain_farmer"
 	grainFarmerRepository "service/grain_farmer/repository"
@@ -57,11 +58,14 @@ func (s *GrainPurchaseService) ListEntries(query grainPurchaseDTO.GrainPurchaseE
 	if err != nil {
 		return nil, err
 	}
-	entities, err := s.entryRepository.ListByQuery(query, pageIndex, pageSize)
+	dtos, err := s.entryRepository.ListDTOByQuery(query, pageIndex, pageSize)
 	if err != nil {
 		return nil, err
 	}
-	return baseDTO.BuildPage(int(total), db.ToDTOs[grainPurchaseDTO.GrainPurchaseEntryDTO](entities)), nil
+	if err := s.enrichEntryFarmerProfiles(dtos); err != nil {
+		return nil, err
+	}
+	return baseDTO.BuildPage(int(total), dtos), nil
 }
 
 func (s *GrainPurchaseService) CreateEntry(req *grainPurchaseDTO.GrainPurchaseEntryDTO, operatorAppUserID uint64, operatorName string) (*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
@@ -106,7 +110,9 @@ func (s *GrainPurchaseService) updateEntry(id uint, req *grainPurchaseDTO.GrainP
 			return gorm.ErrRecordNotFound
 		}
 		previous := *entity
+		previousBase := entity.BaseEntity
 		copier.Copy(entity, req)
+		preserveEntryBaseEntityFields(&entity.BaseEntity, previousBase)
 		entity.Id = int(id)
 		entity.Version++
 		normalizeEntry(entity)
@@ -244,14 +250,60 @@ func (s *GrainPurchaseService) CreateMaterial(req *grainPurchaseDTO.GrainEntryMa
 	if strings.TrimSpace(entity.OssObjectKey) == "" && strings.TrimSpace(entity.OssURL) == "" {
 		return nil, fmt.Errorf("oss object key or oss url is required")
 	}
+	if entity.EntryID == 0 {
+		return nil, fmt.Errorf("entry_id is required")
+	}
 	if strings.TrimSpace(entity.MaterialBizType) == "" {
 		entity.MaterialBizType = "entry"
 	}
-	result, err := s.materialRepository.Create(entity)
+	if strings.TrimSpace(entity.ImageHash) == "" {
+		entity.ImageHash = hashImageName(entity.FileName)
+	}
+	result, err := s.materialRepository.FindOrCreate(entity)
 	if err != nil {
 		return nil, err
 	}
 	return db.ToDTO[grainPurchaseDTO.GrainEntryMaterialDTO](result), nil
+}
+
+func hashImageName(name string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(name)))
+}
+
+func (s *GrainPurchaseService) enrichEntryFarmerProfiles(entries []*grainPurchaseDTO.GrainPurchaseEntryDTO) error {
+	for _, entry := range entries {
+		if entry == nil || entry.FarmerID == 0 {
+			continue
+		}
+		farmer, err := s.farmerRepository.FindById(uint(entry.FarmerID))
+		if err == gorm.ErrRecordNotFound {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if farmer.Active == 0 {
+			continue
+		}
+		name, idNumber, phone, address, bankNumber, bankName, err := grainFarmerService.DecryptFarmerProfileValues(
+			farmer.Name,
+			farmer.IDNumber,
+			farmer.Phone,
+			farmer.Address,
+			farmer.BankNumber,
+			farmer.BankName,
+		)
+		if err != nil {
+			return err
+		}
+		entry.FarmerName = name
+		entry.FarmerIDNumber = idNumber
+		entry.FarmerPhone = phone
+		entry.FarmerAddress = address
+		entry.FarmerBankNumber = bankNumber
+		entry.FarmerBankName = bankName
+	}
+	return nil
 }
 
 func (s *GrainPurchaseService) DeleteMaterial(id uint) error {
@@ -548,6 +600,9 @@ func normalizeEntry(entity *grainPurchaseRepository.GrainPurchaseEntry) {
 	if strings.TrimSpace(entity.Unit) == "" {
 		entity.Unit = "公斤"
 	}
+	if strings.TrimSpace(entity.DisplayUnit) == "" {
+		entity.DisplayUnit = "公斤"
+	}
 	if entity.Quantity > 0 {
 		entity.UnitPrice = entity.Amount / entity.Quantity
 	}
@@ -557,4 +612,10 @@ func normalizeEntry(entity *grainPurchaseRepository.GrainPurchaseEntry) {
 	if entity.Version <= 0 {
 		entity.Version = 1
 	}
+}
+
+func preserveEntryBaseEntityFields(base *db.BaseEntity, previous db.BaseEntity) {
+	base.Active = previous.Active
+	base.CreatedTime = previous.CreatedTime
+	base.CreatedBy = previous.CreatedBy
 }

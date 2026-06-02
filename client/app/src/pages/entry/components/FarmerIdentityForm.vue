@@ -7,9 +7,34 @@
 
     <view class="field">
       <text class="label">选择农户</text>
-      <picker :value="farmerIndex" :range="farmerOptions" range-key="name" @change="handleFarmerChange">
-        <view class="picker-value">{{ farmerOptions[farmerIndex]?.name }}</view>
-      </picker>
+      <view class="farmer-search">
+        <input
+          v-model="farmerKeyword"
+          class="input"
+          placeholder="输入姓名、手机号、身份证号快速查找"
+          @focus="showFarmerResults = true"
+        />
+        <button class="new-farmer-btn" @click="selectFarmer('new')">新农户</button>
+      </view>
+      <view class="selected-farmer">
+        <text>{{ selectedFarmerText }}</text>
+      </view>
+      <scroll-view v-if="showFarmerResults" class="farmer-results" scroll-y>
+        <button
+          v-for="farmer in filteredFarmers"
+          :key="farmer.id"
+          class="farmer-option"
+          :class="{ active: farmer.id === model.farmerId }"
+          @click="selectFarmer(farmer.id)"
+        >
+          <view>
+            <text class="farmer-name">{{ farmer.name }}</text>
+            <text class="farmer-meta">{{ farmer.phone || farmer.idNumber || '已建档' }}</text>
+          </view>
+          <text class="farmer-status">{{ farmer.statusText || '已建档' }}</text>
+        </button>
+        <view v-if="!filteredFarmers.length" class="empty-result">没有匹配农户，可点“新农户”建档</view>
+      </scroll-view>
     </view>
 
     <view class="field">
@@ -71,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { FarmerProfile, GrainEntryDraft, GrainPreset } from '@/types/grain'
 
 const props = defineProps<{
@@ -93,11 +118,24 @@ const model = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-const farmerOptions = computed(() => [
-  ...props.farmers.map((farmer) => ({ id: farmer.id, name: `${farmer.name} · 已建档` })),
-  { id: 'new', name: '新农户，拍身份证建档' },
-])
-const farmerIndex = computed(() => Math.max(0, farmerOptions.value.findIndex((item) => item.id === props.modelValue.farmerId)))
+const farmerKeyword = ref('')
+const showFarmerResults = ref(false)
+const selectedFarmer = computed(() => props.farmers.find((farmer) => farmer.id === props.modelValue.farmerId))
+const selectedFarmerText = computed(() => {
+  if (selectedFarmer.value) {
+    return `当前：${selectedFarmer.value.name} · ${selectedFarmer.value.phone || selectedFarmer.value.idNumber || '已建档'}`
+  }
+  return '当前：新农户，拍身份证建档'
+})
+const filteredFarmers = computed(() => {
+  const key = farmerKeyword.value.trim()
+  const source = key
+    ? props.farmers.filter((farmer) =>
+        [farmer.name, farmer.phone, farmer.idNumber, farmer.address].some((value) => value?.includes(key)),
+      )
+    : props.farmers
+  return source.slice(0, 8)
+})
 const payTypeNames = computed(() => props.preset.paymentMethods.length ? props.preset.paymentMethods.map((item) => item.methodName) : props.preset.payTypes)
 const payTypeIndex = computed(() => Math.max(0, payTypeNames.value.indexOf(model.value.payType)))
 const selectedPaymentMethod = computed(() =>
@@ -117,9 +155,19 @@ const accountPlaceholder = computed(() => {
   return '请输入收款账号'
 })
 
-function handleFarmerChange(event: { detail: { value: number | string } }) {
-  const index = Number(event.detail.value)
-  const farmerId = farmerOptions.value[index]?.id || 'new'
+watch(
+  () => props.modelValue.farmerId,
+  () => {
+    farmerKeyword.value = selectedFarmer.value?.name || ''
+    showFarmerResults.value = false
+  },
+  { immediate: true },
+)
+
+function selectFarmer(farmerId: string) {
+  const farmer = props.farmers.find((item) => item.id === farmerId)
+  farmerKeyword.value = farmer?.name || ''
+  showFarmerResults.value = false
   emit('farmer-change', farmerId)
 }
 
@@ -238,6 +286,87 @@ function selectPayType(event: { detail: { value: number | string } }) {
 .scan-group {
   display: flex;
   gap: 12rpx;
+}
+
+.farmer-search {
+  display: grid;
+  grid-template-columns: 1fr 148rpx;
+  gap: 14rpx;
+  align-items: center;
+}
+
+.new-farmer-btn {
+  height: 88rpx;
+  border: 1rpx solid #cfe0d1;
+  border-radius: 18rpx;
+  background: #ffffff;
+  color: #145535;
+  font-size: 26rpx;
+  font-weight: 800;
+  line-height: 88rpx;
+}
+
+.selected-farmer {
+  margin-top: 12rpx;
+  color: #667266;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.farmer-results {
+  max-height: 460rpx;
+  margin-top: 14rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 18rpx;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.farmer-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  width: 100%;
+  padding: 20rpx 22rpx;
+  border: 0;
+  border-bottom: 1rpx solid #edf1ea;
+  border-radius: 0;
+  background: #ffffff;
+  color: #172018;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.farmer-option.active {
+  background: #f0f8f1;
+}
+
+.farmer-name,
+.farmer-meta {
+  display: block;
+}
+
+.farmer-name {
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.farmer-meta,
+.farmer-status {
+  color: #6d776c;
+  font-size: 23rpx;
+}
+
+.farmer-status {
+  flex: 0 0 auto;
+}
+
+.empty-result {
+  padding: 28rpx 22rpx;
+  color: #667266;
+  font-size: 24rpx;
+  text-align: center;
 }
 
 .scan-btn {

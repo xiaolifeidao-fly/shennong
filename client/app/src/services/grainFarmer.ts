@@ -1,7 +1,7 @@
 import { http } from './request'
 import { buildQuery } from './query'
 import type { PageResponse } from '@/types/api'
-import type { GrainFarmerDTO } from '@/types/grain'
+import type { GrainDraftCardImage, GrainFarmerDTO } from '@/types/grain'
 
 export interface GrainFarmerQuery {
   page?: number
@@ -23,4 +23,22 @@ export function createGrainFarmer(data: Partial<GrainFarmerDTO>) {
 
 export function updateGrainFarmer(id: string | number, data: Partial<GrainFarmerDTO>) {
   return http.put<GrainFarmerDTO, Partial<GrainFarmerDTO>>(`/grain-farmers/${id}`, data)
+}
+
+export interface FarmerImagesResult {
+  idCardFront: string
+  idCardBack: string
+  bankCard: string
+}
+
+export function getGrainFarmerImages(farmerId: string | number) {
+  return http.get<FarmerImagesResult>(`/grain-farmer-images?farmerId=${farmerId}`)
+}
+
+export function saveGrainFarmerImage(farmerId: string | number, image: GrainDraftCardImage) {
+  return http.post<unknown, GrainDraftCardImage & { farmerId: string | number; imageName?: string }>('/grain-farmer-images', {
+    ...image,
+    farmerId,
+    imageName: image.fileName,
+  })
 }

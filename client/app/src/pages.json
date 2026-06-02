@@ -31,6 +31,18 @@
       }
     },
     {
+      "path": "pages/farmers/detail",
+      "style": {
+        "navigationBarTitleText": "农户详情"
+      }
+    },
+    {
+      "path": "pages/farmers/entry-detail",
+      "style": {
+        "navigationBarTitleText": "收粮明细"
+      }
+    },
+    {
       "path": "pages/profile/index",
       "style": {
         "navigationBarTitleText": "完善资料"

@@ -6,6 +6,7 @@ type GrainStationDTO struct {
 	baseDTO.BaseDTO
 	StationName  string `json:"stationName"`
 	StationCode  string `json:"stationCode"`
+	TenantID     uint64 `json:"tenantId"`
 	ContactName  string `json:"contactName"`
 	ContactPhone string `json:"contactPhone"`
 	Province     string `json:"province"`
@@ -59,21 +60,24 @@ type GrainPurchasePlaceDTO struct {
 }
 
 type GrainStationQueryDTO struct {
-	Page      int    `form:"page"`
-	PageIndex int    `form:"pageIndex"`
-	PageSize  int    `form:"pageSize"`
-	StationID uint64 `form:"stationId"`
-	AppUserID uint64 `form:"appUserId"`
-	Search    string `form:"search"`
-	Status    string `form:"status"`
+	Page       int      `form:"page"`
+	PageIndex  int      `form:"pageIndex"`
+	PageSize   int      `form:"pageSize"`
+	StationID  uint64   `form:"stationId"`
+	TenantID   uint64   `form:"tenantId"`
+	StationIDs []uint64 `form:"-"`
+	AppUserID  uint64   `form:"appUserId"`
+	Search     string   `form:"search"`
+	Status     string   `form:"status"`
 }
 
 type GrainConfigItemQueryDTO struct {
-	Page      int    `form:"page"`
-	PageIndex int    `form:"pageIndex"`
-	PageSize  int    `form:"pageSize"`
-	StationID uint64 `form:"stationId"`
-	AppUserID uint64 `form:"appUserId"`
-	Search    string `form:"search"`
-	Status    string `form:"status"`
+	Page       int      `form:"page"`
+	PageIndex  int      `form:"pageIndex"`
+	PageSize   int      `form:"pageSize"`
+	StationID  uint64   `form:"stationId"`
+	StationIDs []uint64 `form:"-"`
+	AppUserID  uint64   `form:"appUserId"`
+	Search     string   `form:"search"`
+	Status     string   `form:"status"`
 }

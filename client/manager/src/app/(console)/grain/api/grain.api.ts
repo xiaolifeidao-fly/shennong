@@ -5,6 +5,7 @@ import type { CrudListQuery } from "../../components/CrudManagementPanel";
 
 export class GrainStationRecord {
   id!: number;
+  tenantId = 0;
   stationName = "";
   stationCode = "";
   contactName = "";
@@ -41,8 +42,15 @@ export class GrainFarmerRecord {
 export class GrainPurchaseEntryRecord {
   id!: number;
   stationId = 0;
+  stationName = "";
   appUserId = 0;
   farmerId = 0;
+  farmerName = "";
+  farmerIdNumber = "";
+  farmerPhone = "";
+  farmerAddress = "";
+  farmerBankNumber = "";
+  farmerBankName = "";
   purchaseTypeId = 0;
   crop = "";
   quantity = 0;
@@ -60,6 +68,71 @@ export class GrainPurchaseEntryRecord {
   remark = "";
   createdTime?: string;
   updatedTime?: string;
+  [key: string]: unknown;
+}
+
+export class GrainPurchaseEntrySnapshotRecord {
+  id!: number;
+  entryId = 0;
+  snapshotVersion = 0;
+  snapshotAction = "";
+  snapshotTime?: string;
+  operatorAppUserId = 0;
+  operatorName = "";
+  stationId = 0;
+  appUserId = 0;
+  farmerId = 0;
+  farmerName = "";
+  farmerIdNumber = "";
+  farmerPhone = "";
+  farmerAddress = "";
+  farmerBankNumber = "";
+  farmerBankName = "";
+  purchaseTypeId = 0;
+  crop = "";
+  quantity = 0;
+  unit = "公斤";
+  amount = 0;
+  unitPrice = 0;
+  buyTime?: string;
+  placeId = 0;
+  place = "";
+  locationName = "";
+  locationAddress = "";
+  longitude = "";
+  latitude = "";
+  province = "";
+  city = "";
+  district = "";
+  paymentMethodId = 0;
+  payType = "";
+  entryStatus = "";
+  entryRemark = "";
+  createdTime?: string;
+  updatedTime?: string;
+  [key: string]: unknown;
+}
+
+export class GrainFarmerImagesRecord {
+  idCardFront = "";
+  idCardBack = "";
+  bankCard = "";
+}
+
+export class GrainCardOcrResult {
+  cardType = "";
+  mock = false;
+  ossBucket = "";
+  ossObjectKey = "";
+  ossUrl = "";
+  fileName = "";
+  fileSize = 0;
+  mimeType = "";
+  name = "";
+  idNumber = "";
+  address = "";
+  bankNumber = "";
+  bankName = "";
   [key: string]: unknown;
 }
 
@@ -132,12 +205,54 @@ function crudApi<R>(cls: new () => R, url: string) {
 export const grainStationApi = crudApi(GrainStationRecord, "/grain-stations");
 export const grainFarmerApi = crudApi(GrainFarmerRecord, "/grain-farmers");
 export const grainPurchaseEntryApi = crudApi(GrainPurchaseEntryRecord, "/grain-purchase-entries");
+export const grainPurchaseEntrySnapshotApi = {
+  list: (query: CrudListQuery) => getPage(GrainPurchaseEntrySnapshotRecord, "/grain-entry-snapshots", query),
+};
 export const grainPurchaseTypeApi = crudApi(GrainPurchaseTypeRecord, "/grain-purchase-types");
 export const grainPaymentMethodApi = crudApi(GrainPaymentMethodRecord, "/grain-payment-methods");
 export const grainPurchasePlaceApi = crudApi(GrainPurchasePlaceRecord, "/grain-purchase-places");
 
 export async function voidGrainPurchaseEntry(id: number) {
   const response = await instance.put<ApiResponse<{ voided: boolean }>>(`/grain-purchase-entries/${id}/void`);
+  return unwrapApiResponse(response.data);
+}
+
+export async function getGrainFarmerImages(farmerId: number, appUserId?: number) {
+  const response = await instance.get<ApiResponse<GrainFarmerImagesRecord>>(`/grain-farmers/${farmerId}/images`, {
+    params: { appUserId },
+  });
+  return unwrapApiResponse(response.data);
+}
+
+export async function recognizeGrainCard(
+  file: File,
+  payload: {
+    cardType: "id-card" | "bank-card";
+    stationId?: number;
+    appUserId?: number;
+    farmerId?: number;
+    imageSide?: "front" | "back";
+  },
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("cardType", payload.cardType);
+  if (payload.stationId) {
+    formData.append("stationId", String(payload.stationId));
+  }
+  if (payload.appUserId) {
+    formData.append("appUserId", String(payload.appUserId));
+  }
+  if (payload.farmerId) {
+    formData.append("farmerId", String(payload.farmerId));
+  }
+  if (payload.imageSide) {
+    formData.append("imageSide", payload.imageSide);
+  }
+  const response = await instance.post<ApiResponse<GrainCardOcrResult>>("/file/grain-card-ocr/recognize", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 30000,
+  });
   return unwrapApiResponse(response.data);
 }
 

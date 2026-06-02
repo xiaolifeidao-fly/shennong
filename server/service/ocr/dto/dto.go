@@ -1,11 +1,12 @@
 package dto
 
 type RecognizeCardRequest struct {
-	CardType string
-	FileName string
-	FileSize int64
-	MimeType string
-	ImageURL string
+	CardType   string
+	FileName   string
+	FileSize   int64
+	MimeType   string
+	ImageURL   string
+	ImageBytes []byte
 }
 
 type RecognizeCardResult struct {

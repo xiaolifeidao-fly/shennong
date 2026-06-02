@@ -78,7 +78,7 @@ func (r *UserRepository) ListUsersByQuery(query userDTO.UserQueryDTO, pageIndex,
 	whereSQL, values := buildUserListWhere(query)
 	sql := `SELECT
 		u.id, u.active, u.created_time, u.updated_time, u.created_by, u.updated_by,
-		u.name, u.username, u.email, u.phone, u.department, u.role, u.password,
+		u.name, u.username, u.email, u.phone, u.department, u.tenant_id, u.role, u.password,
 		u.origin_password, u.status, u.last_login_time, u.secret_key, u.remark,
 		u.pub_token, u.ban_count
 	FROM user u ` + whereSQL + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
@@ -136,6 +136,10 @@ func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 	if value := strings.TrimSpace(query.Department); value != "" {
 		clauses = append(clauses, "u.department LIKE ?")
 		values = append(values, "%"+value+"%")
+	}
+	if query.TenantID > 0 {
+		clauses = append(clauses, "u.tenant_id = ?")
+		values = append(values, query.TenantID)
 	}
 	if value := strings.TrimSpace(query.Role); value != "" {
 		clauses = append(clauses, "u.role = ?")

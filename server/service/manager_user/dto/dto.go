@@ -12,6 +12,7 @@ type UserDTO struct {
 	Email          string    `json:"email"`
 	Phone          string    `json:"phone"`
 	Department     string    `json:"department"`
+	TenantID       uint64    `json:"tenantId"`
 	Role           string    `json:"role"`
 	Password       string    `json:"password"`
 	OriginPassword string    `json:"originPassword"`
@@ -32,6 +33,7 @@ type CreateUserDTO struct {
 	Email          string    `json:"email"`
 	Phone          string    `json:"phone"`
 	Department     string    `json:"department"`
+	TenantID       uint64    `json:"tenantId"`
 	Role           string    `json:"role"`
 	Password       string    `json:"password"`
 	OriginPassword string    `json:"originPassword"`
@@ -49,6 +51,7 @@ type UpdateUserDTO struct {
 	Email          *string    `json:"email,omitempty"`
 	Phone          *string    `json:"phone,omitempty"`
 	Department     *string    `json:"department,omitempty"`
+	TenantID       *uint64    `json:"tenantId,omitempty"`
 	Role           *string    `json:"role,omitempty"`
 	Password       *string    `json:"password,omitempty"`
 	OriginPassword *string    `json:"originPassword,omitempty"`
@@ -70,6 +73,7 @@ type UserQueryDTO struct {
 	Email      string `form:"email"`
 	Phone      string `form:"phone"`
 	Department string `form:"department"`
+	TenantID   uint64 `form:"tenantId"`
 	Role       string `form:"role"`
 	Status     string `form:"status"`
 	SecretKey  string `form:"secretKey"`

@@ -19,41 +19,21 @@
       />
     </view>
 
-    <FarmerDetailSheet
-      :visible="detailVisible"
-      :farmer="currentFarmer"
-      :entries="currentEntries"
-      :summaries="currentSummaries"
-      :entries-loading="grainStore.entriesLoading"
-      :summaries-loading="grainStore.summariesLoading"
-      :editing="editing"
-      @close="closeDetail"
-      @edit="editing = $event"
-      @save="saveFarmer"
-      @entry="entryForFarmer"
-    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { onReachBottom, onShow } from '@dcloudio/uni-app'
 import FarmerFilterBar from './components/FarmerFilterBar.vue'
-import FarmerDetailSheet from './components/FarmerDetailSheet.vue'
 import SectionHeader from '@/components/business/SectionHeader.vue'
 import FarmerSummaryCard from '@/components/business/FarmerSummaryCard.vue'
 import { useGrainStore } from '@/stores/grain'
-import type { FarmerProfile } from '@/types/grain'
 
 const grainStore = useGrainStore()
 const keyword = ref('')
 const activeFilter = ref('今天')
-const detailVisible = ref(false)
-const editing = ref(false)
 
-const currentFarmer = computed(() => grainStore.selectedFarmer)
-const currentEntries = computed(() => grainStore.entries.filter((entry) => entry.farmerId === grainStore.selectedFarmerId))
-const currentSummaries = computed(() => grainStore.summaries.filter((summary) => summary.farmerId === grainStore.selectedFarmerId))
 const filteredFarmers = computed(() => {
   const key = keyword.value.trim()
   return grainStore.farmerSummaries.filter((farmer) => {
@@ -64,47 +44,37 @@ const filteredFarmers = computed(() => {
 })
 
 onShow(() => {
-  void grainStore.loadTodayFarmerSummaries(true, keyword.value)
-  if (grainStore.selectedFarmerId !== 'new' && currentFarmer.value) {
-    detailVisible.value = false
-  }
+  void grainStore.loadTodayFarmerSummaries(true, keyword.value, activeFilter.value)
 })
 
 onReachBottom(() => {
-  void grainStore.loadTodayFarmerSummaries(false, keyword.value)
+  void grainStore.loadTodayFarmerSummaries(false, keyword.value, activeFilter.value)
+})
+
+watch(activeFilter, (filter) => {
+  if (grainStore.dailySummaryLoading) {
+    // 正在加载中，等加载完成后补发
+    const stop = watch(
+      () => grainStore.dailySummaryLoading,
+      (loading) => {
+        if (!loading) {
+          stop()
+          void grainStore.loadTodayFarmerSummaries(true, keyword.value, filter)
+        }
+      },
+    )
+  } else {
+    void grainStore.loadTodayFarmerSummaries(true, keyword.value, filter)
+  }
 })
 
 function handleSearch() {
-  void grainStore.loadTodayFarmerSummaries(true, keyword.value)
+  void grainStore.loadTodayFarmerSummaries(true, keyword.value, activeFilter.value)
 }
 
 function showFarmer(farmerId: string) {
   grainStore.selectFarmer(farmerId)
-  editing.value = false
-  detailVisible.value = true
-  void grainStore.loadEntries(true, farmerId)
-  void grainStore.loadSummaries(true, farmerId)
-}
-
-function closeDetail() {
-  detailVisible.value = false
-  editing.value = false
-}
-
-async function saveFarmer(farmer: FarmerProfile) {
-  try {
-    await grainStore.updateFarmer(farmer.id, farmer)
-    editing.value = false
-    uni.showToast({ title: '已保存农户资料', icon: 'success' })
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '保存失败', icon: 'none' })
-  }
-}
-
-function entryForFarmer(farmerId: string) {
-  grainStore.selectFarmer(farmerId)
-  closeDetail()
-  uni.switchTab({ url: '/pages/entry/index' })
+  uni.navigateTo({ url: '/pages/farmers/detail' })
 }
 
 function goNewEntry() {

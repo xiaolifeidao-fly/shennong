@@ -7,30 +7,38 @@ import (
 
 type GrainPurchaseEntryDTO struct {
 	baseDTO.BaseDTO
-	StationID       uint64     `json:"stationId"`
-	AppUserID       uint64     `json:"appUserId"`
-	FarmerID        uint64     `json:"farmerId"`
-	PurchaseTypeID  uint64     `json:"purchaseTypeId"`
-	Crop            string     `json:"crop"`
-	Quantity        float64    `json:"quantity"`
-	Unit            string     `json:"unit"`
-	Amount          float64    `json:"amount"`
-	UnitPrice       float64    `json:"unitPrice"`
-	BuyTime         *time.Time `json:"buyTime"`
-	PlaceID         uint64     `json:"placeId"`
-	Place           string     `json:"place"`
-	LocationName    string     `json:"locationName"`
-	LocationAddress string     `json:"locationAddress"`
-	Longitude       string     `json:"longitude"`
-	Latitude        string     `json:"latitude"`
-	Province        string     `json:"province"`
-	City            string     `json:"city"`
-	District        string     `json:"district"`
-	PaymentMethodID uint64     `json:"paymentMethodId"`
-	PayType         string     `json:"payType"`
-	Status          string     `json:"status"`
-	Version         int        `json:"version"`
-	Remark          string     `json:"remark"`
+	StationID        uint64     `json:"stationId"`
+	StationName      string     `json:"stationName"`
+	AppUserID        uint64     `json:"appUserId"`
+	FarmerID         uint64     `json:"farmerId"`
+	FarmerName       string     `json:"farmerName"`
+	FarmerIDNumber   string     `json:"farmerIdNumber"`
+	FarmerPhone      string     `json:"farmerPhone"`
+	FarmerAddress    string     `json:"farmerAddress"`
+	FarmerBankNumber string     `json:"farmerBankNumber"`
+	FarmerBankName   string     `json:"farmerBankName"`
+	PurchaseTypeID   uint64     `json:"purchaseTypeId"`
+	Crop             string     `json:"crop"`
+	Quantity         float64    `json:"quantity"`
+	Unit             string     `json:"unit"`
+	DisplayUnit      string     `json:"displayUnit"`
+	Amount           float64    `json:"amount"`
+	UnitPrice        float64    `json:"unitPrice"`
+	BuyTime          *time.Time `json:"buyTime"`
+	PlaceID          uint64     `json:"placeId"`
+	Place            string     `json:"place"`
+	LocationName     string     `json:"locationName"`
+	LocationAddress  string     `json:"locationAddress"`
+	Longitude        string     `json:"longitude"`
+	Latitude         string     `json:"latitude"`
+	Province         string     `json:"province"`
+	City             string     `json:"city"`
+	District         string     `json:"district"`
+	PaymentMethodID  uint64     `json:"paymentMethodId"`
+	PayType          string     `json:"payType"`
+	Status           string     `json:"status"`
+	Version          int        `json:"version"`
+	Remark           string     `json:"remark"`
 }
 
 type GrainPurchaseEntrySnapshotDTO struct {
@@ -120,6 +128,7 @@ type GrainEntryMaterialDTO struct {
 	OssObjectKey    string `json:"ossObjectKey"`
 	OssURL          string `json:"ossUrl"`
 	FileName        string `json:"fileName"`
+	ImageHash       string `json:"imageHash"`
 	FileSize        int64  `json:"fileSize"`
 	MimeType        string `json:"mimeType"`
 	ETag            string `json:"etag"`
@@ -127,59 +136,64 @@ type GrainEntryMaterialDTO struct {
 }
 
 type GrainPurchaseEntryQueryDTO struct {
-	Page      int        `form:"page"`
-	PageIndex int        `form:"pageIndex"`
-	PageSize  int        `form:"pageSize"`
-	StationID uint64     `form:"stationId"`
-	AppUserID uint64     `form:"appUserId"`
-	FarmerID  uint64     `form:"farmerId"`
-	Search    string     `form:"search"`
-	Status    string     `form:"status"`
-	StartTime *time.Time `form:"startTime" time_format:"2006-01-02 15:04:05"`
-	EndTime   *time.Time `form:"endTime" time_format:"2006-01-02 15:04:05"`
+	Page       int        `form:"page"`
+	PageIndex  int        `form:"pageIndex"`
+	PageSize   int        `form:"pageSize"`
+	StationID  uint64     `form:"stationId"`
+	StationIDs []uint64   `form:"-"`
+	AppUserID  uint64     `form:"appUserId"`
+	FarmerID   uint64     `form:"farmerId"`
+	Search     string     `form:"search"`
+	Status     string     `form:"status"`
+	StartTime  *time.Time `form:"startTime" time_format:"2006-01-02 15:04:05"`
+	EndTime    *time.Time `form:"endTime" time_format:"2006-01-02 15:04:05"`
 }
 
 type GrainEntrySnapshotQueryDTO struct {
-	Page      int    `form:"page"`
-	PageIndex int    `form:"pageIndex"`
-	PageSize  int    `form:"pageSize"`
-	EntryID   uint64 `form:"entryId"`
-	StationID uint64 `form:"stationId"`
-	AppUserID uint64 `form:"appUserId"`
+	Page       int      `form:"page"`
+	PageIndex  int      `form:"pageIndex"`
+	PageSize   int      `form:"pageSize"`
+	EntryID    uint64   `form:"entryId"`
+	StationID  uint64   `form:"stationId"`
+	StationIDs []uint64 `form:"-"`
+	AppUserID  uint64   `form:"appUserId"`
 }
 
 type GrainFarmerPurchaseSummaryQueryDTO struct {
-	Page      int        `form:"page"`
-	PageIndex int        `form:"pageIndex"`
-	PageSize  int        `form:"pageSize"`
-	StationID uint64     `form:"stationId"`
-	AppUserID uint64     `form:"appUserId"`
-	FarmerID  uint64     `form:"farmerId"`
-	StartDate *time.Time `form:"startDate" time_format:"2006-01-02"`
-	EndDate   *time.Time `form:"endDate" time_format:"2006-01-02"`
-	Search    string     `form:"search"`
+	Page       int        `form:"page"`
+	PageIndex  int        `form:"pageIndex"`
+	PageSize   int        `form:"pageSize"`
+	StationID  uint64     `form:"stationId"`
+	StationIDs []uint64   `form:"-"`
+	AppUserID  uint64     `form:"appUserId"`
+	FarmerID   uint64     `form:"farmerId"`
+	StartDate  *time.Time `form:"startDate" time_format:"2006-01-02"`
+	EndDate    *time.Time `form:"endDate" time_format:"2006-01-02"`
+	Search     string     `form:"search"`
 }
 
 type GrainFarmerDailySummaryQueryDTO struct {
-	Page      int        `form:"page"`
-	PageIndex int        `form:"pageIndex"`
-	PageSize  int        `form:"pageSize"`
-	StationID uint64     `form:"stationId"`
-	AppUserID uint64     `form:"appUserId"`
-	FarmerID  uint64     `form:"farmerId"`
-	StartDate *time.Time `form:"startDate" time_format:"2006-01-02"`
-	EndDate   *time.Time `form:"endDate" time_format:"2006-01-02"`
-	Search    string     `form:"search"`
+	Page       int        `form:"page"`
+	PageIndex  int        `form:"pageIndex"`
+	PageSize   int        `form:"pageSize"`
+	StationID  uint64     `form:"stationId"`
+	StationIDs []uint64   `form:"-"`
+	AppUserID  uint64     `form:"appUserId"`
+	FarmerID   uint64     `form:"farmerId"`
+	StartDate  *time.Time `form:"startDate" time_format:"2006-01-02"`
+	EndDate    *time.Time `form:"endDate" time_format:"2006-01-02"`
+	Search     string     `form:"search"`
 }
 
 type GrainEntryMaterialQueryDTO struct {
-	Page            int    `form:"page"`
-	PageIndex       int    `form:"pageIndex"`
-	PageSize        int    `form:"pageSize"`
-	StationID       uint64 `form:"stationId"`
-	EntryID         uint64 `form:"entryId"`
-	FarmerID        uint64 `form:"farmerId"`
-	AppUserID       uint64 `form:"appUserId"`
-	MaterialBizType string `form:"materialBizType"`
-	MaterialType    string `form:"materialType"`
+	Page            int      `form:"page"`
+	PageIndex       int      `form:"pageIndex"`
+	PageSize        int      `form:"pageSize"`
+	StationID       uint64   `form:"stationId"`
+	StationIDs      []uint64 `form:"-"`
+	EntryID         uint64   `form:"entryId"`
+	FarmerID        uint64   `form:"farmerId"`
+	AppUserID       uint64   `form:"appUserId"`
+	MaterialBizType string   `form:"materialBizType"`
+	MaterialType    string   `form:"materialType"`
 }

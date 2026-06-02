@@ -17,12 +17,12 @@ func (r *FarmerIDCardImageRepository) EnsureTable() error {
 }
 
 // FindByUnique 按唯一条件查找
-func (r *FarmerIDCardImageRepository) FindByUnique(farmerID, appUserID uint64, imageHash string) (*FarmerIDCardImage, error) {
+func (r *FarmerIDCardImageRepository) FindByUnique(farmerID, appUserID uint64, imageSide, imageHash string) (*FarmerIDCardImage, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity FarmerIDCardImage
-	err := r.Db.Where("farmer_id = ? AND app_user_id = ? AND image_hash = ? AND active = 1", farmerID, appUserID, imageHash).
+	err := r.Db.Where("farmer_id = ? AND app_user_id = ? AND image_side = ? AND image_hash = ? AND active = 1", farmerID, appUserID, imageSide, imageHash).
 		First(&entity).Error
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func (r *FarmerIDCardImageRepository) FindOrCreate(entity *FarmerIDCardImage) (*
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
 	}
-	existing, err := r.FindByUnique(entity.FarmerID, entity.AppUserID, entity.ImageHash)
+	existing, err := r.FindByUnique(entity.FarmerID, entity.AppUserID, entity.ImageSide, entity.ImageHash)
 	if err == nil {
 		return existing, nil
 	}
@@ -43,6 +43,20 @@ func (r *FarmerIDCardImageRepository) FindOrCreate(entity *FarmerIDCardImage) (*
 		return nil, err2
 	}
 	return entity, nil
+}
+
+// FindLatestBySide 按农户ID+面查找最新一条
+func (r *FarmerIDCardImageRepository) FindLatestBySide(farmerID, appUserID uint64, imageSide string) (*FarmerIDCardImage, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity FarmerIDCardImage
+	err := r.Db.Where("farmer_id = ? AND app_user_id = ? AND image_side = ? AND active = 1", farmerID, appUserID, imageSide).
+		Order("id DESC").First(&entity).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entity, nil
 }
 
 // ——————————————————————————————————————————————
@@ -83,4 +97,18 @@ func (r *FarmerBankCardImageRepository) FindOrCreate(entity *FarmerBankCardImage
 		return nil, err2
 	}
 	return entity, nil
+}
+
+// FindLatest 按农户ID查找最新一条
+func (r *FarmerBankCardImageRepository) FindLatest(farmerID, appUserID uint64) (*FarmerBankCardImage, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity FarmerBankCardImage
+	err := r.Db.Where("farmer_id = ? AND app_user_id = ? AND active = 1", farmerID, appUserID).
+		Order("id DESC").First(&entity).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entity, nil
 }

@@ -2,6 +2,7 @@ package grain_purchase
 
 import (
 	commonRouter "common/middleware/routers"
+	"manager-api/pkg/internal/tenantctx"
 	grainPurchaseService "service/grain_purchase"
 	grainPurchaseDTO "service/grain_purchase/dto"
 	"strconv"
@@ -39,6 +40,11 @@ func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
 	if err := context.ShouldBindQuery(&query); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListEntries(query)
 	commonRouter.ToJson(context, result, err)
@@ -104,6 +110,11 @@ func (h *GrainPurchaseHandler) listSnapshots(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
+	}
 	result, err := h.service.ListEntrySnapshots(query)
 	commonRouter.ToJson(context, result, err)
 }
@@ -114,6 +125,11 @@ func (h *GrainPurchaseHandler) listFarmerPurchaseSummaries(context *gin.Context)
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
+	}
 	result, err := h.service.ListFarmerPurchaseSummaries(query)
 	commonRouter.ToJson(context, result, err)
 }
@@ -123,6 +139,11 @@ func (h *GrainPurchaseHandler) listMaterials(context *gin.Context) {
 	if err := context.ShouldBindQuery(&query); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListMaterials(query)
 	commonRouter.ToJson(context, result, err)

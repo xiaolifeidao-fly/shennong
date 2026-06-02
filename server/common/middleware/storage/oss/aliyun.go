@@ -110,12 +110,27 @@ func (a *AliyunOss) GetUrl(path string, duration *time.Duration) (string, error)
 		return "", err
 	}
 
-	key := a.BuildKey(path)
-	var url string
+	return a.signURL(bucket, a.BuildKey(path), duration)
+}
 
-	expiredInSec := int64((*duration).Seconds())
-	if url, err = bucket.SignURL(key, oss.HTTPGet, expiredInSec); err != nil {
+// GetUrlByKey signs a full OSS object key that already includes DirPrefix.
+func (a *AliyunOss) GetUrlByKey(key string, duration *time.Duration) (string, error) {
+	if len(key) == 0 {
+		return "", errors.New("file key is nil")
+	}
+	if duration == nil {
+		duration = new(time.Duration)
+		*duration = time.Hour * 1
+	}
+
+	bucket, err := a.ossClient.Bucket(a.BucketName)
+	if err != nil {
 		return "", err
 	}
-	return url, nil
+	return a.signURL(bucket, key, duration)
+}
+
+func (a *AliyunOss) signURL(bucket *oss.Bucket, key string, duration *time.Duration) (string, error) {
+	expiredInSec := int64((*duration).Seconds())
+	return bucket.SignURL(key, oss.HTTPGet, expiredInSec)
 }

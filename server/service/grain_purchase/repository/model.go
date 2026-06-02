@@ -12,8 +12,9 @@ type GrainPurchaseEntry struct {
 	FarmerID        uint64     `gorm:"column:farmer_id;type:bigint unsigned;index:idx_farmer_id" description:"农户ID"`
 	PurchaseTypeID  uint64     `gorm:"column:purchase_type_id;type:bigint unsigned;index:idx_purchase_type_id" description:"收购类型ID"`
 	Crop            string     `gorm:"column:crop;type:varchar(100);index:idx_crop" description:"收购类型名称冗余"`
-	Quantity        float64    `gorm:"column:quantity;type:decimal(12,3);default:0" description:"重量"`
-	Unit            string     `gorm:"column:unit;type:varchar(20)" description:"单位"`
+	Quantity        float64    `gorm:"column:quantity;type:decimal(12,3);default:0" description:"重量（公斤）"`
+	Unit            string     `gorm:"column:unit;type:varchar(20)" description:"单位（内部固定公斤）"`
+	DisplayUnit     string     `gorm:"column:display_unit;type:varchar(20)" description:"展示单位"`
 	Amount          float64    `gorm:"column:amount;type:decimal(12,2);default:0" description:"金额"`
 	UnitPrice       float64    `gorm:"column:unit_price;type:decimal(12,4);default:0" description:"单价"`
 	BuyTime         *time.Time `gorm:"column:buy_time;type:datetime;index:idx_buy_time" description:"收购时间"`
@@ -120,7 +121,7 @@ func (g *GrainStationPurchaseSummary) TableName() string {
 type GrainEntryMaterial struct {
 	db.BaseEntity
 	StationID       uint64 `gorm:"column:station_id;type:bigint unsigned;index:idx_station_id" description:"粮站ID"`
-	EntryID         uint64 `gorm:"column:entry_id;type:bigint unsigned;index:idx_entry_id" description:"收粮录入ID"`
+	EntryID         uint64 `gorm:"column:entry_id;type:bigint unsigned;index:idx_entry_id;uniqueIndex:uniq_entry_image_hash" description:"收粮录入ID"`
 	FarmerID        uint64 `gorm:"column:farmer_id;type:bigint unsigned;index:idx_farmer_id" description:"农户ID"`
 	AppUserID       uint64 `gorm:"column:app_user_id;type:bigint unsigned;index:idx_app_user_id" description:"业务员ID"`
 	MaterialBizType string `gorm:"column:material_biz_type;type:varchar(50);index:idx_material_biz_type" description:"材料业务类型"`
@@ -129,6 +130,7 @@ type GrainEntryMaterial struct {
 	OssObjectKey    string `gorm:"column:oss_object_key;type:varchar(500);index:idx_oss_object_key" description:"OSS Object Key"`
 	OssURL          string `gorm:"column:oss_url;type:varchar(1000)" description:"OSS URL"`
 	FileName        string `gorm:"column:file_name;type:varchar(255)" description:"文件名"`
+	ImageHash       string `gorm:"column:image_hash;type:char(64);not null;uniqueIndex:uniq_entry_image_hash" description:"文件名SHA-256，与EntryID组成唯一键"`
 	FileSize        int64  `gorm:"column:file_size;type:bigint;default:0" description:"文件大小"`
 	MimeType        string `gorm:"column:mime_type;type:varchar(100)" description:"文件类型"`
 	ETag            string `gorm:"column:etag;type:varchar(100)" description:"ETag"`

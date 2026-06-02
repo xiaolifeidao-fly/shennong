@@ -6,6 +6,7 @@ type GrainStation struct {
 	db.BaseEntity
 	StationName  string `gorm:"column:station_name;type:varchar(100);index:idx_station_name" description:"粮站名称"`
 	StationCode  string `gorm:"column:station_code;type:varchar(50);uniqueIndex:uk_station_code" description:"粮站编码"`
+	TenantID     uint64 `gorm:"column:tenant_id;type:bigint unsigned;index:idx_tenant_id" description:"租户ID"`
 	ContactName  string `gorm:"column:contact_name;type:varchar(50)" description:"联系人"`
 	ContactPhone string `gorm:"column:contact_phone;type:varchar(32)" description:"联系电话"`
 	Province     string `gorm:"column:province;type:varchar(50)" description:"省"`

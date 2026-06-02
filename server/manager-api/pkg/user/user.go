@@ -2,6 +2,7 @@ package user
 
 import (
 	commonRouter "common/middleware/routers"
+	"manager-api/pkg/internal/tenantctx"
 	"net/http"
 	userService "service/manager_user"
 	userDTO "service/manager_user/dto"
@@ -53,6 +54,9 @@ func (h *UserHandler) listUsers(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	if tenantID := tenantctx.CurrentTenantID(context); tenantID > 0 {
+		query.TenantID = tenantID
+	}
 	result, err := h.userService.ListUsers(query)
 	commonRouter.ToJson(context, result, err)
 }
@@ -80,6 +84,9 @@ func (h *UserHandler) createUser(context *gin.Context) {
 	if err := context.ShouldBindJSON(&req); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
+	}
+	if tenantID := tenantctx.CurrentTenantID(context); tenantID > 0 {
+		req.TenantID = tenantID
 	}
 	result, err := h.userService.CreateUser(&req)
 	commonRouter.ToJson(context, result, err)

@@ -2,6 +2,7 @@ package grain_config
 
 import (
 	commonRouter "common/middleware/routers"
+	"manager-api/pkg/internal/tenantctx"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
 	"strconv"
@@ -46,6 +47,11 @@ func (h *GrainConfigHandler) listStations(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
+	}
 	result, err := h.service.ListStations(query)
 	commonRouter.ToJson(context, result, err)
 }
@@ -55,6 +61,9 @@ func (h *GrainConfigHandler) createStation(context *gin.Context) {
 	if err := context.ShouldBindJSON(&req); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
+	}
+	if tenantID := tenantctx.CurrentTenantID(context); tenantID > 0 {
+		req.TenantID = tenantID
 	}
 	result, err := h.service.CreateStation(&req)
 	commonRouter.ToJson(context, result, err)
@@ -69,6 +78,9 @@ func (h *GrainConfigHandler) updateStation(context *gin.Context) {
 	if err := context.ShouldBindJSON(&req); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
+	}
+	if tenantID := tenantctx.CurrentTenantID(context); tenantID > 0 {
+		req.TenantID = tenantID
 	}
 	result, err := h.service.UpdateStation(id, &req)
 	writeResult(context, result, err, "grain station not found")
@@ -87,6 +99,11 @@ func (h *GrainConfigHandler) listPurchaseTypes(context *gin.Context) {
 	if err := context.ShouldBindQuery(&query); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListPurchaseTypesPage(query)
 	commonRouter.ToJson(context, result, err)

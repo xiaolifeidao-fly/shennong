@@ -21,16 +21,33 @@ func (r *GrainPurchaseEntryRepository) EnsureTable() error {
 }
 
 func (r *GrainPurchaseEntryRepository) CountByQuery(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) (int64, error) {
-	dbQuery := applyEntryQuery(r.Db.Model(&GrainPurchaseEntry{}).Where("active = ?", 1), query)
+	dbQuery := applyEntryQuery(r.entryListBaseQuery(), query)
 	var total int64
 	return total, dbQuery.Count(&total).Error
 }
 
 func (r *GrainPurchaseEntryRepository) ListByQuery(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, pageIndex, pageSize int) ([]*GrainPurchaseEntry, error) {
-	dbQuery := applyEntryQuery(r.Db.Model(&GrainPurchaseEntry{}).Where("active = ?", 1), query)
+	dbQuery := applyEntryQuery(r.entryListBaseQuery(), query)
 	var entities []*GrainPurchaseEntry
-	err := dbQuery.Order("buy_time DESC, id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&entities).Error
+	err := dbQuery.Select("e.*").Order("e.buy_time DESC, e.id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Scan(&entities).Error
 	return entities, err
+}
+
+func (r *GrainPurchaseEntryRepository) ListDTOByQuery(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, pageIndex, pageSize int) ([]*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
+	dbQuery := applyEntryQuery(r.entryListBaseQuery(), query)
+	var dtos []*grainPurchaseDTO.GrainPurchaseEntryDTO
+	err := dbQuery.Select("e.*, gs.station_name AS station_name").
+		Order("e.buy_time DESC, e.id DESC").
+		Offset((pageIndex - 1) * pageSize).
+		Limit(pageSize).
+		Scan(&dtos).Error
+	return dtos, err
+}
+
+func (r *GrainPurchaseEntryRepository) entryListBaseQuery() *gorm.DB {
+	return r.Db.Table("grain_purchase_entry AS e").
+		Joins("LEFT JOIN grain_station AS gs ON gs.id = e.station_id").
+		Where("e.active = ?", 1)
 }
 
 type GrainPurchaseEntrySnapshotRepository struct {
@@ -193,28 +210,57 @@ func (r *GrainEntryMaterialRepository) ListByQuery(query grainPurchaseDTO.GrainE
 	return entities, err
 }
 
+func (r *GrainEntryMaterialRepository) FindByUnique(entryID uint64, imageHash string) (*GrainEntryMaterial, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity GrainEntryMaterial
+	err := r.Db.Where("entry_id = ? AND image_hash = ? AND active = 1", entryID, imageHash).First(&entity).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
+func (r *GrainEntryMaterialRepository) FindOrCreate(entity *GrainEntryMaterial) (*GrainEntryMaterial, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	existing, err := r.FindByUnique(entity.EntryID, entity.ImageHash)
+	if err == nil {
+		return existing, nil
+	}
+	if err2 := r.Db.Create(entity).Error; err2 != nil {
+		return nil, err2
+	}
+	return entity, nil
+}
+
 func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) *gorm.DB {
 	if query.StationID > 0 {
-		dbQuery = dbQuery.Where("station_id = ?", query.StationID)
+		dbQuery = dbQuery.Where("e.station_id = ?", query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("e.station_id IN ?", query.StationIDs)
 	}
 	if query.AppUserID > 0 {
-		dbQuery = dbQuery.Where("app_user_id = ?", query.AppUserID)
+		dbQuery = dbQuery.Where("e.app_user_id = ?", query.AppUserID)
 	}
 	if query.FarmerID > 0 {
-		dbQuery = dbQuery.Where("farmer_id = ?", query.FarmerID)
+		dbQuery = dbQuery.Where("e.farmer_id = ?", query.FarmerID)
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
 		likeValue := "%" + value + "%"
-		dbQuery = dbQuery.Where("(crop LIKE ? OR place LIKE ? OR pay_type LIKE ? OR location_address LIKE ?)", likeValue, likeValue, likeValue, likeValue)
+		dbQuery = dbQuery.Where("(e.crop LIKE ? OR e.place LIKE ? OR e.pay_type LIKE ? OR e.location_address LIKE ?)", likeValue, likeValue, likeValue, likeValue)
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
-		dbQuery = dbQuery.Where("status = ?", value)
+		dbQuery = dbQuery.Where("e.status = ?", value)
 	}
 	if query.StartTime != nil {
-		dbQuery = dbQuery.Where("buy_time >= ?", query.StartTime)
+		dbQuery = dbQuery.Where("e.buy_time >= ?", query.StartTime)
 	}
 	if query.EndTime != nil {
-		dbQuery = dbQuery.Where("buy_time <= ?", query.EndTime)
+		dbQuery = dbQuery.Where("e.buy_time <= ?", query.EndTime)
 	}
 	return dbQuery
 }
@@ -225,6 +271,9 @@ func applySnapshotQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainEntrySnaps
 	}
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("station_id = ?", query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("station_id IN ?", query.StationIDs)
 	}
 	if query.AppUserID > 0 {
 		dbQuery = dbQuery.Where("app_user_id = ?", query.AppUserID)
@@ -259,6 +308,9 @@ func applyDailySummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainFarmer
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("s.station_id = ?", query.StationID)
 	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("s.station_id IN ?", query.StationIDs)
+	}
 	if query.AppUserID > 0 {
 		dbQuery = dbQuery.Where("s.app_user_id = ?", query.AppUserID)
 	}
@@ -281,6 +333,9 @@ func applyDailySummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainFarmer
 func applyMaterialQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainEntryMaterialQueryDTO) *gorm.DB {
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("station_id = ?", query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("station_id IN ?", query.StationIDs)
 	}
 	if query.EntryID > 0 {
 		dbQuery = dbQuery.Where("entry_id = ?", query.EntryID)

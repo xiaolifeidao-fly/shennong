@@ -64,6 +64,9 @@ func applyFarmerQuery(dbQuery *gorm.DB, query grainFarmerDTO.GrainFarmerQueryDTO
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("station_id = ?", query.StationID)
 	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("station_id IN ?", query.StationIDs)
+	}
 	if query.AppUserID > 0 {
 		dbQuery = dbQuery.Where("app_user_id = ?", query.AppUserID)
 	}

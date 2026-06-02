@@ -5,6 +5,7 @@ import (
 	commonRouter "common/middleware/routers"
 	grainPurchaseService "service/grain_purchase"
 	grainPurchaseDTO "service/grain_purchase/dto"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,6 +27,7 @@ func NewGrainEntryMaterialHandler() *GrainEntryMaterialHandler {
 func (h *GrainEntryMaterialHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-entry-materials", h.listMaterials)
 	engine.POST("/grain-entry-materials", h.createMaterial)
+	engine.DELETE("/grain-entry-materials/:id", h.deleteMaterial)
 }
 
 func (h *GrainEntryMaterialHandler) listMaterials(context *gin.Context) {
@@ -62,6 +64,16 @@ func (h *GrainEntryMaterialHandler) createMaterial(context *gin.Context) {
 	req.StationID = stationID
 	result, err := h.grainPurchaseService.CreateMaterial(&req)
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainEntryMaterialHandler) deleteMaterial(context *gin.Context) {
+	idStr := context.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id == 0 {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	commonRouter.ToJson(context, nil, h.grainPurchaseService.DeleteMaterial(uint(id)))
 }
 
 func requiredStationID(context *gin.Context) (uint64, bool) {

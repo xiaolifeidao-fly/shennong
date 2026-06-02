@@ -10,10 +10,11 @@ import (
 	"io"
 	"path/filepath"
 	farmerImageService "service/farmer_image"
-	ocrResultService "service/ocr_result"
-	ocrResultRepository "service/ocr_result/repository"
+	grainFarmerService "service/grain_farmer"
 	ocrService "service/ocr"
 	ocrDTO "service/ocr/dto"
+	ocrResultService "service/ocr_result"
+	ocrResultRepository "service/ocr_result/repository"
 	"strings"
 	"time"
 
@@ -22,21 +23,25 @@ import (
 
 type GrainCardOcrHandler struct {
 	*commonRouter.BaseHandler
-	ocrService          *ocrService.AliyunOCRService
-	farmerImageService  *farmerImageService.FarmerImageService
-	ocrResultService    *ocrResultService.OcrResultService
+	ocrService         *ocrService.AliyunOCRService
+	farmerImageService *farmerImageService.FarmerImageService
+	grainFarmerService *grainFarmerService.GrainFarmerService
+	ocrResultService   *ocrResultService.OcrResultService
 }
 
 func NewGrainCardOcrHandler() *GrainCardOcrHandler {
 	imgSvc := farmerImageService.NewFarmerImageService()
+	farmerSvc := grainFarmerService.NewGrainFarmerService()
 	ocrResSvc := ocrResultService.NewOcrResultService()
 	_ = imgSvc.EnsureTable()
+	_ = farmerSvc.EnsureTable()
 	_ = ocrResSvc.EnsureTable()
 	return &GrainCardOcrHandler{
-		BaseHandler:         &commonRouter.BaseHandler{},
-		ocrService:          ocrService.NewAliyunOCRServiceFromConfig(),
-		farmerImageService:  imgSvc,
-		ocrResultService:    ocrResSvc,
+		BaseHandler:        &commonRouter.BaseHandler{},
+		ocrService:         ocrService.NewAliyunOCRServiceFromConfig(),
+		farmerImageService: imgSvc,
+		grainFarmerService: farmerSvc,
+		ocrResultService:   ocrResSvc,
 	}
 }
 
@@ -99,9 +104,14 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	var result *ocrDTO.RecognizeCardResult
 
 	// 有 farmerId 时启用图片记录 + OCR缓存
+	ossObjectKey := ""
+	if oss.Oss != nil {
+		ossObjectKey = oss.Oss.BuildKey(objectPath)
+	}
+
 	farmerID := parseUint64(farmerIDStr)
 	if farmerID > 0 {
-		businessID, imgErr := h.resolveBusinessID(farmerID, appUserID, cardType, imageSide, file.Filename, imageURL)
+		businessID, imgErr := h.resolveBusinessID(farmerID, appUserID, cardType, imageSide, file.Filename, imageURL, ossObjectKey)
 		if imgErr == nil && businessID != "" {
 			// 命中缓存
 			if cached := h.ocrResultService.GetSuccessResult(businessID); cached != "" {
@@ -112,6 +122,10 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 						cachedResult.OssBucket = oss.Oss.BucketName
 						cachedResult.OssObjectKey = oss.Oss.BuildKey(objectPath)
 					}
+					if err := h.saveFarmerCardInfo(farmerID, stationID, &cachedResult); err != nil {
+						commonRouter.ToJson(context, nil, err)
+						return
+					}
 					commonRouter.ToJson(context, &cachedResult, nil)
 					return
 				}
@@ -119,11 +133,12 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 
 			// 调用OCR
 			result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
-				CardType: cardType,
-				FileName: file.Filename,
-				FileSize: file.Size,
-				MimeType: file.Header.Get("Content-Type"),
-				ImageURL: imageURL,
+				CardType:   cardType,
+				FileName:   file.Filename,
+				FileSize:   file.Size,
+				MimeType:   file.Header.Get("Content-Type"),
+				ImageURL:   imageURL,
+				ImageBytes: image,
 			})
 			h.saveOcrResult(businessID, imageURL, result, err)
 		}
@@ -132,11 +147,12 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	// 无 farmerId 或图片记录失败时，直接调用OCR（向下兼容）
 	if result == nil && err == nil {
 		result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
-			CardType: cardType,
-			FileName: file.Filename,
-			FileSize: file.Size,
-			MimeType: file.Header.Get("Content-Type"),
-			ImageURL: imageURL,
+			CardType:   cardType,
+			FileName:   file.Filename,
+			FileSize:   file.Size,
+			MimeType:   file.Header.Get("Content-Type"),
+			ImageURL:   imageURL,
+			ImageBytes: image,
 		})
 	}
 
@@ -145,19 +161,22 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 		result.OssObjectKey = oss.Oss.BuildKey(objectPath)
 		result.OssURL = imageURL
 	}
+	if err == nil && result != nil && farmerID > 0 {
+		err = h.saveFarmerCardInfo(farmerID, stationID, result)
+	}
 	commonRouter.ToJson(context, result, err)
 }
 
 // resolveBusinessID 查找或创建图片记录，返回业务唯一ID
-func (h *GrainCardOcrHandler) resolveBusinessID(farmerID, appUserID uint64, cardType, imageSide, imageName, ossURL string) (string, error) {
+func (h *GrainCardOcrHandler) resolveBusinessID(farmerID, appUserID uint64, cardType, imageSide, imageName, ossURL, ossObjectKey string) (string, error) {
 	if cardType == "id-card" {
-		record, err := h.farmerImageService.FindOrCreateIDCardImage(farmerID, appUserID, imageSide, imageName, ossURL)
+		record, err := h.farmerImageService.FindOrCreateIDCardImage(farmerID, appUserID, imageSide, imageName, ossURL, ossObjectKey)
 		if err != nil {
 			return "", err
 		}
 		return farmerImageService.IDCardBusinessID(record.Id), nil
 	}
-	record, err := h.farmerImageService.FindOrCreateBankCardImage(farmerID, appUserID, imageName, ossURL)
+	record, err := h.farmerImageService.FindOrCreateBankCardImage(farmerID, appUserID, imageName, ossURL, ossObjectKey)
 	if err != nil {
 		return "", err
 	}
@@ -175,6 +194,14 @@ func (h *GrainCardOcrHandler) saveOcrResult(businessID, ossURL string, result *o
 		}
 	}
 	_ = h.ocrResultService.SaveResult(businessID, ossURL, resultJSON, status)
+}
+
+func (h *GrainCardOcrHandler) saveFarmerCardInfo(farmerID, stationID uint64, result *ocrDTO.RecognizeCardResult) error {
+	if farmerID == 0 || result == nil {
+		return nil
+	}
+	_, err := h.grainFarmerService.UpdateFarmerCardInfoInStation(uint(farmerID), result, stationID)
+	return err
 }
 
 func buildOcrObjectPath(cardType, fileName string, stationID, appUserID uint64) string {

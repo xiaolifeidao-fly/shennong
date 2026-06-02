@@ -31,3 +31,4 @@ package
 old_source_code
 old_client_code
 */**/application.properties
+.claude/settings.local.json

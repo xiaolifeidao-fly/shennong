@@ -7,8 +7,6 @@
       :farmer-count="grainStore.todayFarmerCount"
     />
 
-    <QuickActions @new-entry="goNewEntry" @scan-id="openScan('id')" @scan-bank="openScan('bank')" />
-
     <SectionHeader title="今日农户汇总" action-text="全部农户" @action="goFarmers" />
     <view v-if="grainStore.farmersLoading || grainStore.dailySummaryLoading" class="loading-strip">正在加载今日汇总...</view>
     <view class="list">
@@ -23,25 +21,19 @@
     <SectionHeader title="最近录入" action-text="继续录入" @action="goEntry" />
     <view v-if="grainStore.entriesLoading" class="loading-strip">正在加载最近录入...</view>
     <RecentEntriesTable :entries="grainStore.recentEntries" :farmers="grainStore.farmers" />
-
-    <ScanSheet :visible="scanVisible" :type="scanType" @close="scanVisible = false" />
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import HomeHero from './components/HomeHero.vue'
-import QuickActions from './components/QuickActions.vue'
 import RecentEntriesTable from './components/RecentEntriesTable.vue'
-import ScanSheet from './components/ScanSheet.vue'
 import SectionHeader from '@/components/business/SectionHeader.vue'
 import FarmerSummaryCard from '@/components/business/FarmerSummaryCard.vue'
 import { useGrainStore } from '@/stores/grain'
 
 const grainStore = useGrainStore()
-const scanVisible = ref(false)
-const scanType = ref<'id' | 'bank'>('id')
 const topFarmers = computed(() => grainStore.farmerSummaries.slice(0, 2))
 
 onShow(() => {
@@ -49,11 +41,6 @@ onShow(() => {
   void grainStore.loadFarmers()
   void grainStore.loadEntries(true)
 })
-
-function goNewEntry() {
-  grainStore.selectFarmer('new')
-  uni.switchTab({ url: '/pages/entry/index' })
-}
 
 function goEntry() {
   uni.switchTab({ url: '/pages/entry/index' })
@@ -66,11 +53,6 @@ function goFarmers() {
 function openFarmer(farmerId: string) {
   grainStore.selectFarmer(farmerId)
   uni.switchTab({ url: '/pages/farmers/index' })
-}
-
-function openScan(type: 'id' | 'bank') {
-  scanType.value = type
-  scanVisible.value = true
 }
 </script>
 

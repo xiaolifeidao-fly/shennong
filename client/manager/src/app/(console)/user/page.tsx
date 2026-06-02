@@ -1,7 +1,5 @@
-"use client";
-
-import { UserManagementDemo } from "./components/UserManagementDemo";
+import { redirect } from "next/navigation";
 
 export default function UserPage() {
-  return <UserManagementDemo />;
+  redirect("/user/maintenance");
 }

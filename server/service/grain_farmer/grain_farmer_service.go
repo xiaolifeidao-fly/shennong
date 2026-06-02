@@ -5,6 +5,7 @@ import (
 	"common/middleware/db"
 	grainFarmerDTO "service/grain_farmer/dto"
 	grainFarmerRepository "service/grain_farmer/repository"
+	ocrDTO "service/ocr/dto"
 	"strings"
 
 	"github.com/jinzhu/copier"
@@ -96,6 +97,50 @@ func (s *GrainFarmerService) UpdateFarmerInStation(id uint, req *grainFarmerDTO.
 	return s.updateFarmer(id, req, stationID)
 }
 
+func (s *GrainFarmerService) UpdateFarmerCardInfoInStation(id uint, result *ocrDTO.RecognizeCardResult, stationID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
+	entity, err := s.farmerRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if err := decryptFarmerEntity(entity); err != nil {
+		return nil, err
+	}
+
+	changed := false
+	if result != nil {
+		switch result.CardType {
+		case "id-card":
+			changed = assignNonEmpty(&entity.Name, result.Name) || changed
+			changed = assignNonEmpty(&entity.IDNumber, result.IDNumber) || changed
+			changed = assignNonEmpty(&entity.Address, result.Address) || changed
+		case "bank-card":
+			changed = assignNonEmpty(&entity.BankNumber, result.BankNumber) || changed
+			changed = assignNonEmpty(&entity.BankName, result.BankName) || changed
+		}
+	}
+	if !changed {
+		dto := db.ToDTO[grainFarmerDTO.GrainFarmerDTO](entity)
+		return dto, nil
+	}
+
+	normalizeFarmerStatus(entity)
+	if err := prepareFarmerForSave(entity); err != nil {
+		return nil, err
+	}
+	saved, err := s.farmerRepository.SaveOrUpdate(entity)
+	if err != nil {
+		return nil, err
+	}
+	dto := db.ToDTO[grainFarmerDTO.GrainFarmerDTO](saved)
+	if err := decryptFarmerDTO(dto); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
 func (s *GrainFarmerService) updateFarmer(id uint, req *grainFarmerDTO.GrainFarmerDTO, stationID uint64) (*grainFarmerDTO.GrainFarmerDTO, error) {
 	entity, err := s.farmerRepository.FindById(id)
 	if err != nil {
@@ -104,7 +149,9 @@ func (s *GrainFarmerService) updateFarmer(id uint, req *grainFarmerDTO.GrainFarm
 	if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) {
 		return nil, gorm.ErrRecordNotFound
 	}
+	previousBase := entity.BaseEntity
 	copier.Copy(entity, req)
+	preserveFarmerBaseEntityFields(&entity.BaseEntity, previousBase)
 	entity.Id = int(id)
 	normalizeFarmer(entity)
 	if err := prepareFarmerForSave(entity); err != nil {
@@ -154,6 +201,13 @@ func normalizeFarmer(entity *grainFarmerRepository.GrainFarmer) {
 	entity.Name = strings.TrimSpace(entity.Name)
 	entity.IDNumber = strings.TrimSpace(entity.IDNumber)
 	entity.Phone = strings.TrimSpace(entity.Phone)
+	entity.Address = strings.TrimSpace(entity.Address)
+	entity.BankNumber = strings.TrimSpace(entity.BankNumber)
+	entity.BankName = strings.TrimSpace(entity.BankName)
+	normalizeFarmerStatus(entity)
+}
+
+func normalizeFarmerStatus(entity *grainFarmerRepository.GrainFarmer) {
 	if strings.TrimSpace(entity.Status) == "" {
 		if strings.TrimSpace(entity.BankNumber) == "" {
 			entity.Status = "missing-bank"
@@ -163,6 +217,25 @@ func normalizeFarmer(entity *grainFarmerRepository.GrainFarmer) {
 			entity.StatusText = "资料完整"
 		}
 	}
+	if strings.TrimSpace(entity.BankNumber) != "" && entity.Status == "missing-bank" {
+		entity.Status = "complete"
+		entity.StatusText = "资料完整"
+	}
+}
+
+func preserveFarmerBaseEntityFields(base *db.BaseEntity, previous db.BaseEntity) {
+	base.Active = previous.Active
+	base.CreatedTime = previous.CreatedTime
+	base.CreatedBy = previous.CreatedBy
+}
+
+func assignNonEmpty(target *string, value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || *target == value {
+		return false
+	}
+	*target = value
+	return true
 }
 
 func dbFieldDigest(value string) string {

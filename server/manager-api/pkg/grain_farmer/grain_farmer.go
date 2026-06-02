@@ -2,6 +2,8 @@ package grain_farmer
 
 import (
 	commonRouter "common/middleware/routers"
+	"manager-api/pkg/internal/tenantctx"
+	farmerImageService "service/farmer_image"
 	grainFarmerService "service/grain_farmer"
 	grainFarmerDTO "service/grain_farmer/dto"
 	"strconv"
@@ -12,17 +14,21 @@ import (
 
 type GrainFarmerHandler struct {
 	*commonRouter.BaseHandler
-	service *grainFarmerService.GrainFarmerService
+	service      *grainFarmerService.GrainFarmerService
+	imageService *farmerImageService.FarmerImageService
 }
 
 func NewGrainFarmerHandler() *GrainFarmerHandler {
 	service := grainFarmerService.NewGrainFarmerService()
+	imageService := farmerImageService.NewFarmerImageService()
 	_ = service.EnsureTable()
-	return &GrainFarmerHandler{BaseHandler: &commonRouter.BaseHandler{}, service: service}
+	_ = imageService.EnsureTable()
+	return &GrainFarmerHandler{BaseHandler: &commonRouter.BaseHandler{}, service: service, imageService: imageService}
 }
 
 func (h *GrainFarmerHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-farmers", h.listFarmers)
+	engine.GET("/grain-farmers/:id/images", h.getFarmerImages)
 	engine.POST("/grain-farmers", h.createFarmer)
 	engine.PUT("/grain-farmers/:id", h.updateFarmer)
 	engine.DELETE("/grain-farmers/:id", h.deleteFarmer)
@@ -34,8 +40,23 @@ func (h *GrainFarmerHandler) listFarmers(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if len(stationIDs) > 0 {
+		query.StationIDs = stationIDs
+	}
 	result, err := h.service.ListFarmers(query)
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainFarmerHandler) getFarmerImages(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	appUserID, _ := strconv.ParseUint(context.Query("appUserId"), 10, 64)
+	result := h.imageService.GetLatestFarmerImages(uint64(id), appUserID)
+	commonRouter.ToJson(context, result, nil)
 }
 
 func (h *GrainFarmerHandler) createFarmer(context *gin.Context) {

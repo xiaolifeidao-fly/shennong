@@ -23,6 +23,7 @@ export interface GrainEntry {
   crop: string
   quantity: number
   unit: string
+  displayUnit: string
   amount: number
   buyTime: string
   placeId: number
@@ -84,6 +85,24 @@ export interface GrainEntryDraft {
   paymentMethodCode: string
   payType: string
   materialImages: string[]
+  cardImages?: GrainDraftCardImages
+}
+
+export interface GrainDraftCardImage {
+  cardType: GrainCardOcrType
+  imageSide?: 'front' | 'back'
+  ossBucket?: string
+  ossObjectKey?: string
+  ossUrl?: string
+  fileName?: string
+  fileSize?: number
+  mimeType?: string
+}
+
+export interface GrainDraftCardImages {
+  idCardFront?: GrainDraftCardImage
+  idCardBack?: GrainDraftCardImage
+  bankCard?: GrainDraftCardImage
 }
 
 export interface FarmerSummary extends FarmerProfile {
@@ -182,6 +201,7 @@ export interface GrainPurchaseEntryDTO {
   crop: string
   quantity: number
   unit: string
+  displayUnit: string
   amount: number
   unitPrice: number
   buyTime: string

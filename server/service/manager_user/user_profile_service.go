@@ -74,6 +74,7 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 			Email:          row.Email,
 			Phone:          row.Phone,
 			Department:     row.Department,
+			TenantID:       row.TenantID,
 			Role:           row.Role,
 			Password:       row.Password,
 			OriginPassword: row.OriginPassword,
@@ -139,6 +140,7 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 	email := strings.TrimSpace(req.Email)
 	phone := strings.TrimSpace(req.Phone)
 	department := strings.TrimSpace(req.Department)
+	tenantID := req.TenantID
 	role := normalizeUserRole(req.Role)
 	status := normalizeUserStatus(req.Status)
 	password := strings.TrimSpace(req.Password)
@@ -178,6 +180,7 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 		Email:          email,
 		Phone:          phone,
 		Department:     department,
+		TenantID:       tenantID,
 		Role:           role,
 		Password:       password,
 		OriginPassword: originPassword,
@@ -241,6 +244,9 @@ func (s *UserService) UpdateUser(id uint, req *userDTO.UpdateUserDTO) (*userDTO.
 	}
 	if req.Department != nil {
 		entity.Department = strings.TrimSpace(*req.Department)
+	}
+	if req.TenantID != nil {
+		entity.TenantID = *req.TenantID
 	}
 	if req.Role != nil {
 		role := normalizeUserRole(*req.Role)

@@ -12,6 +12,7 @@ type User struct {
 	Email          string    `gorm:"column:email;type:varchar(100);index:idx_email" orm:"column(email);size(100);null" description:"邮箱"`
 	Phone          string    `gorm:"column:phone;type:varchar(32);index:idx_phone" orm:"column(phone);size(32);null" description:"手机号"`
 	Department     string    `gorm:"column:department;type:varchar(100);index:idx_department" orm:"column(department);size(100);null" description:"部门"`
+	TenantID       uint64    `gorm:"column:tenant_id;type:bigint unsigned;index:idx_tenant_id" description:"租户ID"`
 	Role           string    `gorm:"column:role;type:varchar(50);index:idx_role" orm:"column(role);size(50);null" description:"角色"`
 	Password       string    `gorm:"column:password;type:varchar(50)" orm:"column(password);size(50);null" description:"密码"`
 	OriginPassword string    `gorm:"column:origin_password;type:varchar(50)" orm:"column(origin_password);size(50);null" description:"原始密码"`
@@ -54,6 +55,7 @@ type UserListRow struct {
 	Email          string    `gorm:"column:email"`
 	Phone          string    `gorm:"column:phone"`
 	Department     string    `gorm:"column:department"`
+	TenantID       uint64    `gorm:"column:tenant_id"`
 	Role           string    `gorm:"column:role"`
 	Password       string    `gorm:"column:password"`
 	OriginPassword string    `gorm:"column:origin_password"`

@@ -7,11 +7,13 @@ import {
   CompassOutlined,
   DatabaseOutlined,
   LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
   UsergroupAddOutlined,
 } from "@ant-design/icons";
-import { Avatar, Badge, Button, Layout, Menu, Space, Tag, Typography } from "antd";
+import { Avatar, Badge, Button, Grid, Layout, Menu, Space, Tag, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { PropsWithChildren, useEffect, useMemo, useState } from "react";
@@ -19,6 +21,7 @@ import { clearAuthToken } from "@/utils/auth";
 
 const { Content, Header, Sider } = Layout;
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 interface ManagerShellProps extends PropsWithChildren {}
 
@@ -26,8 +29,11 @@ type MenuItem = Required<MenuProps>["items"][number];
 
 const pageTitleMap: Record<string, string> = {
   "/manager-dashboard": "数据总览",
+  "/user/maintenance": "用户维护",
+  "/user/list": "用户列表",
   "/user": "用户管理",
   "/permission": "权限管理",
+  "/tenant": "租户管理",
   "/grain/stations": "粮站列表",
   "/grain/config": "基础设置",
   "/grain/payment-methods": "付款方式",
@@ -37,6 +43,9 @@ const pageTitleMap: Record<string, string> = {
 };
 
 function getOpenKeys(pathname: string) {
+  if (pathname.startsWith("/user")) {
+    return ["/user"];
+  }
   if (pathname.startsWith("/activation-code")) {
     return ["/activation-code"];
   }
@@ -53,6 +62,9 @@ function getOpenKeys(pathname: string) {
     return ["/grain-farmer-group"];
   }
   if (pathname.startsWith("/permission")) {
+    return ["/system-group"];
+  }
+  if (pathname.startsWith("/tenant")) {
     return ["/system-group"];
   }
   if (pathname.startsWith("/grain")) {
@@ -76,8 +88,10 @@ function getOpenKeys(pathname: string) {
 export function ManagerShell({ children }: ManagerShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const screens = useBreakpoint();
   const activePath = pathname ?? "/manager-dashboard";
   const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(activePath));
+  const [collapsed, setCollapsed] = useState(false);
   const quickActions = useMemo(
     () => [
       {
@@ -86,7 +100,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
         icon: <AppstoreOutlined />,
       },
       {
-        key: "/user",
+        key: "/user/maintenance",
         label: "用户管理",
         icon: <TeamOutlined />,
       },
@@ -119,6 +133,16 @@ export function ManagerShell({ children }: ManagerShellProps) {
         key: "/user",
         icon: <TeamOutlined />,
         label: "用户管理",
+        children: [
+          {
+            key: "/user/maintenance",
+            label: "用户维护",
+          },
+          {
+            key: "/user/list",
+            label: "用户列表",
+          },
+        ],
       },
       {
         key: "/system-group",
@@ -128,6 +152,10 @@ export function ManagerShell({ children }: ManagerShellProps) {
           {
             key: "/permission",
             label: "角色资源",
+          },
+          {
+            key: "/tenant",
+            label: "租户管理",
           },
         ],
       },
@@ -189,6 +217,10 @@ export function ManagerShell({ children }: ManagerShellProps) {
     setOpenKeys((currentKeys) => Array.from(new Set([...currentKeys, ...pathOpenKeys])));
   }, [activePath]);
 
+  useEffect(() => {
+    setCollapsed(!screens.lg);
+  }, [screens.lg]);
+
   const handleLogout = () => {
     clearAuthToken();
     router.replace("/login");
@@ -209,6 +241,10 @@ export function ManagerShell({ children }: ManagerShellProps) {
         >
           <Sider
             width={248}
+            collapsedWidth={screens.md ? 82 : 0}
+            collapsible
+            collapsed={collapsed}
+            trigger={null}
             style={{
               background: "transparent",
             }}
@@ -223,11 +259,11 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 gap: 18,
               }}
             >
-              <div>
+              <div className="manager-sidebar-brand">
                 <div className="manager-brand-kicker">管理控制台</div>
                 <Space align="start" size={12} style={{ marginTop: 18 }}>
                   <div className="manager-crest" />
-                  <div className="manager-wordmark">
+                  <div className="manager-wordmark manager-collapse-hidden">
                     <strong style={{ color: "#fff" }}>收粮管理端</strong>
                     <span style={{ color: "rgba(255,255,255,0.66)" }}>Shennong Admin</span>
                   </div>
@@ -251,7 +287,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
                   marginTop: 8,
                 }}
               />
-              <div className="manager-sidebar-foot">
+              <div className="manager-sidebar-foot manager-collapse-hidden">
                 <span>权限模式</span>
                 <strong>系统角色权限</strong>
                 <Tag bordered={false}>按角色授权</Tag>
@@ -281,8 +317,14 @@ export function ManagerShell({ children }: ManagerShellProps) {
                   alignItems: "center",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
+                <div className="manager-header-main">
                   <Space size={10} align="center" style={{ marginBottom: 8 }}>
+                    <Button
+                      type="text"
+                      icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                      className="manager-nav-toggle"
+                      onClick={() => setCollapsed((value) => !value)}
+                    />
                     <CompassOutlined style={{ color: "var(--manager-primary)" }} />
                     <Text style={{ color: "var(--manager-text-soft)", fontWeight: 700 }}>
                       {pageTitle}
@@ -313,7 +355,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
                   </Space>
                 </div>
 
-                <Space size={12} wrap>
+                <Space size={12} wrap className="manager-header-account">
                   <Badge dot offset={[-2, 2]}>
                     <div
                       className="manager-icon-button"

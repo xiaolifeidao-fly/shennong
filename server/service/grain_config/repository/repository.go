@@ -25,6 +25,12 @@ func (r *GrainStationRepository) CountByQuery(query grainConfigDTO.GrainStationQ
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("grain_station.id = ?", query.StationID)
 	}
+	if query.TenantID > 0 {
+		dbQuery = dbQuery.Where("grain_station.tenant_id = ?", query.TenantID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("grain_station.id IN ?", query.StationIDs)
+	}
 	if query.AppUserID > 0 {
 		dbQuery = dbQuery.Joins("JOIN grain_station_user ON grain_station_user.station_id = grain_station.id AND grain_station_user.active = ? AND grain_station_user.status = ? AND grain_station_user.app_user_id = ?", 1, "active", query.AppUserID)
 	}
@@ -36,6 +42,12 @@ func (r *GrainStationRepository) ListByQuery(query grainConfigDTO.GrainStationQu
 	dbQuery := applyStationQuery(r.Db.Model(&GrainStation{}).Where("grain_station.active = ?", 1), query.Search, query.Status)
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("grain_station.id = ?", query.StationID)
+	}
+	if query.TenantID > 0 {
+		dbQuery = dbQuery.Where("grain_station.tenant_id = ?", query.TenantID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("grain_station.id IN ?", query.StationIDs)
 	}
 	if query.AppUserID > 0 {
 		dbQuery = dbQuery.Joins("JOIN grain_station_user ON grain_station_user.station_id = grain_station.id AND grain_station_user.active = ? AND grain_station_user.status = ? AND grain_station_user.app_user_id = ?", 1, "active", query.AppUserID)
@@ -197,6 +209,9 @@ func applyStationQuery(dbQuery *gorm.DB, search string, status string) *gorm.DB 
 func applyStationConfigItemQuery(dbQuery *gorm.DB, query grainConfigDTO.GrainConfigItemQueryDTO, searchColumns ...string) *gorm.DB {
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("station_id = ?", query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		dbQuery = dbQuery.Where("station_id IN ?", query.StationIDs)
 	}
 	return applyNamedConfigItemQuery(dbQuery, query, searchColumns...)
 }

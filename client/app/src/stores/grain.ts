@@ -6,7 +6,8 @@ import {
   listGrainPurchaseTypes,
   listGrainStations,
 } from '@/services/grainConfig'
-import { createGrainFarmer, listGrainFarmers, updateGrainFarmer } from '@/services/grainFarmer'
+import { createGrainFarmer, getGrainFarmerImages, listGrainFarmers, saveGrainFarmerImage, updateGrainFarmer } from '@/services/grainFarmer'
+import type { FarmerImagesResult } from '@/services/grainFarmer'
 import {
   createGrainEntryMaterial,
   listGrainFarmerDailySummaries,
@@ -21,6 +22,9 @@ import type {
   FarmerProfile,
   FarmerStatus,
   FarmerSummary,
+  GrainCardOcrResult,
+  GrainDraftCardImage,
+  GrainDraftCardImages,
   GrainEntry,
   GrainEntryDraft,
   GrainFarmerDailySummaryDTO,
@@ -45,6 +49,8 @@ interface GrainState {
   summaries: GrainFarmerPurchaseSummary[]
   preset: GrainPreset
   selectedFarmerId: string
+  selectedEntryId: string
+  farmerImages: Record<string, FarmerImagesResult>
   stationId: number
   loading: boolean
   presetLoading: boolean
@@ -52,6 +58,7 @@ interface GrainState {
   entriesLoading: boolean
   summariesLoading: boolean
   dailySummaryLoading: boolean
+  farmerImagesLoading: boolean
   initialized: boolean
   presetLoaded: boolean
   farmersLoaded: boolean
@@ -61,6 +68,10 @@ interface GrainState {
   dailySummaryPageIndex: number
   dailySummaryPageSize: number
   dailySummaryTotal: number
+  entriesPageIndex: number
+  entriesPageSize: number
+  entriesTotal: number
+  entriesCurrentFarmerId: string
 }
 
 function safeArray<T>(value: T[] | null | undefined): T[] {
@@ -95,6 +106,27 @@ function formatDateTime(value?: string) {
 
 function nowText() {
   return formatDateTime(new Date().toISOString())
+}
+
+function toDateString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function getDateRangeForFilter(filter: string): { startDate: string; endDate: string } {
+  const now = new Date()
+  const today = toDateString(now)
+  if (filter === '本周') {
+    const day = now.getDay() === 0 ? 7 : now.getDay()
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - day + 1)
+    return { startDate: toDateString(monday), endDate: today }
+  }
+  if (filter === '本月') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+    return { startDate: toDateString(firstDay), endDate: today }
+  }
+  return { startDate: today, endDate: today }
 }
 
 function getPaymentInfoStatusText(hasPaymentAccount: boolean) {
@@ -136,6 +168,7 @@ function toEntry(dto: GrainPurchaseEntryDTO): GrainEntry {
     crop: dto.crop || '',
     quantity: Number(dto.quantity) || 0,
     unit: dto.unit || '公斤',
+    displayUnit: dto.displayUnit || '公斤',
     amount: Number(dto.amount) || 0,
     buyTime: formatDateTime(dto.buyTime),
     placeId: Number(dto.placeId) || 0,
@@ -228,10 +261,14 @@ function createDraft(farmer: FarmerProfile | undefined, preset: GrainPreset): Gr
     paymentMethodCode: firstPaymentMethod?.methodCode || '',
     payType: firstPaymentMethod?.methodName || preset.payTypes[0] || '',
     materialImages: [],
+    cardImages: {},
   }
 }
 
 function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefined): GrainEntryDraft {
+  const displayUnit = entry.displayUnit || entry.unit || '公斤'
+  const displayQuantity = displayUnit === '吨' ? entry.quantity / 1000 : entry.quantity
+
   return {
     farmerId: farmer?.id || entry.farmerId,
     farmerName: farmer?.name || '',
@@ -242,8 +279,8 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
     bankName: farmer?.bankName || '',
     purchaseTypeId: entry.purchaseTypeId,
     crop: entry.crop,
-    quantity: entry.quantity,
-    unit: entry.unit || '公斤',
+    quantity: displayQuantity,
+    unit: displayUnit,
     amount: entry.amount,
     buyTime: entry.buyTime,
     placeId: entry.placeId,
@@ -259,6 +296,7 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
     paymentMethodCode: '',
     payType: entry.payType,
     materialImages: [...(entry.materialImages || [])],
+    cardImages: {},
   }
 }
 
@@ -267,6 +305,33 @@ function applyMaterialImage(draft: GrainEntryDraft, ossUrl: string): string[] {
     return [...draft.materialImages]
   }
   return [...draft.materialImages, ossUrl]
+}
+
+function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): GrainDraftCardImage {
+  return {
+    cardType: result.cardType,
+    imageSide,
+    ossBucket: result.ossBucket,
+    ossObjectKey: result.ossObjectKey,
+    ossUrl: result.ossUrl,
+    fileName: result.fileName,
+    fileSize: result.fileSize,
+    mimeType: result.mimeType,
+  }
+}
+
+function applyCardImage(draft: GrainEntryDraft, image: GrainDraftCardImage): GrainDraftCardImages {
+  const cardImages = { ...(draft.cardImages || {}) }
+  if (image.cardType === 'id-card') {
+    if (image.imageSide === 'back') {
+      cardImages.idCardBack = image
+    } else {
+      cardImages.idCardFront = image
+    }
+  } else {
+    cardImages.bankCard = image
+  }
+  return cardImages
 }
 
 function buildFarmerPayload(draft: GrainEntryDraft, stationId: number): Partial<GrainFarmerDTO> {
@@ -288,6 +353,9 @@ function buildFarmerPayload(draft: GrainEntryDraft, stationId: number): Partial<
 
 function buildEntryPayload(draft: GrainEntryDraft, farmerId: number, stationId: number): Partial<GrainPurchaseEntryDTO> {
   const userStore = useUserStore()
+  const displayUnit = draft.unit || '公斤'
+  const rawQuantity = Number(draft.quantity) || 0
+  const quantityKg = displayUnit === '吨' ? rawQuantity * 1000 : rawQuantity
 
   return {
     stationId,
@@ -295,8 +363,9 @@ function buildEntryPayload(draft: GrainEntryDraft, farmerId: number, stationId: 
     farmerId,
     purchaseTypeId: draft.purchaseTypeId || 0,
     crop: draft.crop,
-    quantity: Number(draft.quantity) || 0,
-    unit: draft.unit || '公斤',
+    quantity: quantityKg,
+    unit: '公斤',
+    displayUnit,
     amount: Number(draft.amount) || 0,
     buyTime: toServerTime(draft.buyTime),
     placeId: draft.placeId || 0,
@@ -338,6 +407,8 @@ export const useGrainStore = defineStore('grain', {
     summaries: [],
     preset: defaultPreset,
     selectedFarmerId: 'new',
+    selectedEntryId: '',
+    farmerImages: {},
     stationId: DEFAULT_GRAIN_STATION_ID,
     loading: false,
     presetLoading: false,
@@ -345,6 +416,7 @@ export const useGrainStore = defineStore('grain', {
     entriesLoading: false,
     summariesLoading: false,
     dailySummaryLoading: false,
+    farmerImagesLoading: false,
     initialized: false,
     presetLoaded: false,
     farmersLoaded: false,
@@ -354,6 +426,10 @@ export const useGrainStore = defineStore('grain', {
     dailySummaryPageIndex: 0,
     dailySummaryPageSize: 20,
     dailySummaryTotal: 0,
+    entriesPageIndex: 0,
+    entriesPageSize: 10,
+    entriesTotal: 0,
+    entriesCurrentFarmerId: '',
   }),
   getters: {
     todayEntryCount: (state) => state.dailyFarmerSummaries.reduce((sum, item) => sum + item.entryCount, 0),
@@ -365,6 +441,13 @@ export const useGrainStore = defineStore('grain', {
     selectedFarmer: (state) =>
       state.farmers.find((farmer) => farmer.id === state.selectedFarmerId) ||
       state.dailyFarmerSummaries.find((farmer) => farmer.id === state.selectedFarmerId),
+    selectedEntry: (state) => state.entries.find((e) => e.id === state.selectedEntryId),
+    farmerEntriesSorted: (state) =>
+      state.entries
+        .filter((e) => e.farmerId === state.selectedFarmerId)
+        .sort((a, b) => (a.buyTime < b.buyTime ? 1 : -1)),
+    farmerEntriesHasMore: (state) =>
+      state.entries.filter((e) => e.farmerId === state.entriesCurrentFarmerId).length < state.entriesTotal,
   },
   actions: {
     async ensureUserAndStation() {
@@ -445,8 +528,8 @@ export const useGrainStore = defineStore('grain', {
         this.summariesLoading = false
       }
     },
-    async loadTodayFarmerSummaries(force = false, search = '') {
-      if (this.dailySummaryLoading) {
+    async loadTodayFarmerSummaries(force = false, search = '', dateFilter = '今天') {
+      if (this.dailySummaryLoading && !force) {
         return
       }
       if (!force && this.dailySummaryLoaded && this.dailyFarmerSummaries.length >= this.dailySummaryTotal) {
@@ -456,14 +539,14 @@ export const useGrainStore = defineStore('grain', {
       try {
         const { appUserId, stationId } = await this.ensureUserAndStation()
         const pageIndex = force ? 1 : this.dailySummaryPageIndex + 1
-        const today = formatDateTime(new Date().toISOString()).slice(0, 10)
+        const { startDate, endDate } = getDateRangeForFilter(dateFilter)
         const summaryPage = await listGrainFarmerDailySummaries({
           pageIndex,
           pageSize: this.dailySummaryPageSize,
           stationId: stationId || undefined,
           appUserId: appUserId || undefined,
-          startDate: today,
-          endDate: today,
+          startDate,
+          endDate,
           search: search.trim() || undefined,
         })
         const nextSummaries = pageItems(summaryPage).map(toFarmerDailySummary)
@@ -472,7 +555,7 @@ export const useGrainStore = defineStore('grain', {
         this.dailySummaryPageIndex = pageIndex
         this.dailySummaryLoaded = true
       } catch (error) {
-        uni.showToast({ title: error instanceof Error ? error.message : '今日农户汇总加载失败', icon: 'none' })
+        uni.showToast({ title: error instanceof Error ? error.message : '农户汇总加载失败', icon: 'none' })
       } finally {
         this.dailySummaryLoading = false
       }
@@ -503,6 +586,60 @@ export const useGrainStore = defineStore('grain', {
       } finally {
         this.entriesLoading = false
       }
+    },
+    async loadFarmerEntriesPaged(force = false, farmerId?: string) {
+      const targetFarmerId = farmerId || this.selectedFarmerId
+      if (!targetFarmerId || targetFarmerId === 'new') return
+
+      const isSameFarmer = this.entriesCurrentFarmerId === targetFarmerId
+      if (this.entriesLoading) return
+      if (!force && isSameFarmer) {
+        const loaded = this.entries.filter((e) => e.farmerId === targetFarmerId).length
+        if (loaded >= this.entriesTotal && this.entriesTotal > 0) return
+      }
+
+      this.entriesLoading = true
+      try {
+        const { appUserId, stationId } = await this.ensureUserAndStation()
+        const pageIndex = force || !isSameFarmer ? 1 : this.entriesPageIndex + 1
+        const entryPage = await listGrainPurchaseEntries({
+          pageIndex,
+          pageSize: this.entriesPageSize,
+          stationId: stationId || undefined,
+          appUserId: appUserId || undefined,
+          farmerId: Number(targetFarmerId),
+        })
+        const nextEntries = pageItems(entryPage).map(toEntry)
+        if (force || !isSameFarmer) {
+          this.entries = [...this.entries.filter((e) => e.farmerId !== targetFarmerId), ...nextEntries]
+        } else {
+          const existingIds = new Set(this.entries.map((e) => e.id))
+          const newEntries = nextEntries.filter((e) => !existingIds.has(e.id))
+          this.entries = [...this.entries, ...newEntries]
+        }
+        this.entriesTotal = Number(entryPage?.total) || nextEntries.length
+        this.entriesPageIndex = pageIndex
+        this.entriesCurrentFarmerId = targetFarmerId
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '录入明细加载失败', icon: 'none' })
+      } finally {
+        this.entriesLoading = false
+      }
+    },
+    async loadFarmerImages(farmerId: string) {
+      if (!farmerId || farmerId === 'new') return
+      this.farmerImagesLoading = true
+      try {
+        const result = await getGrainFarmerImages(farmerId)
+        this.farmerImages = { ...this.farmerImages, [farmerId]: result }
+      } catch {
+        // 图片加载失败不影响主流程
+      } finally {
+        this.farmerImagesLoading = false
+      }
+    },
+    selectEntry(entryId: string) {
+      this.selectedEntryId = entryId
     },
     async loadGrainData(force = false) {
       if (this.loading || (this.initialized && !force)) {
@@ -559,6 +696,7 @@ export const useGrainStore = defineStore('grain', {
         idNumber: result.idNumber || draft.idNumber,
         address: result.address || draft.address,
         materialImages: applyMaterialImage(draft, result.ossUrl),
+        cardImages: applyCardImage(draft, toDraftCardImage(result, side)),
       }
     },
     async recognizeBankCard(filePath: string, draft: GrainEntryDraft) {
@@ -568,6 +706,7 @@ export const useGrainStore = defineStore('grain', {
         bankNumber: result.bankNumber || draft.bankNumber,
         bankName: result.bankName || draft.bankName,
         materialImages: applyMaterialImage(draft, result.ossUrl),
+        cardImages: applyCardImage(draft, toDraftCardImage(result)),
       }
     },
     async saveEntry(draft: GrainEntryDraft) {
@@ -580,11 +719,14 @@ export const useGrainStore = defineStore('grain', {
         await updateGrainFarmer(farmerId, buildFarmerPayload(draft, this.stationId))
       }
 
+      await this.saveFarmerCardImages(farmerId, draft.cardImages)
       const entry = await createGrainPurchaseEntry(buildEntryPayload(draft, farmerId, this.stationId))
       await this.saveEntryMaterials(entry, draft.materialImages)
       this.selectedFarmerId = String(farmerId)
       await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true), this.loadSummaries(true, String(farmerId)), this.loadEntries(true, String(farmerId))])
-      return toEntry(entry)
+      const savedEntry = toEntry(entry)
+      this.entries = [savedEntry, ...this.entries.filter((item) => item.id !== savedEntry.id)]
+      return savedEntry
     },
     async updateEntry(entryId: string, draft: GrainEntryDraft) {
       const farmerId = Number(draft.farmerId)
@@ -593,11 +735,14 @@ export const useGrainStore = defineStore('grain', {
       }
 
       await updateGrainFarmer(farmerId, buildFarmerPayload(draft, this.stationId))
+      await this.saveFarmerCardImages(farmerId, draft.cardImages)
       const entry = await updateGrainPurchaseEntry(entryId, buildEntryPayload(draft, farmerId, this.stationId))
       await this.saveEntryMaterials(entry, draft.materialImages)
       this.selectedFarmerId = String(farmerId)
       await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true), this.loadSummaries(true, String(farmerId)), this.loadEntries(true, String(farmerId))])
-      return toEntry(entry)
+      const savedEntry = toEntry(entry)
+      this.entries = [savedEntry, ...this.entries.filter((item) => item.id !== savedEntry.id)]
+      return savedEntry
     },
     async saveEntryMaterials(entry: GrainPurchaseEntryDTO, images: string[]) {
       const tasks = images
@@ -616,6 +761,12 @@ export const useGrainStore = defineStore('grain', {
           }),
         )
       await Promise.all(tasks)
+    },
+    async saveFarmerCardImages(farmerId: string | number, cardImages?: GrainDraftCardImages) {
+      const images = [cardImages?.idCardFront, cardImages?.idCardBack, cardImages?.bankCard].filter(
+        (image): image is GrainDraftCardImage => Boolean(image?.ossObjectKey || image?.ossUrl),
+      )
+      await Promise.all(images.map((image) => saveGrainFarmerImage(farmerId, image)))
     },
     async updateFarmer(farmerId: string, patch: Partial<FarmerProfile>) {
       const result = await updateGrainFarmer(farmerId, {

@@ -1,6 +1,7 @@
 package ocr
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -69,8 +70,8 @@ func (s *AliyunOCRService) RecognizeCard(ctx context.Context, req ocrDTO.Recogni
 	if strings.TrimSpace(req.CardType) == "" {
 		return nil, errors.New("cardType不能为空")
 	}
-	if strings.TrimSpace(req.ImageURL) == "" {
-		return nil, errors.New("识别图片URL不能为空")
+	if strings.TrimSpace(req.ImageURL) == "" && len(req.ImageBytes) == 0 {
+		return nil, errors.New("识别图片不能为空")
 	}
 	if req.CardType == cardTypeBankCard {
 		return s.RecognizeBankCard(ctx, req)
@@ -89,8 +90,10 @@ func (s *AliyunOCRService) RecognizeIDCard(ctx context.Context, req ocrDTO.Recog
 	if s.outputQualityInfo {
 		params["OutputQualityInfo"] = "true"
 	}
-	params["Url"] = req.ImageURL
-	resp, rawData, err := s.call(ctx, "RecognizeIdcard", params)
+	if len(req.ImageBytes) == 0 {
+		params["Url"] = req.ImageURL
+	}
+	resp, rawData, err := s.call(ctx, "RecognizeIdcard", params, req.ImageBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +103,11 @@ func (s *AliyunOCRService) RecognizeIDCard(ctx context.Context, req ocrDTO.Recog
 }
 
 func (s *AliyunOCRService) RecognizeBankCard(ctx context.Context, req ocrDTO.RecognizeCardRequest) (*ocrDTO.RecognizeCardResult, error) {
-	resp, rawData, err := s.call(ctx, "RecognizeBankCard", map[string]string{"Url": req.ImageURL})
+	params := map[string]string{}
+	if len(req.ImageBytes) == 0 {
+		params["Url"] = req.ImageURL
+	}
+	resp, rawData, err := s.call(ctx, "RecognizeBankCard", params, req.ImageBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +116,7 @@ func (s *AliyunOCRService) RecognizeBankCard(ctx context.Context, req ocrDTO.Rec
 	return result, nil
 }
 
-func (s *AliyunOCRService) call(ctx context.Context, action string, params map[string]string) (*aliyunOCRResponse, map[string]interface{}, error) {
+func (s *AliyunOCRService) call(ctx context.Context, action string, params map[string]string, body []byte) (*aliyunOCRResponse, map[string]interface{}, error) {
 	if strings.TrimSpace(s.accessKeyID) == "" || strings.TrimSpace(s.accessKeySecret) == "" {
 		return nil, nil, errors.New("阿里云OCR配置缺失：ocr.accessKeyId或ocr.accessKeySecret为空")
 	}
@@ -128,11 +135,20 @@ func (s *AliyunOCRService) call(ctx context.Context, action string, params map[s
 			query[k] = v
 		}
 	}
-	signature := sign(http.MethodGet, query, s.accessKeySecret)
+	method := http.MethodGet
+	var reader io.Reader
+	if len(body) > 0 {
+		method = http.MethodPost
+		reader = bytes.NewReader(body)
+	}
+	signature := sign(method, query, s.accessKeySecret)
 	requestURL := s.endpoint + "/?" + canonicalQuery(query) + "&Signature=" + percentEncode(signature)
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	request, err := http.NewRequestWithContext(ctx, method, requestURL, reader)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(body) > 0 {
+		request.Header.Set("Content-Type", "application/octet-stream")
 	}
 
 	client := s.httpClient

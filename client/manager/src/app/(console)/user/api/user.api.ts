@@ -15,6 +15,8 @@ export class UserRecord {
 
   department = "";
 
+  tenantId = 0;
+
   role = "member";
 
   status = "active";
@@ -78,6 +80,7 @@ export interface UserPayload {
   email?: string;
   phone?: string;
   department?: string;
+  tenantId?: number;
   role: string;
   status: string;
   remark?: string;

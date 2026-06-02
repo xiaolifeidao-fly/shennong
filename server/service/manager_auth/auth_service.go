@@ -34,12 +34,13 @@ var (
 )
 
 type LoginUser struct {
-	ID        uint64   `json:"id"`
-	Name      string   `json:"name"`
-	Username  string   `json:"username"`
-	Role      string   `json:"role"`
-	Status    string   `json:"status"`
-	RoleIDs   []uint64 `json:"roleIds,omitempty"`
+	ID       uint64   `json:"id"`
+	Name     string   `json:"name"`
+	Username string   `json:"username"`
+	TenantID uint64   `json:"tenantId"`
+	Role     string   `json:"role"`
+	Status   string   `json:"status"`
+	RoleIDs  []uint64 `json:"roleIds,omitempty"`
 }
 
 type AuthService struct {
@@ -381,6 +382,7 @@ func toLoginUser(user *userRepository.User) *LoginUser {
 		ID:       uint64(user.Id),
 		Name:     user.Name,
 		Username: user.Username,
+		TenantID: user.TenantID,
 		Role:     user.Role,
 		Status:   user.Status,
 	}

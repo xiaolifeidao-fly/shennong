@@ -73,7 +73,8 @@
       "Bash(SHENNONG_REAL_OCR_TEST=1 go test ./pkg/grain_card_ocr/... -run TestRealAliyunOCRWithOSS -v -timeout 120s)",
       "Bash(SHENNONG_REAL_OCR_TEST=1 go test ./pkg/grain_card_ocr/... -run TestRealAliyunOCRWithOSS -v -timeout 120s -count=1)",
       "Bash(go test *)",
-      "Bash(xargs ls)"
+      "Bash(xargs ls)",
+      "Bash(npx vue-tsc *)"
     ]
   }
 }

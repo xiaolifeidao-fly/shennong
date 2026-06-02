@@ -14,7 +14,7 @@
     <view class="data-grid">
       <view class="kv">
         <text>合计数量</text>
-        <text class="value">{{ formatQuantity(farmer.totalQuantity) }}</text>
+        <text class="value">{{ formatQuantitySummary(farmer.totalQuantity) }}</text>
       </view>
       <view class="kv">
         <text>合计金额</text>
@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { formatAmount, formatQuantity, pickTime } from '@/utils/grain'
+import { formatAmount, formatQuantitySummary, pickTime } from '@/utils/grain'
 import type { FarmerSummary } from '@/types/grain'
 
 const props = defineProps<{
