@@ -4,10 +4,41 @@ import { installAuthGuard, redirectLoggedInUser, ensureAuthenticated } from '@/u
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
+const apiTransport = import.meta.env.VITE_APP_API_TRANSPORT || 'https'
+const cloudEnv = import.meta.env.VITE_APP_CLOUD_ENV
+
+declare const wx: {
+  cloud?: {
+    init(options: {
+      env: string
+      traceUser?: boolean
+    }): void
+  }
+} | undefined
 
 installAuthGuard()
 
+function initWechatCloud() {
+  if (apiTransport !== 'cloud') {
+    return
+  }
+  if (!cloudEnv) {
+    console.warn('VITE_APP_CLOUD_ENV is empty')
+    return
+  }
+  if (typeof wx === 'undefined' || !wx.cloud?.init) {
+    console.warn('wx.cloud.init is unavailable')
+    return
+  }
+
+  wx.cloud.init({
+    env: cloudEnv,
+    traceUser: true,
+  })
+}
+
 onLaunch(() => {
+  initWechatCloud()
   userStore.restoreLoginState()
   ensureAuthenticated()
   redirectLoggedInUser()

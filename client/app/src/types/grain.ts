@@ -307,6 +307,7 @@ export interface GrainEntryMaterialDTO {
   ossBucket: string
   ossObjectKey: string
   ossUrl: string
+  imageUrl: string
   fileName: string
   fileSize: number
   mimeType: string

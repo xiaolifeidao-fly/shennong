@@ -4,6 +4,7 @@ import type { ApiResponse } from '@/types/api'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
 type RequestData = string | object | ArrayBuffer
+type ApiTransport = 'cloud' | 'https'
 
 interface RequestOptions<TBody = RequestData> {
   method?: HttpMethod
@@ -12,11 +13,123 @@ interface RequestOptions<TBody = RequestData> {
 }
 
 const baseURL = import.meta.env.VITE_APP_API_BASE_URL
+const apiTransport = (import.meta.env.VITE_APP_API_TRANSPORT || 'https') as ApiTransport
+const cloudEnv = import.meta.env.VITE_APP_CLOUD_ENV
+const cloudService = import.meta.env.VITE_APP_CLOUD_SERVICE
+const cloudFileBaseURL = import.meta.env.VITE_APP_CLOUD_FILE_BASE_URL || baseURL
+
+interface ApiRawResponse<TData> {
+  statusCode: number
+  data: ApiResponse<TData>
+}
+
+interface WechatCloudContainer {
+  callContainer<TData = unknown>(options: {
+    config: {
+      env: string
+    }
+    path: string
+    header: Record<string, string>
+    method: HttpMethod
+    data?: RequestData
+  }): Promise<ApiRawResponse<TData>>
+}
+
+declare const wx: {
+  cloud?: WechatCloudContainer
+  uploadFile?(options: {
+    url: string
+    filePath: string
+    name: string
+    formData?: Record<string, string | number>
+    header?: Record<string, string>
+    success: (response: { statusCode: number; data: string }) => void
+    fail: (error: { errMsg?: string }) => void
+  }): unknown
+  downloadFile?(options: {
+    url: string
+    header?: Record<string, string>
+    success: (response: { statusCode: number; tempFilePath: string }) => void
+    fail: (error: { errMsg?: string }) => void
+  }): unknown
+} | undefined
+
+function getWechatCloud() {
+  return (typeof wx === 'undefined' ? undefined : wx.cloud)
+}
 
 function authHeaders() {
   const token = getToken()
   return {
     ...(token ? { token, Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
+function normalizeCloudPath(url: string) {
+  return url.replace(/^\/+/, '')
+}
+
+function joinURL(base: string, url: string) {
+  if (/^(https?:|wxfile:|blob:)/.test(url)) {
+    return url
+  }
+  return `${base.replace(/\/+$/, '')}/${normalizeCloudPath(url)}`
+}
+
+function fileRequestURL(url: string) {
+  return apiTransport === 'cloud' ? joinURL(cloudFileBaseURL, url) : joinURL(baseURL, url)
+}
+
+function fileHeaders(contentType?: string) {
+  return {
+    ...(contentType ? { 'content-type': contentType } : {}),
+    ...(apiTransport === 'cloud' && cloudService ? { 'X-WX-SERVICE': cloudService } : {}),
+    ...authHeaders(),
+  }
+}
+
+async function sendRequest<TData, TBody extends RequestData>(
+  url: string,
+  method: HttpMethod,
+  data?: TBody,
+): Promise<ApiRawResponse<TData>> {
+  if (apiTransport === 'cloud') {
+    if (!cloudEnv || !cloudService) {
+      throw new Error('云托管配置缺失')
+    }
+    const wechatCloud = getWechatCloud()
+    if (!wechatCloud?.callContainer) {
+      throw new Error('当前环境不支持云托管调用')
+    }
+
+    return wechatCloud.callContainer<TData>({
+      config: {
+        env: cloudEnv,
+      },
+      path: normalizeCloudPath(url),
+      header: {
+        'content-type': 'application/json',
+        'X-WX-SERVICE': cloudService,
+        ...authHeaders(),
+      },
+      method,
+      data,
+    })
+  }
+
+  const response = await uni.request({
+    url: `${baseURL}${url}`,
+    method,
+    data,
+    header: {
+      'content-type': 'application/json',
+      ...authHeaders(),
+    },
+  })
+
+  return {
+    statusCode: response.statusCode,
+    data: response.data as ApiResponse<TData>,
   }
 }
 
@@ -31,17 +144,8 @@ export async function request<TData, TBody extends RequestData = RequestData>(
   }
 
   try {
-    const response = await uni.request({
-      url: `${baseURL}${url}`,
-      method,
-      data,
-      header: {
-        'content-type': 'application/json',
-        ...authHeaders(),
-      },
-    })
-
-    const payload = response.data as ApiResponse<TData>
+    const response = await sendRequest<TData, TBody>(url, method, data)
+    const payload = response.data
     const isUnauthorized = response.statusCode === 401 || payload?.code === 401
 
     if (isUnauthorized || !payload?.success) {
@@ -70,13 +174,15 @@ export async function upload<TData>(
 ) {
   uni.showLoading({ title: '识别中', mask: true })
   try {
-    const response = await uni.uploadFile({
-      url: `${baseURL}${url}`,
-      filePath,
-      name,
-      formData,
-      header: authHeaders(),
-    })
+    const response = apiTransport === 'cloud'
+      ? await uploadByWechat(url, filePath, formData, name)
+      : await uni.uploadFile({
+          url: fileRequestURL(url),
+          filePath,
+          name,
+          formData,
+          header: authHeaders(),
+        })
     const payload = JSON.parse(String(response.data || '{}')) as ApiResponse<TData>
     const isUnauthorized = response.statusCode === 401 || payload?.code === 401
 
@@ -92,6 +198,60 @@ export async function upload<TData>(
   } finally {
     uni.hideLoading()
   }
+}
+
+function uploadByWechat(
+  url: string,
+  filePath: string,
+  formData: Record<string, string | number>,
+  name: string,
+) {
+  if (typeof wx === 'undefined' || !wx.uploadFile) {
+    throw new Error('当前环境不支持微信文件上传')
+  }
+  return new Promise<{ statusCode: number; data: string }>((resolve, reject) => {
+    wx.uploadFile?.({
+      url: fileRequestURL(url),
+      filePath,
+      name,
+      formData,
+      header: fileHeaders(),
+      success: resolve,
+      fail: (error) => reject(new Error(error.errMsg || '上传失败')),
+    })
+  })
+}
+
+export async function download(url: string) {
+  if (!url || /^(https?:|wxfile:|blob:)/.test(url)) {
+    return url
+  }
+  const targetURL = fileRequestURL(url)
+  const response = apiTransport === 'cloud'
+    ? await downloadByWechat(targetURL)
+    : await uni.downloadFile({
+        url: targetURL,
+        header: authHeaders(),
+      })
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error('下载失败')
+  }
+  return response.tempFilePath
+}
+
+function downloadByWechat(url: string) {
+  if (typeof wx === 'undefined' || !wx.downloadFile) {
+    throw new Error('当前环境不支持微信文件下载')
+  }
+  return new Promise<{ statusCode: number; tempFilePath: string }>((resolve, reject) => {
+    wx.downloadFile?.({
+      url,
+      header: fileHeaders(),
+      success: resolve,
+      fail: (error) => reject(new Error(error.errMsg || '下载失败')),
+    })
+  })
 }
 
 export const http = {
@@ -110,4 +270,5 @@ export const http = {
   delete: <TData>(url: string, options?: Omit<RequestOptions, 'method' | 'data'>) =>
     request<TData>(url, { ...options, method: 'DELETE' }),
   upload,
+  download,
 }

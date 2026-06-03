@@ -102,3 +102,13 @@ export function listGrainEntryMaterials(query: GrainEntryMaterialQuery = {}) {
 export function createGrainEntryMaterial(data: Partial<GrainEntryMaterialDTO>) {
   return http.post<GrainEntryMaterialDTO, Partial<GrainEntryMaterialDTO>>('/grain-entry-materials', data)
 }
+
+export function uploadGrainEntryMaterial(filePath: string, data: Partial<GrainEntryMaterialDTO>) {
+  const formData: Record<string, string | number> = {}
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      formData[key] = value as string | number
+    }
+  })
+  return http.upload<GrainEntryMaterialDTO>('/grain-entry-materials/upload', filePath, formData)
+}

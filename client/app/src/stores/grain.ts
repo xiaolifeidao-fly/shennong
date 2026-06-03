@@ -15,8 +15,10 @@ import {
   listGrainFarmerPurchaseSummaries,
   listGrainPurchaseEntries,
   updateGrainPurchaseEntry,
+  uploadGrainEntryMaterial,
 } from '@/services/grainPurchase'
 import { recognizeGrainCard, type IDCardSide } from '@/services/grainOcr'
+import { http } from '@/services/request'
 import type {
   FarmerProfile,
   FarmerStatus,
@@ -333,6 +335,17 @@ function applyCardImage(draft: GrainEntryDraft, image: GrainDraftCardImage): Gra
   return cardImages
 }
 
+function isLocalImagePath(image: string) {
+  return /^(wxfile:|http:\/\/tmp\/|file:\/\/|\/tmp\/)/.test(image)
+}
+
+async function resolveDisplayImage(image: string) {
+  if (!image || /^(https?:|wxfile:|blob:|data:)/.test(image)) {
+    return image
+  }
+  return http.download(image)
+}
+
 function buildFarmerPayload(draft: GrainEntryDraft): Partial<GrainFarmerDTO> {
   return {
     name: draft.farmerName,
@@ -614,7 +627,14 @@ export const useGrainStore = defineStore('grain', {
       this.farmerImagesLoading = true
       try {
         const result = await getGrainFarmerImages(farmerId)
-        this.farmerImages = { ...this.farmerImages, [farmerId]: result }
+        this.farmerImages = {
+          ...this.farmerImages,
+          [farmerId]: {
+            idCardFront: await resolveDisplayImage(result.idCardFront),
+            idCardBack: await resolveDisplayImage(result.idCardBack),
+            bankCard: await resolveDisplayImage(result.bankCard),
+          },
+        }
       } catch {
         // 图片加载失败不影响主流程
       } finally {
@@ -730,19 +750,25 @@ export const useGrainStore = defineStore('grain', {
     async saveEntryMaterials(entry: GrainPurchaseEntryDTO, images: string[]) {
       const tasks = images
         .filter(Boolean)
-        .map((image, index) =>
-          createGrainEntryMaterial({
+        .map((image, index) => {
+          const payload = {
             stationId: entry.stationId,
             entryId: entry.id,
             farmerId: entry.farmerId,
             appUserId: entry.appUserId,
             materialBizType: 'entry',
             materialType: 'image',
-            ossUrl: image,
             fileName: image.split('/').pop() || `material-${index + 1}`,
             sortOrder: index,
-          }),
-        )
+          }
+          if (isLocalImagePath(image)) {
+            return uploadGrainEntryMaterial(image, payload)
+          }
+          return createGrainEntryMaterial({
+            ...payload,
+            ossUrl: image,
+          })
+        })
       await Promise.all(tasks)
     },
     async saveFarmerCardImages(farmerId: string | number, cardImages?: GrainDraftCardImages) {
