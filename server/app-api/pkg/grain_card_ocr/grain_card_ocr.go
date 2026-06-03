@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	farmerImageService "service/farmer_image"
 	grainFarmerService "service/grain_farmer"
@@ -97,21 +99,50 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	if input.imageSide == "" {
 		input.imageSide = "front"
 	}
+	log.Printf(
+		"[grain-card-ocr] recognize input: cardType=%s farmerId=%s imageSide=%s fileName=%s fileSize=%d mimeType=%s cloudFileIdSet=%t imageUrlHost=%s imageBytes=%d",
+		input.cardType,
+		input.farmerID,
+		input.imageSide,
+		input.fileName,
+		input.fileSize,
+		input.mimeType,
+		input.cloudFileID != "",
+		urlHost(input.imageURL),
+		len(input.image),
+	)
 
 	objectPath := buildOcrObjectPath(input.cardType, input.fileName, stationID, appUserID)
+	log.Printf(
+		"[grain-card-ocr] oss put image: stationId=%d appUserId=%d objectPath=%s bytes=%d",
+		stationID,
+		appUserID,
+		objectPath,
+		len(input.image),
+	)
 	if err := oss.Put(objectPath, input.image); err != nil {
+		log.Printf(
+			"[grain-card-ocr] oss put image failed: stationId=%d appUserId=%d objectPath=%s err=%v",
+			stationID,
+			appUserID,
+			objectPath,
+			err,
+		)
 		commonRouter.ToJson(context, nil, err)
 		return
 	}
+	log.Printf("[grain-card-ocr] oss put image success: objectPath=%s", objectPath)
 	expireDuration := time.Duration(vipper.GetInt64("ocr.ossUrlExpireSeconds")) * time.Second
 	if expireDuration <= 0 {
 		expireDuration = 10 * time.Minute
 	}
 	imageURL, err := oss.GetUrl(objectPath, &expireDuration)
 	if err != nil {
+		log.Printf("[grain-card-ocr] oss sign url failed: objectPath=%s expire=%s err=%v", objectPath, expireDuration, err)
 		commonRouter.ToJson(context, nil, err)
 		return
 	}
+	log.Printf("[grain-card-ocr] oss sign url success: objectPath=%s expire=%s host=%s", objectPath, expireDuration, urlHost(imageURL))
 
 	var result *ocrDTO.RecognizeCardResult
 
@@ -250,13 +281,16 @@ func downloadCloudStorageImage(rawURL string) ([]byte, string, error) {
 	}
 
 	client := &http.Client{Timeout: 20 * time.Second}
+	log.Printf("[grain-card-ocr] download cloud image start: host=%s", urlHost(rawURL))
 	resp, err := client.Get(rawURL)
 	if err != nil {
+		log.Printf("[grain-card-ocr] download cloud image failed: host=%s err=%v", urlHost(rawURL), err)
 		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[grain-card-ocr] download cloud image bad status: host=%s status=%d contentType=%s contentLength=%d", urlHost(rawURL), resp.StatusCode, resp.Header.Get("Content-Type"), resp.ContentLength)
 		return nil, "", fmt.Errorf("下载云存储图片失败：%d", resp.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCloudOcrImageSize+1))
@@ -279,7 +313,16 @@ func downloadCloudStorageImage(rawURL string) ([]byte, string, error) {
 	if contentType == "" {
 		contentType = http.DetectContentType(data)
 	}
+	log.Printf("[grain-card-ocr] download cloud image success: host=%s bytes=%d contentType=%s contentLength=%d", urlHost(rawURL), len(data), contentType, resp.ContentLength)
 	return data, contentType, nil
+}
+
+func urlHost(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
 }
 
 // resolveBusinessID 查找或创建图片记录，返回业务唯一ID

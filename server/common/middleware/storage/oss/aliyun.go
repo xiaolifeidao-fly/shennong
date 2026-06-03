@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log"
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -63,9 +64,27 @@ func (a *AliyunOss) Put(path string, data []byte) error {
 	}
 
 	key := a.BuildKey(path)
+	log.Printf(
+		"oss put start: endpoint=%s bucket=%s dirPrefix=%s key=%s bytes=%d accessKeyId=%s",
+		a.Endpoint,
+		a.BucketName,
+		a.DirPrefix,
+		key,
+		len(data),
+		maskSecret(a.AccessKeyId),
+	)
 	if err = bucket.PutObject(key, bytes.NewReader(data)); err != nil {
+		log.Printf(
+			"oss put failed: endpoint=%s bucket=%s key=%s bytes=%d err=%v",
+			a.Endpoint,
+			a.BucketName,
+			key,
+			len(data),
+			err,
+		)
 		return err
 	}
+	log.Printf("oss put success: bucket=%s key=%s bytes=%d", a.BucketName, key, len(data))
 	return nil
 }
 
