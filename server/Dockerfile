@@ -1,5 +1,5 @@
 # Build from the server directory:
-# docker build -f app-api/Dockerfile -t shennong-app-api .
+# docker build -t shennong-app-api .
 
 FROM golang:1.21-alpine AS builder
 

@@ -1,0 +1,11 @@
+.git
+**/.gocache
+**/logs
+**/*.log
+**/*.pid
+app-api/app-api
+app-api/*.tar.gz
+app-api/package
+manager-api/manager-api
+manager-api/*.tar.gz
+manager-api/package
