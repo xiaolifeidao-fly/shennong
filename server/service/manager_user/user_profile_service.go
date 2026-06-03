@@ -13,6 +13,42 @@ import (
 	"gorm.io/gorm"
 )
 
+// fillUserTenants attaches TenantIDs and TenantNames to each UserDTO.
+func (s *UserService) fillUserTenants(items []*userDTO.UserDTO) error {
+	if len(items) == 0 || s.userTenantRepository.Db == nil {
+		return nil
+	}
+	userIDs := make([]int, 0, len(items))
+	itemByID := make(map[int]*userDTO.UserDTO, len(items))
+	for _, item := range items {
+		userIDs = append(userIDs, item.Id)
+		itemByID[item.Id] = item
+	}
+	var rows []struct {
+		UserID     int
+		TenantID   uint64
+		TenantName string
+	}
+	err := s.userTenantRepository.Db.Table("user_tenant AS ut").
+		Select("ut.user_id AS user_id, ut.tenant_id AS tenant_id, t.tenant_name AS tenant_name").
+		Joins("LEFT JOIN tenant AS t ON t.id = ut.tenant_id AND t.active = ?", 1).
+		Where("ut.active = ? AND ut.user_id IN ?", 1, userIDs).
+		Order("ut.id ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if item, ok := itemByID[row.UserID]; ok {
+			item.TenantIDs = append(item.TenantIDs, row.TenantID)
+			if strings.TrimSpace(row.TenantName) != "" {
+				item.TenantNames = append(item.TenantNames, row.TenantName)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *UserService) GetCurrentUserProfile(id uint) (*userDTO.CurrentUserProfileDTO, error) {
 	entity, err := s.userRepository.FindById(id)
 	if err != nil {
@@ -225,6 +261,9 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 			item.BalanceAmount = account.BalanceAmount
 		}
 	}
+	if err := s.fillUserTenants(items); err != nil {
+		return nil, err
+	}
 	return baseDTO.BuildPage(int(total), items), nil
 }
 
@@ -239,7 +278,11 @@ func (s *UserService) GetUserByID(id uint) (*userDTO.UserDTO, error) {
 	if entity.Active == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-	return db.ToDTO[userDTO.UserDTO](entity), nil
+	result := db.ToDTO[userDTO.UserDTO](entity)
+	if err := s.fillUserTenants([]*userDTO.UserDTO{result}); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, error) {
@@ -308,7 +351,12 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[userDTO.UserDTO](created), nil
+	if len(req.TenantIDs) > 0 {
+		if err := s.userTenantRepository.ReplaceActiveTenants(uint64(created.Id), req.TenantIDs); err != nil {
+			return nil, err
+		}
+	}
+	return s.GetUserByID(uint(created.Id))
 }
 
 func (s *UserService) UpdateUser(id uint, req *userDTO.UpdateUserDTO) (*userDTO.UserDTO, error) {
@@ -401,7 +449,12 @@ func (s *UserService) UpdateUser(id uint, req *userDTO.UpdateUserDTO) (*userDTO.
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[userDTO.UserDTO](saved), nil
+	if req.TenantIDs != nil {
+		if err := s.userTenantRepository.ReplaceActiveTenants(uint64(saved.Id), *req.TenantIDs); err != nil {
+			return nil, err
+		}
+	}
+	return s.GetUserByID(uint(saved.Id))
 }
 
 func (s *UserService) DeleteUser(id uint) error {

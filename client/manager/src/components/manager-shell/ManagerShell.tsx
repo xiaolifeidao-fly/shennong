@@ -36,8 +36,10 @@ import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
 import { clearAuthToken } from "@/utils/auth";
+import { withoutBasePath } from "@/utils/routes";
 import {
   changeCurrentUserPassword,
+  fetchCurrentUserPermittedPageUrls,
   fetchCurrentUserProfile,
   updateCurrentUserProfile,
   type CurrentUserProfile,
@@ -63,10 +65,11 @@ interface PasswordFormValues {
 const pageTitleMap: Record<string, string> = {
   "/manager-dashboard": "数据总览",
   "/user/maintenance": "用户维护",
+  "/user/tenant": "租户配置",
   "/user/list": "用户列表",
   "/user": "用户管理",
   "/permission": "权限管理",
-  "/tenant": "租户管理",
+  "/tenant": "租户配置",
   "/grain/stations": "粮站列表",
   "/grain/config": "基础设置",
   "/grain/payment-methods": "付款方式",
@@ -95,10 +98,7 @@ function getOpenKeys(pathname: string) {
   if (pathname.startsWith("/app-user")) {
     return ["/grain-farmer-group"];
   }
-  if (pathname.startsWith("/permission")) {
-    return ["/system-group"];
-  }
-  if (pathname.startsWith("/tenant")) {
+  if (pathname.startsWith("/permission") || pathname.startsWith("/tenant")) {
     return ["/system-group"];
   }
   if (pathname.startsWith("/grain")) {
@@ -132,13 +132,14 @@ export function ManagerShell({ children }: ManagerShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const screens = useBreakpoint();
-  const activePath = pathname ?? "/manager-dashboard";
+  const activePath = withoutBasePath(pathname ?? "/manager-dashboard");
   const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(activePath));
   const [collapsed, setCollapsed] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const [profileForm] = Form.useForm<ProfileFormValues>();
   const [passwordForm] = Form.useForm<PasswordFormValues>();
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
+  const [permittedUrls, setPermittedUrls] = useState<Set<string> | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -218,6 +219,10 @@ export function ManagerShell({ children }: ManagerShellProps) {
             key: "/user/maintenance",
             label: "用户维护",
           },
+          {
+            key: "/tenant",
+            label: "租户配置",
+          },
         ],
       },
       {
@@ -231,7 +236,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
           },
           {
             key: "/tenant",
-            label: "租户管理",
+            label: "租户配置",
           },
         ],
       },
@@ -292,6 +297,48 @@ export function ManagerShell({ children }: ManagerShellProps) {
     ],
     [],
   );
+  const filteredItems = useMemo<MenuItem[]>(() => {
+    if (permittedUrls === null) {
+      return items;
+    }
+    const isAllowed = (key: string) => permittedUrls.has(key);
+
+    const result: MenuItem[] = [];
+    for (const item of items) {
+      if (!item || typeof item !== "object") {
+        result.push(item);
+        continue;
+      }
+      const menuItem = item as { type?: string; key?: string; children?: { key?: string }[] };
+      if (menuItem.type === "group") {
+        result.push(item);
+        continue;
+      }
+      if (Array.isArray(menuItem.children)) {
+        const allowedChildren = menuItem.children.filter(
+          (child) => child.key && isAllowed(child.key as string),
+        );
+        if (allowedChildren.length > 0) {
+          result.push({ ...item, children: allowedChildren } as MenuItem);
+        }
+      } else if (menuItem.key && isAllowed(menuItem.key as string)) {
+        result.push(item);
+      }
+    }
+
+    // Remove trailing group items with no following content
+    const cleaned: MenuItem[] = [];
+    for (let i = 0; i < result.length; i++) {
+      const cur = result[i] as { type?: string };
+      if (cur?.type === "group") {
+        const next = result[i + 1] as { type?: string } | undefined;
+        if (!next || next.type === "group") continue;
+      }
+      cleaned.push(result[i]);
+    }
+    return cleaned;
+  }, [items, permittedUrls]);
+
   const selectedKey = activePath === "/activation-code" ? "/activation-code/admin" : activePath;
 
   const roleText = useMemo(() => {
@@ -316,6 +363,12 @@ export function ManagerShell({ children }: ManagerShellProps) {
     try {
       const result = await fetchCurrentUserProfile();
       setProfile(result);
+      if (result.role === "admin") {
+        setPermittedUrls(null);
+      } else {
+        const urls = await fetchCurrentUserPermittedPageUrls(result.id);
+        setPermittedUrls(urls);
+      }
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "获取个人信息失败");
     }
@@ -452,7 +505,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 selectedKeys={[selectedKey]}
                 openKeys={openKeys}
                 onOpenChange={(keys) => setOpenKeys(keys as string[])}
-                items={items}
+                items={filteredItems}
                 onClick={({ key }) => {
                   if (typeof key === "string" && key.startsWith("/")) {
                     router.push(key);
@@ -512,7 +565,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
                     </Text>
                   </Space>
                   <Space size={10} wrap style={{ width: "100%" }}>
-                    {quickActions.map((action) => {
+                    {quickActions.filter((a) => permittedUrls === null || permittedUrls.has(a.key)).map((action) => {
                       const isActive = activePath === action.key;
 
                       return (

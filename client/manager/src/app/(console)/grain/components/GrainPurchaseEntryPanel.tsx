@@ -52,7 +52,6 @@ import {
   grainPurchaseEntryApi,
   grainPurchaseEntrySnapshotApi,
   grainPurchaseTypeApi,
-  grainStationApi,
   recognizeGrainCard,
   voidGrainPurchaseEntry,
   type GrainCardOcrResult,
@@ -63,6 +62,7 @@ import {
   type GrainPurchaseEntryRecord,
   type GrainPurchaseEntrySnapshotRecord,
 } from "../api/grain.api";
+import { useAccessibleStations } from "../hooks/useAccessibleStations";
 import { SensitiveValue } from "./SensitiveValue";
 
 const { Text } = Typography;
@@ -167,6 +167,8 @@ function isBankPaymentMethod(method?: { label?: unknown; methodCode?: unknown },
 }
 
 export function GrainPurchaseEntryPanel() {
+  const { stations: accessibleStations } = useAccessibleStations();
+  const stationOptions: CrudOption[] = accessibleStations.map((s) => ({ label: s.stationName, value: s.id }));
   const [form] = Form.useForm<EntryFormValues>();
   const [records, setRecords] = useState<GrainPurchaseEntryRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -177,7 +179,6 @@ export function GrainPurchaseEntryPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<GrainPurchaseEntryRecord | null>(null);
-  const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [appUserOptions, setAppUserOptions] = useState<CrudOption[]>([]);
   const [purchaseTypeOptions, setPurchaseTypeOptions] = useState<CrudOption[]>([]);
   const [paymentMethodOptions, setPaymentMethodOptions] = useState<PaymentMethodOption[]>([]);
@@ -222,13 +223,11 @@ export function GrainPurchaseEntryPanel() {
 
   useEffect(() => {
     Promise.all([
-      grainStationApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
       fetchAppUsers({ pageIndex: 1, pageSize: 200, status: "active" }),
       grainPurchaseTypeApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
       grainPaymentMethodApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
     ])
-      .then(([stations, appUsers, purchaseTypes, paymentMethods]) => {
-        setStationOptions(stations.data.map((station) => ({ label: station.stationName, value: station.id })));
+      .then(([appUsers, purchaseTypes, paymentMethods]) => {
         setAppUserOptions(
           appUsers.data.map((user) => ({ label: user.name || user.username || `业务员 ${user.id}`, value: user.id })),
         );
@@ -965,11 +964,10 @@ export function GrainPurchaseEntryPanel() {
                   <div style={{ display: "grid", gap: 12 }}>
                     {entryMaterials.map((item) => (
                       <div key={item.id}>
-                        <Text type="secondary">{item.fileName || item.materialType || `材料 #${item.id}`}</Text>
                         <Image
                           src={item.imageUrl}
                           alt={item.fileName || "收粮材料"}
-                          style={{ marginTop: 6, width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
+                          style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
                         />
                       </div>
                     ))}

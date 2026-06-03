@@ -18,7 +18,6 @@ type AppUserDTO struct {
 	LastLoginTime   *time.Time `json:"lastLoginTime"`
 	SecretKey       string     `json:"secretKey"`
 	Remark          string     `json:"remark"`
-	PubToken        string     `json:"pubToken"`
 	BanCount        uint32     `json:"banCount"`
 	OpenUID         string     `json:"openUid"`
 	UnionID         string     `json:"unionId"`
@@ -47,7 +46,6 @@ type CreateAppUserDTO struct {
 	LastLoginTime   *time.Time `json:"lastLoginTime"`
 	SecretKey       string     `json:"secretKey"`
 	Remark          string     `json:"remark"`
-	PubToken        string     `json:"pubToken"`
 	BanCount        uint32     `json:"banCount"`
 	OpenUID         string     `json:"openUid"`
 	UnionID         string     `json:"unionId"`
@@ -81,7 +79,6 @@ type UpdateAppUserDTO struct {
 	LastLoginTime   *time.Time `json:"lastLoginTime,omitempty"`
 	SecretKey       *string    `json:"secretKey,omitempty"`
 	Remark          *string    `json:"remark,omitempty"`
-	PubToken        *string    `json:"pubToken,omitempty"`
 	BanCount        *uint32    `json:"banCount,omitempty"`
 	OpenUID         *string    `json:"openUid,omitempty"`
 	UnionID         *string    `json:"unionId,omitempty"`
@@ -109,7 +106,6 @@ type AppUserQueryDTO struct {
 	Department string `form:"department"`
 	Status     string `form:"status"`
 	SecretKey  string `form:"secretKey"`
-	PubToken   string `form:"pubToken"`
 	OpenUID    string `form:"openUid"`
 	UnionID    string `form:"unionId"`
 }

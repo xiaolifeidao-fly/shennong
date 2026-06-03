@@ -1,52 +1,66 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Form, Input, Modal, Select, message } from "antd";
-import { tenantApi, type TenantRecord } from "../../tenant/api/tenant.api";
-import type { UserPayload, UserRecord } from "../api/user.api";
+import { Form, Input, Modal, Select } from "antd";
+import type { TenantOption, UserPayload, UserRecord } from "../api/user.api";
 
 interface UserFormModalProps {
   open: boolean;
   submitting: boolean;
   user: UserRecord | null;
-  showTenantField?: boolean;
+  tenantOptions: TenantOption[];
   onCancel: () => void;
   onSubmit: (payload: UserPayload) => Promise<void>;
 }
 
 interface UserFormValues {
   username: string;
-  tenantId?: number;
-  remark?: string;
+  role: string;
+  status: string;
   password?: string;
+  remark?: string;
 }
+
+const roleOptions = [
+  { label: "普通成员", value: "member" },
+  { label: "管理员", value: "admin" },
+  { label: "经理", value: "manager" },
+  { label: "审计员", value: "auditor" },
+];
+
+const statusOptions = [
+  { label: "启用", value: "active" },
+  { label: "停用", value: "inactive" },
+  { label: "锁定", value: "locked" },
+];
 
 export function UserFormModal({
   open,
   submitting,
   user,
-  showTenantField = true,
+  tenantOptions: _tenantOptions,
   onCancel,
   onSubmit,
 }: UserFormModalProps) {
   const [form] = Form.useForm<UserFormValues>();
   const isEdit = Boolean(user);
-  const [tenants, setTenants] = useState<TenantRecord[]>([]);
 
-  useEffect(() => {
-    if (!open || !showTenantField) {
-      return;
+  const handleOk = async () => {
+    const values = await form.validateFields();
+    const payload: UserPayload = {
+      username: values.username.trim(),
+      name: values.username.trim(),
+      role: values.role,
+      status: values.status,
+      remark: values.remark?.trim(),
+    };
+    const password = values.password?.trim();
+    if (password) {
+      payload.password = password;
+      payload.originPassword = password;
     }
-    tenantApi
-      .list({ pageIndex: 1, pageSize: 200, status: "active" })
-      .then((result) => setTenants(result.data))
-      .catch((error) => message.error(error instanceof Error ? error.message : "加载租户失败"));
-  }, [open, showTenantField]);
-
-  const tenantOptions = useMemo(
-    () => tenants.map((tenant) => ({ label: tenant.tenantName, value: tenant.id })),
-    [tenants],
-  );
+    await onSubmit(payload);
+    form.resetFields();
+  };
 
   return (
     <Modal
@@ -61,26 +75,7 @@ export function UserFormModal({
         form.resetFields();
         onCancel();
       }}
-      onOk={async () => {
-        const values = await form.validateFields();
-        const payload: UserPayload = {
-          username: values.username.trim(),
-          name: values.username.trim(),
-          tenantId: showTenantField ? values.tenantId : undefined,
-          role: user?.role ?? "member",
-          status: user?.status ?? "active",
-          remark: values.remark?.trim(),
-        };
-        const password = values.password?.trim();
-        if (password) {
-          payload.password = password;
-          payload.originPassword = password;
-        }
-        await onSubmit({
-          ...payload,
-        });
-        form.resetFields();
-      }}
+      onOk={handleOk}
       afterOpenChange={(visible) => {
         if (!visible) {
           form.resetFields();
@@ -88,7 +83,8 @@ export function UserFormModal({
         }
         form.setFieldsValue({
           username: user?.username ?? "",
-          tenantId: user?.tenantId || undefined,
+          role: user?.role ?? "member",
+          status: user?.status ?? "active",
           remark: user?.remark ?? "",
           password: "",
         });
@@ -102,20 +98,31 @@ export function UserFormModal({
         >
           <Input placeholder="请输入用户名" />
         </Form.Item>
-        {showTenantField ? (
-          <Form.Item label="所属租户" name="tenantId">
-            <Select allowClear options={tenantOptions} placeholder="请选择租户" />
-          </Form.Item>
-        ) : null}
-        {!isEdit ? (
-          <Form.Item
-            label="密码"
-            name="password"
-            rules={[{ required: true, message: "请输入密码" }]}
-          >
-            <Input.Password placeholder="请输入密码" />
-          </Form.Item>
-        ) : null}
+
+        <Form.Item
+          label="角色"
+          name="role"
+          rules={[{ required: true, message: "请选择角色" }]}
+        >
+          <Select options={roleOptions} placeholder="请选择角色" />
+        </Form.Item>
+
+        <Form.Item
+          label="状态"
+          name="status"
+          rules={[{ required: true, message: "请选择状态" }]}
+        >
+          <Select options={statusOptions} placeholder="请选择状态" />
+        </Form.Item>
+
+        <Form.Item
+          label="密码"
+          name="password"
+          rules={isEdit ? [] : [{ required: true, message: "请输入密码" }]}
+        >
+          <Input.Password placeholder={isEdit ? "留空则不修改密码" : "请输入密码"} />
+        </Form.Item>
+
         <Form.Item label="备注" name="remark">
           <Input.TextArea rows={3} placeholder="请输入备注" />
         </Form.Item>

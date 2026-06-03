@@ -61,8 +61,7 @@
         :farmers="grainStore.farmers"
         :preset="grainStore.preset"
         @farmer-change="handleFarmerChange"
-        @scan-id-front="() => applyIdScan('front')"
-        @scan-id-back="() => applyIdScan('back')"
+        @scan-id-front="applyIdScan"
         @scan-bank="applyBankScan"
       />
 
@@ -230,11 +229,11 @@ async function chooseCardPhoto(): Promise<string> {
   })
 }
 
-async function applyIdScan(side: 'front' | 'back' = 'front') {
+async function applyIdScan() {
   try {
     const filePath = await chooseCardPhoto()
-    draft.value = { ...draft.value, ...(await grainStore.recognizeIdCard(filePath, draft.value, side)) }
-    uni.showToast({ title: side === 'front' ? '身份证正面识别完成' : '身份证背面识别完成', icon: 'success' })
+    draft.value = { ...draft.value, ...(await grainStore.recognizeIdCard(filePath, draft.value, 'front')) }
+    uni.showToast({ title: '身份证识别完成', icon: 'success' })
   } catch (error) {
     const message = error instanceof Error ? error.message : '身份证识别失败'
     if (!message.includes('cancel') && !message.includes('取消')) {

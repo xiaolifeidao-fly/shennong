@@ -15,7 +15,15 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "收粮业务员端"
+        "navigationBarTitleText": "首页"
+      }
+    },
+    {
+      "path": "pages/data/index",
+      "style": {
+        "navigationBarTitleText": "数据",
+        "navigationBarBackgroundColor": "#ffffff",
+        "navigationBarTextStyle": "black"
       }
     },
     {
@@ -69,7 +77,11 @@
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "今日"
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/data/index",
+        "text": "数据"
       },
       {
         "pagePath": "pages/entry/index",

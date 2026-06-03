@@ -259,13 +259,6 @@ export function GrainPurchaseEntryPanel() {
     }
   }, [form, watchedAmount, watchedQuantity]);
 
-  const stats = useMemo(
-    () => [
-      { label: "收粮明细总数", value: total },
-    ],
-    [total],
-  );
-
   const filterQuery = () => ({
     pageIndex: 1,
     search: searchValue.trim() || undefined,
@@ -648,17 +641,6 @@ export function GrainPurchaseEntryPanel() {
 
   return (
     <div className="manager-page-stack">
-      <section className="manager-stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        {stats.map((item) => (
-          <div key={item.label} className="manager-data-card">
-            <div className="manager-section-label">{item.label}</div>
-            <div className="manager-display-title" style={{ fontSize: 32, marginTop: 12 }}>
-              {item.value}
-            </div>
-          </div>
-        ))}
-      </section>
-
       <section className="manager-data-card">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
           <Space wrap size={12}>
@@ -953,11 +935,10 @@ export function GrainPurchaseEntryPanel() {
                 <div style={{ display: "grid", gap: 12 }}>
                   {entryMaterials.map((item) => (
                     <div key={item.id}>
-                      <Text type="secondary">{item.fileName || item.materialType || `材料 #${item.id}`}</Text>
                       <Image
                         src={item.imageUrl}
                         alt={item.fileName || "收粮材料"}
-                        style={{ marginTop: 6, width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
+                        style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
                       />
                     </div>
                   ))}

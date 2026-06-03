@@ -20,7 +20,11 @@ func GetRepository[R any]() *R {
 
 	// 检查是否已经存在实例
 	if instance, exists := repoInstances[repoType]; exists {
-		return instance.(*R)
+		repoValue := instance.(*R)
+		if repo, ok := any(repoValue).(interface{ SetDb(*gorm.DB) }); ok && Db != nil {
+			repo.SetDb(Db)
+		}
+		return repoValue
 	}
 
 	// 创建新实例并保存到映射中

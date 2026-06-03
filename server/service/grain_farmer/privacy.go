@@ -96,6 +96,35 @@ func decryptFarmerEntities(entities []*grainFarmerRepository.GrainFarmer) error 
 	return nil
 }
 
+func decryptFarmerListRows(rows []*grainFarmerRepository.GrainFarmerListRow) error {
+	key := farmerCryptoKey()
+	if key == "" {
+		return nil
+	}
+	for _, row := range rows {
+		var err error
+		if row.Name, err = decryptFarmerField(row.Name, key, "name"); err != nil {
+			return err
+		}
+		if row.IDNumber, err = decryptFarmerField(row.IDNumber, key, "id_number"); err != nil {
+			return err
+		}
+		if row.Phone, err = decryptFarmerField(row.Phone, key, "phone"); err != nil {
+			return err
+		}
+		if row.Address, err = decryptFarmerField(row.Address, key, "address"); err != nil {
+			return err
+		}
+		if row.BankNumber, err = decryptFarmerField(row.BankNumber, key, "bank_number"); err != nil {
+			return err
+		}
+		if row.BankName, err = decryptFarmerField(row.BankName, key, "bank_name"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func decryptFarmerDTO(dto *grainFarmerDTO.GrainFarmerDTO) error {
 	if dto == nil {
 		return nil

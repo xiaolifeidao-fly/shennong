@@ -11,6 +11,7 @@ require('dotenv').config();
 
 const prefix = process.env.APP_URL_PREFIX;
 const target = process.env.SERVER_TARGET;
+const basePath = process.env.APP_BASE_PATH || "/manager";
 
 // Next.js API 路由处理函数
 
@@ -28,6 +29,7 @@ export default async function handler(req, res) {
       target: target, // 设置代理目标地址
       changeOrigin: true, // 设置请求头中的 Host 为目标地址的 Host
       pathRewrite: {
+        [`^${basePath}/manager/api`]: prefix,
         "^/api": prefix, // 将请求中的 /api 前缀替换为空字符串
       },
       headers: req.headers,
@@ -125,6 +127,13 @@ async function request(url, req){
 }
 
 function getTargetUrl(url){
-  url = url.replace("/api",prefix)
+  url = stripBasePath(url).replace("/api",prefix)
   return target  + url;
+}
+
+function stripBasePath(url) {
+  if (!basePath || !url.startsWith(basePath)) {
+    return url;
+  }
+  return url.slice(basePath.length) || "/";
 }

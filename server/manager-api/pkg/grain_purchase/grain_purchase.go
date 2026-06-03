@@ -2,6 +2,7 @@ package grain_purchase
 
 import (
 	commonRouter "common/middleware/routers"
+	"log"
 	"manager-api/pkg/internal/tenantctx"
 	"net/http"
 	grainPurchaseService "service/grain_purchase"
@@ -160,6 +161,7 @@ func (h *GrainPurchaseHandler) listMaterials(context *gin.Context) {
 			commonRouter.ToError(context, "imageId必须是正整数")
 			return
 		}
+		log.Printf("[grain-material-image] stream image request via query imageId=%d path=%s rawQuery=%s", id, context.Request.URL.Path, context.Request.URL.RawQuery)
 		h.streamMaterialImage(context, uint(id))
 		return
 	}
@@ -196,23 +198,29 @@ func (h *GrainPurchaseHandler) getMaterialImage(context *gin.Context) {
 }
 
 func (h *GrainPurchaseHandler) streamMaterialImage(context *gin.Context, id uint) {
+	log.Printf("[grain-material-image] stream image request id=%d path=%s", id, context.Request.URL.Path)
 	content, err := h.service.GetMaterialImageContent(id)
 	if err == gorm.ErrRecordNotFound {
+		log.Printf("[grain-material-image] stream image not found id=%d", id)
 		context.Status(http.StatusNotFound)
 		return
 	}
 	if err != nil {
+		log.Printf("[grain-material-image] stream image failed id=%d err=%v", id, err)
 		commonRouter.ToError(context, err.Error())
 		return
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		log.Printf("[grain-material-image] stream image tenant scope missing id=%d stationID=%d", id, content.StationID)
 		return
 	} else if len(stationIDs) > 0 && !stationAllowed(content.StationID, stationIDs) {
+		log.Printf("[grain-material-image] stream image station denied id=%d stationID=%d scopedStationIDs=%v", id, content.StationID, stationIDs)
 		context.Status(http.StatusNotFound)
 		return
 	}
 	context.Header("Cache-Control", "private, max-age=300")
 	context.Data(http.StatusOK, content.MimeType, content.Data)
+	log.Printf("[grain-material-image] stream image success id=%d stationID=%d fileName=%s mimeType=%s bytes=%d", id, content.StationID, content.FileName, content.MimeType, len(content.Data))
 }
 
 func (h *GrainPurchaseHandler) deleteMaterial(context *gin.Context) {

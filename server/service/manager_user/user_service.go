@@ -16,6 +16,7 @@ type UserService struct {
 	userRepository            *userRepository.UserRepository
 	userLoginRecordRepository *userRepository.UserLoginRecordRepository
 	userRoleRepository        *userRepository.UserRoleRepository
+	userTenantRepository      *userRepository.UserTenantRepository
 	roleRepository            *permissionRepository.RoleRepository
 }
 
@@ -24,6 +25,7 @@ func NewUserService() *UserService {
 		userRepository:            db.GetRepository[userRepository.UserRepository](),
 		userLoginRecordRepository: db.GetRepository[userRepository.UserLoginRecordRepository](),
 		userRoleRepository:        db.GetRepository[userRepository.UserRoleRepository](),
+		userTenantRepository:      db.GetRepository[userRepository.UserTenantRepository](),
 		roleRepository:            db.GetRepository[permissionRepository.RoleRepository](),
 	}
 }
@@ -36,6 +38,9 @@ func (s *UserService) EnsureTable() error {
 		return err
 	}
 	if err := s.userRoleRepository.EnsureTable(); err != nil {
+		return err
+	}
+	if err := s.userTenantRepository.EnsureTable(); err != nil {
 		return err
 	}
 	if err := s.roleRepository.EnsureTable(); err != nil {

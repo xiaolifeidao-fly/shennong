@@ -2,6 +2,7 @@
 
 import { getData, getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
 import { getAuthToken } from "@/utils/auth";
+import { withBasePath } from "@/utils/routes";
 import type { CrudListQuery } from "../../components/CrudManagementPanel";
 
 export class GrainStationRecord {
@@ -274,7 +275,7 @@ export const grainEntryMaterialApi = {
       total: page.total,
       data: page.data.map((item) => ({
         ...item,
-        imageUrl: imageApiUrl(item.imageUrl || `/grain-entry-materials?imageId=${item.id}`),
+        imageUrl: imageApiUrl(`/grain-entry-materials?imageId=${item.id}`),
       })),
     };
   },
@@ -322,7 +323,7 @@ function imageApiUrl(path: string) {
     params.set("token", token);
   }
   const query = params.toString();
-  return `/api${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}${query ? `?${query}` : ""}`;
+  return withBasePath(`/api${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}${query ? `?${query}` : ""}`);
 }
 
 export async function recognizeGrainCard(

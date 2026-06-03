@@ -85,9 +85,6 @@ func (s *AppUserService) UpdateCurrentUserProfile(id uint, req *appUserDTO.Updat
 	if err != nil {
 		return nil, err
 	}
-	if err := s.managerUserService.EnsureSalesmanUser(saved.Username, saved.Name, saved.Phone, saved.OriginPassword); err != nil {
-		return nil, err
-	}
 	return toCurrentAppUserProfileDTO(saved), nil
 }
 
@@ -102,9 +99,6 @@ func (s *AppUserService) UpdateCurrentUserPhone(id uint, phone string) (*appUser
 	entity.Phone = strings.TrimSpace(phone)
 	saved, err := s.appUserRepository.SaveOrUpdate(entity)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.managerUserService.EnsureSalesmanUser(saved.Username, saved.Name, saved.Phone, saved.OriginPassword); err != nil {
 		return nil, err
 	}
 	return toCurrentAppUserProfileDTO(saved), nil
@@ -144,10 +138,8 @@ func (s *AppUserService) ChangeCurrentUserPassword(id uint, req *appUserDTO.Chan
 
 	entity.OriginPassword = newPassword
 	entity.Password = appUserPassword.Encrypt(entity.Username, newPassword)
-	if _, err = s.appUserRepository.SaveOrUpdate(entity); err != nil {
-		return err
-	}
-	return s.managerUserService.EnsureSalesmanUser(entity.Username, entity.Name, entity.Phone, newPassword)
+	_, err = s.appUserRepository.SaveOrUpdate(entity)
+	return err
 }
 
 func (s *AppUserService) ListUsers(query appUserDTO.AppUserQueryDTO) (*baseDTO.PageDTO[appUserDTO.AppUserDTO], error) {
@@ -182,7 +174,6 @@ func (s *AppUserService) ListUsers(query appUserDTO.AppUserQueryDTO) (*baseDTO.P
 			LastLoginTime:   row.LastLoginTime,
 			SecretKey:       row.SecretKey,
 			Remark:          row.Remark,
-			PubToken:        row.PubToken,
 			BanCount:        row.BanCount,
 			OpenUID:         row.OpenUID,
 			UnionID:         row.UnionID,
@@ -227,7 +218,6 @@ func (s *AppUserService) CreateUser(req *appUserDTO.CreateAppUserDTO) (*appUserD
 	originPassword := strings.TrimSpace(req.OriginPassword)
 	secretKey := strings.TrimSpace(req.SecretKey)
 	remark := strings.TrimSpace(req.Remark)
-	pubToken := strings.TrimSpace(req.PubToken)
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
@@ -270,7 +260,6 @@ func (s *AppUserService) CreateUser(req *appUserDTO.CreateAppUserDTO) (*appUserD
 		LastLoginTime:   req.LastLoginTime,
 		SecretKey:       secretKey,
 		Remark:          remark,
-		PubToken:        pubToken,
 		BanCount:        req.BanCount,
 		OpenUID:         strings.TrimSpace(req.OpenUID),
 		UnionID:         strings.TrimSpace(req.UnionID),
@@ -425,9 +414,6 @@ func (s *AppUserService) UpdateUser(id uint, req *appUserDTO.UpdateAppUserDTO) (
 	}
 	if req.Remark != nil {
 		entity.Remark = strings.TrimSpace(*req.Remark)
-	}
-	if req.PubToken != nil {
-		entity.PubToken = strings.TrimSpace(*req.PubToken)
 	}
 	if req.BanCount != nil {
 		entity.BanCount = *req.BanCount

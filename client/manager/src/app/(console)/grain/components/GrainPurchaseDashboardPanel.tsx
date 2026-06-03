@@ -25,10 +25,10 @@ import type { Dayjs } from "dayjs";
 import type { CrudOption } from "../../components/CrudManagementPanel";
 import {
   getGrainPurchaseDashboard,
-  grainStationApi,
   type GrainPurchaseDashboardDimensionRecord,
   type GrainPurchaseDashboardRecord,
 } from "../api/grain.api";
+import { useAccessibleStations } from "../hooks/useAccessibleStations";
 
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
@@ -208,9 +208,10 @@ function DimensionSection({
 }
 
 export function GrainPurchaseDashboardPanel() {
+  const { stations: accessibleStations } = useAccessibleStations();
+  const stationOptions: CrudOption[] = accessibleStations.map((s) => ({ label: s.stationName, value: s.id }));
   const [range, setRange] = useState<RangeValue>([today, today]);
   const [stationId, setStationId] = useState<number | undefined>();
-  const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [dashboard, setDashboard] = useState<GrainPurchaseDashboardRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [stationMode, setStationMode] = useState<DimensionMode>("chart");
@@ -231,13 +232,6 @@ export function GrainPurchaseDashboardPanel() {
   useEffect(() => {
     void loadDashboard();
   }, [range, stationId]);
-
-  useEffect(() => {
-    grainStationApi
-      .list({ pageIndex: 1, pageSize: 200, status: "active" })
-      .then((result) => setStationOptions(result.data.map((station) => ({ label: station.stationName, value: station.id }))))
-      .catch((error) => message.error(error instanceof Error ? error.message : "加载粮站失败"));
-  }, []);
 
   const overview = dashboard?.overview;
   const scopeLabel = useMemo(() => {

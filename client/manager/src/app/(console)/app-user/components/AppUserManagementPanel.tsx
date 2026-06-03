@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CheckCircleOutlined, LockOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, Form, Input, Modal, Popconfirm, Tooltip, message } from "antd";
 import { CrudManagementPanel } from "../../components/CrudManagementPanel";
 import type { CrudField, CrudFormSection, CrudTableColumn, CrudOption } from "../../components/CrudManagementPanel";
-import { grainStationApi } from "../../grain/api/grain.api";
+import { useAccessibleStations } from "../../grain/hooks/useAccessibleStations";
 import {
   createAppUser,
   deleteAppUser,
@@ -63,25 +63,12 @@ function formatDateTime(value: unknown) {
 }
 
 export function AppUserManagementPanel() {
+  const { stations: accessibleStations } = useAccessibleStations();
+  const stationOptions: CrudOption[] = accessibleStations.map((s) => ({ label: s.stationName, value: s.id }));
   const [passwordForm] = Form.useForm<{ password: string; confirmPassword: string }>();
-  const [stationOptions, setStationOptions] = useState<CrudOption[]>([]);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordRecord, setPasswordRecord] = useState<AppUserRecord | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
-
-  useEffect(() => {
-    grainStationApi
-      .list({ pageIndex: 1, pageSize: 200, status: "active" })
-      .then((stations) => {
-        setStationOptions(
-          stations.data.map((station) => ({
-            label: station.stationName,
-            value: station.id,
-          })),
-        );
-      })
-      .catch((error) => message.error(error instanceof Error ? error.message : "加载粮站选项失败"));
-  }, []);
 
   const stationLabel = (stationId: unknown, record: AppUserRecord) =>
     record.stationName || stationOptions.find((option) => option.value === stationId)?.label || String(stationId || "-");

@@ -26,11 +26,48 @@ func (r *GrainFarmerRepository) CountByQuery(query grainFarmerDTO.GrainFarmerQue
 	return total, dbQuery.Count(&total).Error
 }
 
-func (r *GrainFarmerRepository) ListByQuery(query grainFarmerDTO.GrainFarmerQueryDTO, pageIndex, pageSize int) ([]*GrainFarmer, error) {
-	dbQuery := applyFarmerQuery(r.Db.Model(&GrainFarmer{}).Where("active = ?", 1), query)
-	var entities []*GrainFarmer
-	err := dbQuery.Order("id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&entities).Error
-	return entities, err
+func (r *GrainFarmerRepository) ListByQuery(query grainFarmerDTO.GrainFarmerQueryDTO, pageIndex, pageSize int) ([]*GrainFarmerListRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	whereSQL, values := buildFarmerListWhere(query)
+	sql := `SELECT f.*, COALESCE(gs.station_name, '') AS station_name
+		FROM grain_farmer f
+		LEFT JOIN grain_station gs ON gs.active = 1 AND gs.id = f.station_id ` +
+		whereSQL + ` ORDER BY f.id DESC LIMIT ? OFFSET ?`
+	values = append(values, pageSize, (pageIndex-1)*pageSize)
+	var rows []*GrainFarmerListRow
+	if err := r.QueryBySQL(&rows, sql, values...); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func buildFarmerListWhere(query grainFarmerDTO.GrainFarmerQueryDTO) (string, []interface{}) {
+	clauses := []string{"WHERE f.active = 1"}
+	values := make([]interface{}, 0, 8)
+	if query.StationID > 0 {
+		clauses = append(clauses, "f.station_id = ?")
+		values = append(values, query.StationID)
+	}
+	if len(query.StationIDs) > 0 {
+		clauses = append(clauses, "f.station_id IN ?")
+		values = append(values, query.StationIDs)
+	}
+	if query.AppUserID > 0 {
+		clauses = append(clauses, "f.app_user_id = ?")
+		values = append(values, query.AppUserID)
+	}
+	if value := strings.TrimSpace(query.Search); value != "" {
+		likeValue := "%" + value + "%"
+		clauses = append(clauses, "(f.id_number_digest = ? OR f.phone LIKE ? OR f.address LIKE ?)")
+		values = append(values, query.SearchIDNumberDigest, likeValue, likeValue)
+	}
+	if value := strings.TrimSpace(query.Status); value != "" {
+		clauses = append(clauses, "f.status = ?")
+		values = append(values, value)
+	}
+	return strings.Join(clauses, " AND "), values
 }
 
 func (r *GrainFarmerRepository) FindActiveByIDNumberDigest(idNumberDigest, plainIDNumber string, stationID uint64) (*GrainFarmer, error) {

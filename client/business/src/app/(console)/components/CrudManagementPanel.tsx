@@ -118,6 +118,7 @@ interface CrudManagementPanelProps<R extends CrudRecord, P extends Record<string
   modalWidth?: number;
   showDrawerHeader?: boolean;
   showDrawerRecordTag?: boolean;
+  showStats?: boolean;
   formSections?: CrudFormSection<R>[];
   initialValues?: Partial<R>;
   formExtra?: (context: {
@@ -212,6 +213,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
   modalWidth = 720,
   showDrawerHeader = true,
   showDrawerRecordTag = true,
+  showStats = true,
   formSections,
   initialValues,
   formExtra,
@@ -448,19 +450,21 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
 
   return (
     <div className="manager-page-stack">
-      <section
-        className="manager-stats-grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
-      >
-        {stats.map((item) => (
-          <div key={item.label} className="manager-data-card">
-            <div className="manager-section-label">{item.label}</div>
-            <div className="manager-display-title" style={{ fontSize: 32, marginTop: 12 }}>
-              {item.value}
+      {showStats ? (
+        <section
+          className="manager-stats-grid"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
+        >
+          {stats.map((item) => (
+            <div key={item.label} className="manager-data-card">
+              <div className="manager-section-label">{item.label}</div>
+              <div className="manager-display-title" style={{ fontSize: 32, marginTop: 12 }}>
+                {item.value}
+              </div>
             </div>
-          </div>
-        ))}
-      </section>
+          ))}
+        </section>
+      ) : null}
 
       <section className="manager-data-card">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>

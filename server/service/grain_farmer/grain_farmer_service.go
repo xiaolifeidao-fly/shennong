@@ -39,7 +39,7 @@ func (s *GrainFarmerService) ListFarmers(query grainFarmerDTO.GrainFarmerQueryDT
 	if err != nil {
 		return nil, err
 	}
-	if err := decryptFarmerEntities(entities); err != nil {
+	if err := decryptFarmerListRows(entities); err != nil {
 		return nil, err
 	}
 	return baseDTO.BuildPage(int(total), db.ToDTOs[grainFarmerDTO.GrainFarmerDTO](entities)), nil

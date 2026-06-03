@@ -3,11 +3,14 @@ package grain_farmer_image
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"net/http"
+	"net/url"
 	farmerImageService "service/farmer_image"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type GrainFarmerImageHandler struct {
@@ -50,8 +53,39 @@ func (h *GrainFarmerImageHandler) getFarmerImages(context *gin.Context) {
 		return
 	}
 	appUserID, _ := appCtx.CurrentAppUserID(context)
-	result := h.farmerImageService.GetLatestFarmerImages(farmerID, appUserID)
+	if imageType := strings.TrimSpace(context.Query("imageType")); imageType != "" {
+		h.streamFarmerImage(context, farmerID, appUserID, imageType)
+		return
+	}
+	result := &farmerImageService.FarmerImagesResult{}
+	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "id-card-front") {
+		result.IDCardFront = farmerImagePath(farmerID, "id-card-front")
+	}
+	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "id-card-back") {
+		result.IDCardBack = farmerImagePath(farmerID, "id-card-back")
+	}
+	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "bank-card") {
+		result.BankCard = farmerImagePath(farmerID, "bank-card")
+	}
 	commonRouter.ToJson(context, result, nil)
+}
+
+func (h *GrainFarmerImageHandler) streamFarmerImage(context *gin.Context, farmerID, appUserID uint64, imageType string) {
+	content, err := h.farmerImageService.GetLatestFarmerImageContent(farmerID, appUserID, imageType)
+	if err == gorm.ErrRecordNotFound {
+		context.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
+	context.Header("Cache-Control", "private, max-age=300")
+	context.Data(http.StatusOK, content.MimeType, content.Data)
+}
+
+func farmerImagePath(farmerID uint64, imageType string) string {
+	return "/grain-farmer-images?farmerId=" + strconv.FormatUint(farmerID, 10) + "&imageType=" + url.QueryEscape(imageType)
 }
 
 func (h *GrainFarmerImageHandler) saveFarmerImage(context *gin.Context) {

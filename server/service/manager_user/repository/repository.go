@@ -190,6 +190,74 @@ func (r *UserLoginRecordRepository) EnsureTable() error {
 	return r.Db.AutoMigrate(&UserLoginRecord{})
 }
 
+type UserTenantRepository struct {
+	db.Repository[*UserTenant]
+}
+
+func (r *UserTenantRepository) EnsureTable() error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.AutoMigrate(&UserTenant{})
+}
+
+func (r *UserTenantRepository) ReplaceActiveTenants(userID uint64, tenantIDs []uint64) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	if userID == 0 {
+		return fmt.Errorf("userId must be positive")
+	}
+	if err := r.Db.Model(&UserTenant{}).
+		Where("active = ? AND user_id = ?", 1, userID).
+		Updates(map[string]interface{}{"active": 0}).Error; err != nil {
+		return err
+	}
+	for _, tenantID := range uniquePositiveUint64(tenantIDs) {
+		if _, err := r.Create(&UserTenant{UserID: userID, TenantID: tenantID}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *UserTenantRepository) ListActiveTenantIDs(userID uint64) ([]uint64, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var rows []struct {
+		TenantID uint64
+	}
+	err := r.Db.Raw(
+		`SELECT tenant_id FROM user_tenant WHERE active = ? AND user_id = ? ORDER BY id ASC`,
+		1, userID,
+	).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]uint64, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, row.TenantID)
+	}
+	return result, nil
+}
+
+func uniquePositiveUint64(values []uint64) []uint64 {
+	seen := make(map[uint64]struct{}, len(values))
+	result := make([]uint64, 0, len(values))
+	for _, value := range values {
+		if value == 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
 type UserRoleRepository struct {
 	db.Repository[*UserRole]
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="manager"
+APP_NAME="business"
 PORT="${PORT:-9801}"
 export LC_ALL=C
 export LANG=C
@@ -31,8 +31,8 @@ cat > "$DIST_DIR/start.sh" <<'EOF'
 #!/bin/sh
 set -eu
 
-APP_NAME="manager"
-PORT="${PORT:-9801}"
+APP_NAME="business"
+PORT="${PORT:-9808}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$SCRIPT_DIR/$APP_NAME.pid"
 LOG_DIR="${LOG_DIR:-$SCRIPT_DIR/logs}"
@@ -84,7 +84,7 @@ cat > "$DIST_DIR/stop.sh" <<'EOF'
 #!/bin/sh
 set -eu
 
-APP_NAME="manager"
+APP_NAME="business"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$SCRIPT_DIR/$APP_NAME.pid"
 

@@ -8,12 +8,11 @@ import {
   IdcardOutlined,
   ScanOutlined,
 } from "@ant-design/icons";
-import { Button, Descriptions, Drawer, Empty, Form, Image, InputNumber, message, Space, Tabs, Tag, Tooltip, Typography, Upload } from "antd";
+import { Button, Descriptions, Drawer, Empty, Form, Image, InputNumber, message, Space, Tag, Tooltip, Typography, Upload } from "antd";
 import type { FormInstance } from "antd";
 import type { RcFile } from "antd/es/upload";
 import {
   CrudManagementPanel,
-  type CrudCascaderOption,
   type CrudField,
   type CrudFormSection,
   type CrudOption,
@@ -22,16 +21,12 @@ import {
 import {
   getGrainFarmerImages,
   grainFarmerApi,
-  grainPurchasePlaceApi,
   grainStationApi,
-  listRegionTree,
   recognizeGrainCard,
   type GrainCardOcrResult,
   type GrainFarmerImagesRecord,
   type GrainFarmerRecord,
   type GrainPayload,
-  type GrainPurchasePlaceRecord,
-  type RegionTreeRecord,
 } from "../api/grain.api";
 import { SensitiveValue } from "./SensitiveValue";
 import { getCurrentAppUser, type StoredCurrentAppUser } from "@/utils/auth";
@@ -106,75 +101,6 @@ function beforeImageUpload(file: RcFile) {
     return Upload.LIST_IGNORE;
   }
   return true;
-}
-
-const placeStatusOptions: CrudOption[] = [
-  { label: "启用", value: "active" },
-  { label: "停用", value: "inactive" },
-];
-
-function toCascaderOptions(regions: RegionTreeRecord[]): CrudCascaderOption[] {
-  return regions.map((region) => ({
-    label: region.name,
-    value: region.name,
-    children: region.children ? toCascaderOptions(region.children) : undefined,
-  }));
-}
-
-function GrainPurchasePlacePanel() {
-  const [regionOptions, setRegionOptions] = useState<CrudCascaderOption[]>([]);
-
-  useEffect(() => {
-    listRegionTree()
-      .then((regions) => {
-        setRegionOptions(toCascaderOptions(regions));
-      })
-      .catch((error) => message.error(error instanceof Error ? error.message : "加载收购地点选项失败"));
-  }, []);
-
-  const placeFields: CrudField<GrainPurchasePlaceRecord>[] = [
-    { name: "placeName", label: "地点名称", required: true },
-    { name: "placeType", label: "地点类型" },
-    {
-      name: "regionPath",
-      label: "所在地区",
-      type: "cascader",
-      placeholder: "请选择省 / 市 / 区县",
-      cascaderOptions: regionOptions,
-      linkedNames: ["province", "city", "district"],
-    },
-    { name: "address", label: "地址" },
-    { name: "sortOrder", label: "排序", type: "number", min: 0, precision: 0 },
-    { name: "status", label: "状态", type: "select", options: placeStatusOptions },
-  ];
-
-  const placeColumns: CrudTableColumn<GrainPurchasePlaceRecord>[] = [
-    { name: "placeName", label: "地点名称", width: 160 },
-    { name: "placeType", label: "类型", width: 110 },
-    {
-      name: "address",
-      label: "地址",
-      width: 320,
-      render: (_, record) =>
-        [record.province, record.city, record.district, record.address].filter(Boolean).join(" ") || "-",
-    },
-    { name: "sortOrder", label: "排序", width: 90 },
-    { name: "status", label: "状态", width: 100 },
-  ];
-
-  return (
-    <CrudManagementPanel<GrainPurchasePlaceRecord, GrainPayload>
-      title="收购地点"
-      createText="新增收购地点"
-      searchPlaceholder="地点名称/地址"
-      searchParam="search"
-      fields={placeFields}
-      columns={placeColumns}
-      statusField="status"
-      statusOptions={placeStatusOptions}
-      api={grainPurchasePlaceApi}
-    />
-  );
 }
 
 export function GrainFarmerPanel() {
@@ -337,61 +263,47 @@ export function GrainFarmerPanel() {
 
   return (
     <>
-    <Tabs
-      items={[
-        {
-          key: "farmers",
-          label: "粮户列表",
-          children: (
-            <CrudManagementPanel<GrainFarmerRecord, GrainPayload>
-              title="粮户"
-              createText="新增粮户"
-              searchPlaceholder="姓名/手机号/身份证/地址"
-              searchParam="search"
-              fields={farmerFields}
-              columns={farmerColumns}
-              statusField="status"
-              statusOptions={statusOptions}
-              actionWidth={180}
-              modalWidth={920}
-              showDrawerHeader={false}
-              showDrawerRecordTag={false}
-              initialValues={{ stationId: currentStationId, appUserId: currentAppUserId } as Partial<GrainFarmerRecord>}
-              rowActions={(record) => (
-                <Tooltip title="证件档案">
-                  <Button type="text" icon={<FileImageOutlined />} onClick={() => void openArchive(record)} />
-                </Tooltip>
-              )}
-              formExtra={({ form, editingRecord }) => (
-                <section className="manager-form-assist">
-                  <Form.Item name="appUserId" hidden>
-                    <InputNumber />
-                  </Form.Item>
-                  <Space align="start" style={{ width: "100%", justifyContent: "space-between" }} wrap>
-                    <Space direction="vertical" size={2}>
-                      <Text strong>证件与银行卡识别</Text>
-                      <Text type="secondary">
-                        上传身份证人像面或银行卡照片可自动回填表单；识别结果仍可手动修正后保存。
-                      </Text>
-                    </Space>
-                    <Space wrap>
-                      {renderOcrUpload({ title: "身份证人像面", cardType: "id-card", imageSide: "front" }, form, editingRecord)}
-                      {renderOcrUpload({ title: "银行卡", cardType: "bank-card" }, form, editingRecord)}
-                    </Space>
-                  </Space>
-                </section>
-              )}
-              api={grainFarmerApi}
-              formSections={farmerFormSections}
-            />
-          ),
-        },
-        {
-          key: "places",
-          label: "收购地点",
-          children: <GrainPurchasePlacePanel />,
-        },
-      ]}
+    <CrudManagementPanel<GrainFarmerRecord, GrainPayload>
+      title="粮户"
+      createText="新增粮户"
+      searchPlaceholder="姓名/手机号/身份证/地址"
+      searchParam="search"
+      fields={farmerFields}
+      columns={farmerColumns}
+      statusField="status"
+      statusOptions={statusOptions}
+      actionWidth={180}
+      modalWidth={920}
+      showDrawerHeader={false}
+      showDrawerRecordTag={false}
+      showStats={false}
+      initialValues={{ stationId: currentStationId, appUserId: currentAppUserId } as Partial<GrainFarmerRecord>}
+      rowActions={(record) => (
+        <Tooltip title="证件档案">
+          <Button type="text" icon={<FileImageOutlined />} onClick={() => void openArchive(record)} />
+        </Tooltip>
+      )}
+      formExtra={({ form, editingRecord }) => (
+        <section className="manager-form-assist">
+          <Form.Item name="appUserId" hidden>
+            <InputNumber />
+          </Form.Item>
+          <Space align="start" style={{ width: "100%", justifyContent: "space-between" }} wrap>
+            <Space direction="vertical" size={2}>
+              <Text strong>证件与银行卡识别</Text>
+              <Text type="secondary">
+                上传身份证人像面或银行卡照片可自动回填表单；识别结果仍可手动修正后保存。
+              </Text>
+            </Space>
+            <Space wrap>
+              {renderOcrUpload({ title: "身份证人像面", cardType: "id-card", imageSide: "front" }, form, editingRecord)}
+              {renderOcrUpload({ title: "银行卡", cardType: "bank-card" }, form, editingRecord)}
+            </Space>
+          </Space>
+        </section>
+      )}
+      api={grainFarmerApi}
+      formSections={farmerFormSections}
     />
     <Drawer
       title={archiveRecord ? `证件档案：${archiveRecord.name}` : "证件档案"}

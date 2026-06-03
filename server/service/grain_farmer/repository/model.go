@@ -2,6 +2,27 @@ package repository
 
 import "common/middleware/db"
 
+type GrainFarmerListRow struct {
+	db.BaseEntity
+	StationID      uint64 `gorm:"column:station_id"`
+	StationName    string `gorm:"column:station_name"`
+	AppUserID      uint64 `gorm:"column:app_user_id"`
+	Name           string `gorm:"column:name"`
+	IDNumber       string `gorm:"column:id_number"`
+	IDNumberDigest string `gorm:"column:id_number_digest"`
+	Phone          string `gorm:"column:phone"`
+	Address        string `gorm:"column:address"`
+	BankNumber     string `gorm:"column:bank_number"`
+	BankName       string `gorm:"column:bank_name"`
+	Status         string `gorm:"column:status"`
+	StatusText     string `gorm:"column:status_text"`
+	Remark         string `gorm:"column:remark"`
+}
+
+func (r *GrainFarmerListRow) TableName() string {
+	return "grain_farmer"
+}
+
 type GrainFarmer struct {
 	db.BaseEntity
 	StationID      uint64 `gorm:"column:station_id;type:bigint unsigned;index:idx_station_id" description:"粮站ID"`

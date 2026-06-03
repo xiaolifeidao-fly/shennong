@@ -314,6 +314,41 @@ export interface GrainEntryMaterialDTO {
   sortOrder: number
 }
 
+export interface GrainDashboardOverview {
+  newFarmerCount: number
+  activeUserCount: number
+  totalQuantity: number
+  totalAmount: number
+  entryCount: number
+  averageUnitPrice: number
+  averageFarmerDeal: number
+}
+
+export interface GrainDashboardDimension {
+  key: string
+  name: string
+  stationId: number
+  purchaseTypeId: number
+  entryCount: number
+  farmerCount: number
+  activeUserCount: number
+  totalQuantity: number
+  totalAmount: number
+  averageUnitPrice: number
+  amountShare: number
+  quantityShare: number
+}
+
+export interface GrainDashboard {
+  startDate: string
+  endDate: string
+  stationId: number
+  overview: GrainDashboardOverview
+  byStation: GrainDashboardDimension[]
+  byCrop: GrainDashboardDimension[]
+  generated?: string
+}
+
 export type GrainCardOcrType = 'id-card' | 'bank-card'
 
 export interface GrainCardOcrResult {

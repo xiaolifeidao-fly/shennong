@@ -24,7 +24,6 @@ const statusOptions: CrudOption[] = [
 
 const columns: CrudTableColumn<GrainStationRecord>[] = [
   { name: "stationName", label: "粮站名称", width: 180 },
-  { name: "tenantId", label: "租户ID", width: 100 },
   { name: "contactName", label: "联系人", width: 120 },
   { name: "contactPhone", label: "联系电话", width: 150 },
   {

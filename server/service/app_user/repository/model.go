@@ -18,7 +18,6 @@ type AppUser struct {
 	LastLoginTime   *time.Time `gorm:"column:last_login_time;type:datetime" orm:"column(last_login_time);null" description:"最后登录时间"`
 	SecretKey       string     `gorm:"column:secret_key;type:varchar(50);index:idx_secret_key" orm:"column(secret_key);size(50);null" description:"密钥"`
 	Remark          string     `gorm:"column:remark;type:varchar(50)" orm:"column(remark);size(50);null" description:"备注"`
-	PubToken        string     `gorm:"column:pub_token;type:varchar(100);uniqueIndex:idx_app_pub_token" orm:"column(pub_token);size(100);null" description:"公钥token"`
 	BanCount        uint32     `gorm:"column:ban_count;type:int unsigned;default:0" orm:"column(ban_count);null" description:"封禁次数"`
 	OpenUID         string     `gorm:"column:open_uid;type:varchar(100);index:idx_app_open_uid" orm:"column(open_uid);size(100);null" description:"微信OpenID"`
 	UnionID         string     `gorm:"column:union_id;type:varchar(100);index:idx_app_union_id" orm:"column(union_id);size(100);null" description:"微信UnionID"`
@@ -60,7 +59,6 @@ type AppUserListRow struct {
 	LastLoginTime   *time.Time `gorm:"column:last_login_time"`
 	SecretKey       string     `gorm:"column:secret_key"`
 	Remark          string     `gorm:"column:remark"`
-	PubToken        string     `gorm:"column:pub_token"`
 	BanCount        uint32     `gorm:"column:ban_count"`
 	OpenUID         string     `gorm:"column:open_uid"`
 	UnionID         string     `gorm:"column:union_id"`

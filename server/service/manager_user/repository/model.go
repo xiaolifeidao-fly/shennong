@@ -73,3 +73,13 @@ type UserAccountRow struct {
 	AccountStatus string `gorm:"column:account_status"`
 	BalanceAmount string `gorm:"column:balance_amount"`
 }
+
+type UserTenant struct {
+	db.BaseEntity
+	UserID   uint64 `gorm:"column:user_id;type:bigint unsigned;index:idx_user_id" description:"用户ID"`
+	TenantID uint64 `gorm:"column:tenant_id;type:bigint unsigned;index:idx_tenant_id" description:"租户ID"`
+}
+
+func (u *UserTenant) TableName() string {
+	return "user_tenant"
+}

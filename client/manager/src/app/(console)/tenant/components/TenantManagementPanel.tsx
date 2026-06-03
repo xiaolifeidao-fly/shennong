@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { message, Tag } from "antd";
+import { ApartmentOutlined } from "@ant-design/icons";
+import { Button, message, Modal, Select, Tag, Tooltip } from "antd";
 import {
   CrudManagementPanel,
   type CrudField,
@@ -36,14 +37,6 @@ export function TenantManagementPanel() {
     { name: "tenantCode", label: "租户编码", placeholder: "留空自动生成" },
     { name: "contactName", label: "联系人" },
     { name: "contactPhone", label: "联系电话" },
-    {
-      name: "stationIds",
-      label: "关联粮站",
-      type: "select",
-      mode: "multiple",
-      options: stationOptions,
-      placeholder: "请选择粮站",
-    },
     { name: "status", label: "状态", type: "select", options: statusOptions },
     { name: "remark", label: "备注", type: "textarea" },
   ];
@@ -72,6 +65,32 @@ export function TenantManagementPanel() {
     { name: "status", label: "状态", width: 100 },
   ];
 
+  const handleConfigStations = (record: TenantRecord) => {
+    let nextStationIds: number[] = Array.isArray(record.stationIds) ? (record.stationIds as number[]) : [];
+    Modal.confirm({
+      title: `配置粮站 — ${record.tenantName}`,
+      width: 520,
+      content: (
+        <Select<number[]>
+          mode="multiple"
+          defaultValue={nextStationIds}
+          style={{ width: "100%", marginTop: 16 }}
+          placeholder="请选择关联粮站（可多选，可选全部粮站）"
+          options={stationOptions}
+          optionFilterProp="label"
+          maxTagCount="responsive"
+          onChange={(value) => {
+            nextStationIds = value;
+          }}
+        />
+      ),
+      onOk: async () => {
+        await tenantApi.update(record.id, { stationIds: nextStationIds });
+        message.success("粮站配置已更新");
+      },
+    });
+  };
+
   return (
     <CrudManagementPanel<TenantRecord, TenantPayload>
       title="租户"
@@ -82,6 +101,12 @@ export function TenantManagementPanel() {
       columns={columns}
       statusField="status"
       statusOptions={statusOptions}
+      actionWidth={160}
+      rowActions={(record) => (
+        <Tooltip title="配置粮站">
+          <Button type="text" icon={<ApartmentOutlined />} onClick={() => handleConfigStations(record)} />
+        </Tooltip>
+      )}
       api={tenantApi}
     />
   );

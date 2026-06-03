@@ -121,17 +121,15 @@ func (r *AppUserRepository) ListUsersByQuery(query appUserDTO.AppUserQueryDTO, p
 		u.id, u.active, u.created_time, u.updated_time, u.created_by, u.updated_by,
 		u.name, u.username, u.email, u.phone, u.department, u.password,
 		u.origin_password, u.status, u.last_login_time, u.secret_key, u.remark,
-		u.pub_token, u.ban_count, u.open_uid, u.union_id, u.wx_session_key,
+		u.ban_count, u.open_uid, u.union_id, u.wx_session_key,
 		u.wx_nickname, u.wx_avatar, u.wx_gender, u.wx_country, u.wx_province,
 		u.wx_city, u.wx_language, u.wx_last_login_time,
-		COALESCE((
-			SELECT su.station_id
-			FROM grain_station_user su
-			WHERE su.active = 1 AND su.status = 'active' AND su.app_user_id = u.id
-			ORDER BY su.id DESC
-			LIMIT 1
-		), 0) AS station_id
-	FROM app_user u ` + whereSQL + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
+		COALESCE(gs.id, 0) AS station_id,
+		COALESCE(gs.station_name, '') AS station_name
+	FROM app_user u
+	LEFT JOIN grain_station_user su ON su.active = 1 AND su.status = 'active' AND su.app_user_id = u.id
+		AND su.id = (SELECT MAX(s2.id) FROM grain_station_user s2 WHERE s2.active = 1 AND s2.status = 'active' AND s2.app_user_id = u.id)
+	LEFT JOIN grain_station gs ON gs.active = 1 AND gs.id = su.station_id ` + whereSQL + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
 	values = append(values, pageSize, (pageIndex-1)*pageSize)
 	var rows []AppUserListRow
 	if err := r.QueryBySQL(&rows, sql, values...); err != nil {
@@ -175,10 +173,6 @@ func buildAppUserListWhere(query appUserDTO.AppUserQueryDTO) (string, []interfac
 	}
 	if value := strings.TrimSpace(query.SecretKey); value != "" {
 		clauses = append(clauses, "u.secret_key = ?")
-		values = append(values, value)
-	}
-	if value := strings.TrimSpace(query.PubToken); value != "" {
-		clauses = append(clauses, "u.pub_token = ?")
 		values = append(values, value)
 	}
 	if value := strings.TrimSpace(query.OpenUID); value != "" {

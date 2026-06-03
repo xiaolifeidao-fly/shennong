@@ -3,6 +3,7 @@
 import axios from "axios";
 import { plainToInstance } from "class-transformer";
 import { clearAuthToken, getAuthToken } from "@/utils/auth";
+import { withBasePath } from "@/utils/routes";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -18,7 +19,7 @@ export interface PageResult<T> {
 }
 
 export const instance = axios.create({
-  baseURL: "/api",
+  baseURL: withBasePath("/api"),
   timeout: 10000,
 });
 
@@ -37,8 +38,8 @@ function handleAuthFailure(message?: string | null, error?: string | null) {
     return;
   }
   clearAuthToken();
-  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-    window.location.href = "/login";
+  if (typeof window !== "undefined" && window.location.pathname !== withBasePath("/login")) {
+    window.location.href = withBasePath("/login");
   }
 }
 

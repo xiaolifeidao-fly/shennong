@@ -33,6 +33,9 @@ func (r *Repository[T]) SetDb(db *gorm.DB) {
 
 func (r *Repository[T]) GetOne(sql string, values ...interface{}) (T, error) {
 	var repoValue T
+	if r.Db == nil {
+		return repoValue, fmt.Errorf("database is not initialized")
+	}
 	err := r.Db.Raw(sql, values...).Scan(&repoValue).Error
 	if err == gorm.ErrRecordNotFound {
 		return repoValue, err
@@ -45,12 +48,18 @@ func (r *Repository[T]) Count(sql string, values ...interface{}) (int64, error) 
 }
 
 func (r *Repository[T]) CountBySQL(sql string, values ...interface{}) (int64, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
 	var count int64
 	err := r.Db.Raw("SELECT COUNT(1) AS count FROM ("+sql+") AS t", values...).Scan(&count).Error
 	return count, err
 }
 
 func (r *Repository[T]) GetList(sql string, values ...interface{}) ([]T, error) {
+	if r.Db == nil {
+		return []T{}, fmt.Errorf("database is not initialized")
+	}
 	var entities []T
 	err := r.Db.Raw(sql, values...).Scan(&entities).Error
 	if err == gorm.ErrRecordNotFound {
@@ -60,19 +69,31 @@ func (r *Repository[T]) GetList(sql string, values ...interface{}) ([]T, error) 
 }
 
 func (r *Repository[T]) QueryOneBySQL(result interface{}, sql string, values ...interface{}) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
 	return r.Db.Raw(sql, values...).Scan(result).Error
 }
 
 func (r *Repository[T]) QueryBySQL(result interface{}, sql string, values ...interface{}) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
 	return r.Db.Raw(sql, values...).Scan(result).Error
 }
 
 func (r *Repository[T]) Execute(sql string, params map[string]interface{}) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
 	return r.Db.Exec(sql, params).Error
 }
 
 func (r *Repository[T]) FindById(id uint) (T, error) {
 	var entity T
+	if r.Db == nil {
+		return entity, fmt.Errorf("database is not initialized")
+	}
 	err := r.Db.First(&entity, id).Error
 	if err == gorm.ErrRecordNotFound {
 		return entity, err
@@ -81,6 +102,9 @@ func (r *Repository[T]) FindById(id uint) (T, error) {
 }
 
 func (r *Repository[T]) FindAll() ([]T, error) {
+	if r.Db == nil {
+		return []T{}, fmt.Errorf("database is not initialized")
+	}
 	var entities []T
 	result := r.Db.Find(&entities)
 
@@ -94,6 +118,9 @@ func (r *Repository[T]) FindAll() ([]T, error) {
 }
 
 func (r *Repository[T]) Create(entity T) (T, error) {
+	if r.Db == nil {
+		return entity, fmt.Errorf("database is not initialized")
+	}
 	if e, ok := interface{}(entity).(Entity); ok {
 		e.Init()
 	}
@@ -105,6 +132,9 @@ func (r *Repository[T]) Create(entity T) (T, error) {
 }
 
 func (r *Repository[T]) SaveOrUpdate(entity T) (T, error) {
+	if r.Db == nil {
+		return entity, fmt.Errorf("database is not initialized")
+	}
 	if e, ok := interface{}(entity).(Entity); ok {
 		e.Init()
 	}
@@ -116,6 +146,9 @@ func (r *Repository[T]) SaveOrUpdate(entity T) (T, error) {
 }
 
 func (r *Repository[T]) Delete(id uint) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
 	var entity T
 	err := r.Db.Delete(&entity, id).Error
 	if err != nil {

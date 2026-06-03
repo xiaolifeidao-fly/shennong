@@ -43,11 +43,7 @@
         <view class="scan-group">
           <button class="scan-btn" @click="$emit('scan-id-front')">
             <text class="mini-icon camera-mini"></text>
-            <text>拍正面</text>
-          </button>
-          <button class="scan-btn" @click="$emit('scan-id-back')">
-            <text class="mini-icon camera-mini"></text>
-            <text>拍背面</text>
+            <text>拍身份证</text>
           </button>
         </view>
       </view>
@@ -109,7 +105,6 @@ const emit = defineEmits<{
   'update:modelValue': [value: GrainEntryDraft]
   'farmer-change': [farmerId: string]
   'scan-id-front': []
-  'scan-id-back': []
   'scan-bank': []
 }>()
 

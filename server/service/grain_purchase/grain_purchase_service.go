@@ -6,6 +6,7 @@ import (
 	"common/middleware/storage/oss"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -407,21 +408,27 @@ func (s *GrainPurchaseService) DeleteMaterial(id uint) error {
 }
 
 func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMaterialContent, error) {
+	log.Printf("[grain-material-image] get material image content start id=%d", id)
 	entity, err := s.materialRepository.FindById(id)
 	if err != nil {
+		log.Printf("[grain-material-image] find material failed id=%d err=%v", id, err)
 		return nil, err
 	}
 	if entity.Active == 0 {
+		log.Printf("[grain-material-image] material inactive id=%d entryID=%d stationID=%d", id, entity.EntryID, entity.StationID)
 		return nil, gorm.ErrRecordNotFound
 	}
+	log.Printf("[grain-material-image] material record found id=%d entryID=%d stationID=%d appUserID=%d materialBizType=%s materialType=%s fileName=%s mimeType=%s ossBucket=%s ossObjectKey=%s fallbackURL=%s", id, entity.EntryID, entity.StationID, entity.AppUserID, entity.MaterialBizType, entity.MaterialType, entity.FileName, entity.MimeType, entity.OssBucket, entity.OssObjectKey, safeURLForLog(entity.OssURL))
 	data, err := getOssObject(entity.OssObjectKey, entity.OssURL)
 	if err != nil {
+		log.Printf("[grain-material-image] get oss object failed id=%d entryID=%d stationID=%d fileName=%s ossObjectKey=%s fallbackURL=%s err=%v", id, entity.EntryID, entity.StationID, entity.FileName, entity.OssObjectKey, safeURLForLog(entity.OssURL), err)
 		return nil, err
 	}
 	mimeType := strings.TrimSpace(entity.MimeType)
 	if !strings.HasPrefix(mimeType, "image/") {
 		mimeType = detectImageMimeType(data, entity.FileName)
 	}
+	log.Printf("[grain-material-image] get material image content success id=%d entryID=%d stationID=%d fileName=%s mimeType=%s bytes=%d", id, entity.EntryID, entity.StationID, entity.FileName, mimeType, len(data))
 	return &GrainEntryMaterialContent{
 		Data:      data,
 		MimeType:  mimeType,
@@ -434,14 +441,24 @@ func getOssObject(ossObjectKey, fallbackURL string) ([]byte, error) {
 	key := strings.TrimSpace(ossObjectKey)
 	if key == "" {
 		key = objectKeyFromURL(fallbackURL)
+		log.Printf("[grain-material-image] oss object key empty, parsed key from fallbackURL parsedKey=%s fallbackURL=%s", key, safeURLForLog(fallbackURL))
 	}
 	if key == "" {
 		return nil, fmt.Errorf("oss object key is empty")
 	}
 	if data, err := oss.GetByKey(key); err == nil {
+		log.Printf("[grain-material-image] oss get by key success key=%s bytes=%d", key, len(data))
 		return data, nil
+	} else {
+		log.Printf("[grain-material-image] oss get by key failed key=%s err=%v", key, err)
 	}
-	return oss.Get(key)
+	data, err := oss.Get(key)
+	if err != nil {
+		log.Printf("[grain-material-image] oss get by path failed path=%s err=%v", key, err)
+		return nil, err
+	}
+	log.Printf("[grain-material-image] oss get by path success path=%s bytes=%d", key, len(data))
+	return data, nil
 }
 
 func objectKeyFromURL(rawURL string) string {
@@ -454,6 +471,22 @@ func objectKeyFromURL(rawURL string) string {
 		return ""
 	}
 	return strings.TrimLeft(parsed.Path, "/")
+}
+
+func safeURLForLog(rawURL string) string {
+	value := strings.TrimSpace(rawURL)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	hasQuery := parsed.RawQuery != ""
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return fmt.Sprintf("path=%s hasQuery=%t", parsed.Path, hasQuery)
+	}
+	return fmt.Sprintf("scheme=%s host=%s path=%s hasQuery=%t", parsed.Scheme, parsed.Host, parsed.Path, hasQuery)
 }
 
 func detectImageMimeType(data []byte, fileName string) string {

@@ -11,7 +11,7 @@ import (
 	"manager-api/pkg/login"
 	"manager-api/pkg/permission"
 	region "manager-api/pkg/region"
-	tenant "manager-api/pkg/tenant"
+	"manager-api/pkg/tenant"
 	"manager-api/pkg/user"
 
 	"time"
@@ -28,7 +28,6 @@ func registerHandler() []routers.Handler {
 	return []routers.Handler{
 		build("login", func() routers.Handler { return login.NewLoginHandler() }),
 		build("permission", func() routers.Handler { return permission.NewPermissionHandler() }),
-		build("tenant", func() routers.Handler { return tenant.NewTenantHandler() }),
 		build("user", func() routers.Handler { return user.NewUserHandler() }),
 		build("app_user", func() routers.Handler { return appUser.NewAppUserHandler() }),
 		build("region", func() routers.Handler { return region.NewRegionHandler() }),
@@ -36,5 +35,6 @@ func registerHandler() []routers.Handler {
 		build("grain_farmer", func() routers.Handler { return grainFarmer.NewGrainFarmerHandler() }),
 		build("grain_card_ocr", func() routers.Handler { return grainCardOcr.NewGrainCardOcrHandler() }),
 		build("grain_purchase", func() routers.Handler { return grainPurchase.NewGrainPurchaseHandler() }),
+		build("tenant", func() routers.Handler { return tenant.NewTenantHandler() }),
 	}
 }

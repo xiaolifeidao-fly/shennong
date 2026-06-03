@@ -2,6 +2,7 @@ package grain_farmer
 
 import (
 	commonRouter "common/middleware/routers"
+	"log"
 	"manager-api/pkg/internal/tenantctx"
 	"net/http"
 	"net/url"
@@ -58,7 +59,9 @@ func (h *GrainFarmerHandler) getFarmerImages(context *gin.Context) {
 	if !ok {
 		return
 	}
+	log.Printf("[farmer-image] list image paths request farmerID=%d appUserIdQuery=%s imageTypeQuery=%s", id, context.Query("appUserId"), context.Query("imageType"))
 	if !h.ensureFarmerAccess(context, id) {
+		log.Printf("[farmer-image] list image paths access denied farmerID=%d", id)
 		return
 	}
 	appUserID, _ := strconv.ParseUint(context.Query("appUserId"), 10, 64)
@@ -76,6 +79,7 @@ func (h *GrainFarmerHandler) getFarmerImages(context *gin.Context) {
 	if h.imageService.HasLatestFarmerImage(uint64(id), appUserID, "bank-card") {
 		result.BankCard = h.farmerImagePath(id, appUserID, "bank-card")
 	}
+	log.Printf("[farmer-image] list image paths success farmerID=%d appUserID=%d hasIDCardFront=%t hasIDCardBack=%t hasBankCard=%t", id, appUserID, result.IDCardFront != "", result.IDCardBack != "", result.BankCard != "")
 	commonRouter.ToJson(context, result, nil)
 }
 
@@ -93,17 +97,21 @@ func (h *GrainFarmerHandler) getFarmerImage(context *gin.Context) {
 }
 
 func (h *GrainFarmerHandler) streamFarmerImage(context *gin.Context, id uint, appUserID uint64, imageType string) {
+	log.Printf("[farmer-image] stream image request farmerID=%d appUserID=%d imageType=%s path=%s", id, appUserID, imageType, context.Request.URL.Path)
 	content, err := h.imageService.GetLatestFarmerImageContent(uint64(id), appUserID, imageType)
 	if err == gorm.ErrRecordNotFound {
+		log.Printf("[farmer-image] stream image not found farmerID=%d appUserID=%d imageType=%s", id, appUserID, imageType)
 		context.Status(http.StatusNotFound)
 		return
 	}
 	if err != nil {
+		log.Printf("[farmer-image] stream image failed farmerID=%d appUserID=%d imageType=%s err=%v", id, appUserID, imageType, err)
 		commonRouter.ToError(context, err.Error())
 		return
 	}
 	context.Header("Cache-Control", "private, max-age=300")
 	context.Data(http.StatusOK, content.MimeType, content.Data)
+	log.Printf("[farmer-image] stream image success farmerID=%d appUserID=%d imageType=%s fileName=%s mimeType=%s bytes=%d", id, appUserID, imageType, content.FileName, content.MimeType, len(content.Data))
 }
 
 func (h *GrainFarmerHandler) createFarmer(context *gin.Context) {

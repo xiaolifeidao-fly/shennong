@@ -17,6 +17,10 @@ export class UserRecord {
 
   tenantId = 0;
 
+  tenantIds: number[] = [];
+
+  tenantNames: string[] = [];
+
   role = "member";
 
   status = "active";
@@ -81,6 +85,7 @@ export interface UserPayload {
   phone?: string;
   department?: string;
   tenantId?: number;
+  tenantIds?: number[];
   role: string;
   status: string;
   remark?: string;
@@ -93,6 +98,17 @@ export interface UserPayload {
   secretKey?: string;
   pubToken?: string;
   banCount?: number;
+}
+
+export class TenantOption {
+  id!: number;
+  tenantName = "";
+  tenantCode = "";
+  status = "";
+}
+
+export async function fetchTenantOptions() {
+  return getPage(TenantOption, "/tenants", { pageIndex: 1, pageSize: 200 });
 }
 
 export async function fetchUsers(query: UserListQuery) {

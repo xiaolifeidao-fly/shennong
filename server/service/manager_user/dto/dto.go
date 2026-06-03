@@ -25,6 +25,8 @@ type UserDTO struct {
 	AccountID      int       `json:"accountId"`
 	AccountStatus  string    `json:"accountStatus"`
 	BalanceAmount  string    `json:"balanceAmount"`
+	TenantIDs      []uint64  `json:"tenantIds,omitempty"`
+	TenantNames    []string  `json:"tenantNames,omitempty"`
 }
 
 type CreateUserDTO struct {
@@ -43,6 +45,7 @@ type CreateUserDTO struct {
 	Remark         string    `json:"remark"`
 	PubToken       string    `json:"pubToken"`
 	BanCount       uint32    `json:"banCount"`
+	TenantIDs      []uint64  `json:"tenantIds,omitempty"`
 }
 
 type UpdateUserDTO struct {
@@ -61,6 +64,7 @@ type UpdateUserDTO struct {
 	Remark         *string    `json:"remark,omitempty"`
 	PubToken       *string    `json:"pubToken,omitempty"`
 	BanCount       *uint32    `json:"banCount,omitempty"`
+	TenantIDs      *[]uint64  `json:"tenantIds,omitempty"`
 }
 
 type UserQueryDTO struct {

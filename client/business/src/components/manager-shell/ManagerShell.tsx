@@ -33,6 +33,7 @@ import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
 import { clearAuthToken, setCurrentAppUser } from "@/utils/auth";
+import { withoutBasePath } from "@/utils/routes";
 import {
   changeCurrentUserPassword,
   fetchCurrentUserProfile,
@@ -89,7 +90,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const screens = useBreakpoint();
-  const activePath = pathname ?? "/manager-dashboard";
+  const activePath = withoutBasePath(pathname ?? "/manager-dashboard");
   const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(activePath));
   const [collapsed, setCollapsed] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();

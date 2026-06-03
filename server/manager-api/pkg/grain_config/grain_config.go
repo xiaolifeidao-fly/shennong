@@ -47,11 +47,6 @@ func (h *GrainConfigHandler) listStations(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
-		return
-	} else if len(stationIDs) > 0 {
-		query.StationIDs = stationIDs
-	}
 	result, err := h.service.ListStations(query)
 	commonRouter.ToJson(context, result, err)
 }

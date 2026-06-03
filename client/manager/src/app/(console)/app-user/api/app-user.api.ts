@@ -55,7 +55,6 @@ export interface AppUserPayload extends Record<string, unknown> {
   status?: string;
   secretKey?: string;
   remark?: string;
-  pubToken?: string;
   banCount?: number;
 }
 
@@ -65,6 +64,7 @@ export function fetchAppUsers(query: CrudListQuery) {
 
 export async function createAppUser(payload: AppUserPayload) {
   const { password, originPassword, ...restPayload } = payload;
+  delete restPayload.pubToken;
   const response = await instance.post<ApiResponse<AppUserRecord>>("/app-users", {
     ...restPayload,
     originPassword: originPassword || password,

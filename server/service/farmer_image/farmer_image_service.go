@@ -5,6 +5,7 @@ import (
 	"common/middleware/storage/oss"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -107,15 +108,20 @@ func (s *FarmerImageService) HasLatestFarmerImage(farmerID, appUserID uint64, im
 }
 
 func (s *FarmerImageService) GetLatestFarmerImageContent(farmerID, appUserID uint64, imageType string) (*FarmerImageContent, error) {
+	log.Printf("[farmer-image] get latest image content start farmerID=%d appUserID=%d imageType=%s", farmerID, appUserID, imageType)
 	imageName, objectKey, ossURL, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
 	if err != nil {
+		log.Printf("[farmer-image] find latest image record failed farmerID=%d appUserID=%d imageType=%s err=%v", farmerID, appUserID, imageType, err)
 		return nil, err
 	}
+	log.Printf("[farmer-image] latest image record found farmerID=%d appUserID=%d imageType=%s fileName=%s ossObjectKey=%s fallbackURL=%s", farmerID, appUserID, imageType, imageName, objectKey, safeURLForLog(ossURL))
 	data, err := getOssObject(objectKey, ossURL)
 	if err != nil {
+		log.Printf("[farmer-image] get oss object failed farmerID=%d appUserID=%d imageType=%s fileName=%s ossObjectKey=%s fallbackURL=%s err=%v", farmerID, appUserID, imageType, imageName, objectKey, safeURLForLog(ossURL), err)
 		return nil, err
 	}
 	mimeType := detectImageMimeType(data, imageName)
+	log.Printf("[farmer-image] get latest image content success farmerID=%d appUserID=%d imageType=%s fileName=%s mimeType=%s bytes=%d", farmerID, appUserID, imageType, imageName, mimeType, len(data))
 	return &FarmerImageContent{
 		Data:     data,
 		MimeType: mimeType,
@@ -152,13 +158,20 @@ func refreshOssURL(ossObjectKey, fallbackURL string, expiry time.Duration) strin
 	if ossObjectKey != "" {
 		if oss.Oss != nil {
 			if url, err := oss.Oss.GetUrlByKey(ossObjectKey, &expiry); err == nil {
+				log.Printf("[farmer-image] refresh oss url by key success ossObjectKey=%s expiry=%s", ossObjectKey, expiry)
 				return url
+			} else {
+				log.Printf("[farmer-image] refresh oss url by key failed ossObjectKey=%s expiry=%s err=%v", ossObjectKey, expiry, err)
 			}
 		}
 		if url, err := oss.GetUrl(ossObjectKey, &expiry); err == nil {
+			log.Printf("[farmer-image] refresh oss url by path success ossObjectKey=%s expiry=%s", ossObjectKey, expiry)
 			return url
+		} else {
+			log.Printf("[farmer-image] refresh oss url by path failed ossObjectKey=%s expiry=%s err=%v", ossObjectKey, expiry, err)
 		}
 	}
+	log.Printf("[farmer-image] use fallback oss url ossObjectKey=%s fallbackURL=%s", ossObjectKey, safeURLForLog(fallbackURL))
 	return fallbackURL
 }
 
@@ -166,14 +179,24 @@ func getOssObject(ossObjectKey, fallbackURL string) ([]byte, error) {
 	key := strings.TrimSpace(ossObjectKey)
 	if key == "" {
 		key = objectKeyFromURL(fallbackURL)
+		log.Printf("[farmer-image] oss object key empty, parsed key from fallbackURL parsedKey=%s fallbackURL=%s", key, safeURLForLog(fallbackURL))
 	}
 	if key == "" {
 		return nil, fmt.Errorf("oss object key is empty")
 	}
 	if data, err := oss.GetByKey(key); err == nil {
+		log.Printf("[farmer-image] oss get by key success key=%s bytes=%d", key, len(data))
 		return data, nil
+	} else {
+		log.Printf("[farmer-image] oss get by key failed key=%s err=%v", key, err)
 	}
-	return oss.Get(key)
+	data, err := oss.Get(key)
+	if err != nil {
+		log.Printf("[farmer-image] oss get by path failed path=%s err=%v", key, err)
+		return nil, err
+	}
+	log.Printf("[farmer-image] oss get by path success path=%s bytes=%d", key, len(data))
+	return data, nil
 }
 
 func objectKeyFromURL(rawURL string) string {
@@ -186,6 +209,22 @@ func objectKeyFromURL(rawURL string) string {
 		return ""
 	}
 	return strings.TrimLeft(parsed.Path, "/")
+}
+
+func safeURLForLog(rawURL string) string {
+	value := strings.TrimSpace(rawURL)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	hasQuery := parsed.RawQuery != ""
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return fmt.Sprintf("path=%s hasQuery=%t", parsed.Path, hasQuery)
+	}
+	return fmt.Sprintf("scheme=%s host=%s path=%s hasQuery=%t", parsed.Scheme, parsed.Host, parsed.Path, hasQuery)
 }
 
 func detectImageMimeType(data []byte, fileName string) string {
