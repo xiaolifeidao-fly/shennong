@@ -6,8 +6,11 @@ import (
 	"common/middleware/storage/oss"
 	"common/middleware/vipper"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"net/http"
 	"path/filepath"
 	farmerImageService "service/farmer_image"
 	grainFarmerService "service/grain_farmer"
@@ -21,12 +24,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxCloudOcrImageSize = 10 << 20
+
 type GrainCardOcrHandler struct {
 	*commonRouter.BaseHandler
 	ocrService         *ocrService.AliyunOCRService
 	farmerImageService *farmerImageService.FarmerImageService
 	grainFarmerService *grainFarmerService.GrainFarmerService
 	ocrResultService   *ocrResultService.OcrResultService
+}
+
+type recognizeCardJSONRequest struct {
+	CardType    string `json:"cardType"`
+	FarmerID    string `json:"farmerId"`
+	ImageSide   string `json:"imageSide"`
+	FileName    string `json:"fileName"`
+	FileSize    int64  `json:"fileSize"`
+	MimeType    string `json:"mimeType"`
+	ImageURL    string `json:"imageUrl"`
+	CloudFileID string `json:"cloudFileId"`
+}
+
+type recognizeCardInput struct {
+	cardType    string
+	farmerID    string
+	imageSide   string
+	fileName    string
+	fileSize    int64
+	mimeType    string
+	imageURL    string
+	cloudFileID string
+	image       []byte
 }
 
 func NewGrainCardOcrHandler() *GrainCardOcrHandler {
@@ -50,14 +78,13 @@ func (h *GrainCardOcrHandler) RegisterHandler(engine *gin.RouterGroup) {
 }
 
 func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
-	cardType := strings.TrimSpace(context.PostForm("cardType"))
-	if cardType != "id-card" && cardType != "bank-card" {
-		commonRouter.ToError(context, "cardType必须是id-card或bank-card")
+	input, err := readRecognizeCardInput(context)
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
 		return
 	}
-	file, err := context.FormFile("file")
-	if err != nil {
-		commonRouter.ToError(context, "请上传识别照片")
+	if input.cardType != "id-card" && input.cardType != "bank-card" {
+		commonRouter.ToError(context, "cardType必须是id-card或bank-card")
 		return
 	}
 	stationID, ok := appCtx.CurrentStationID(context)
@@ -67,27 +94,12 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	}
 	appUserID, _ := appCtx.CurrentAppUserID(context)
 
-	// 可选参数：农户ID和身份证面（front/back）
-	farmerIDStr := strings.TrimSpace(context.PostForm("farmerId"))
-	imageSide := strings.TrimSpace(context.PostForm("imageSide"))
-	if imageSide == "" {
-		imageSide = "front"
+	if input.imageSide == "" {
+		input.imageSide = "front"
 	}
 
-	openFile, err := file.Open()
-	if err != nil {
-		commonRouter.ToJson(context, nil, err)
-		return
-	}
-	defer openFile.Close()
-	image, err := io.ReadAll(openFile)
-	if err != nil {
-		commonRouter.ToJson(context, nil, err)
-		return
-	}
-
-	objectPath := buildOcrObjectPath(cardType, file.Filename, stationID, appUserID)
-	if err := oss.Put(objectPath, image); err != nil {
+	objectPath := buildOcrObjectPath(input.cardType, input.fileName, stationID, appUserID)
+	if err := oss.Put(objectPath, input.image); err != nil {
 		commonRouter.ToJson(context, nil, err)
 		return
 	}
@@ -109,9 +121,9 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 		ossObjectKey = oss.Oss.BuildKey(objectPath)
 	}
 
-	farmerID := parseUint64(farmerIDStr)
+	farmerID := parseUint64(input.farmerID)
 	if farmerID > 0 {
-		businessID, imgErr := h.resolveBusinessID(farmerID, appUserID, cardType, imageSide, file.Filename, imageURL, ossObjectKey)
+		businessID, imgErr := h.resolveBusinessID(farmerID, appUserID, input.cardType, input.imageSide, input.fileName, imageURL, ossObjectKey)
 		if imgErr == nil && businessID != "" {
 			// 命中缓存
 			if cached := h.ocrResultService.GetSuccessResult(businessID); cached != "" {
@@ -133,12 +145,12 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 
 			// 调用OCR
 			result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
-				CardType:   cardType,
-				FileName:   file.Filename,
-				FileSize:   file.Size,
-				MimeType:   file.Header.Get("Content-Type"),
+				CardType:   input.cardType,
+				FileName:   input.fileName,
+				FileSize:   input.fileSize,
+				MimeType:   input.mimeType,
 				ImageURL:   imageURL,
-				ImageBytes: image,
+				ImageBytes: input.image,
 			})
 			h.saveOcrResult(businessID, imageURL, result, err)
 		}
@@ -147,12 +159,12 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	// 无 farmerId 或图片记录失败时，直接调用OCR（向下兼容）
 	if result == nil && err == nil {
 		result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
-			CardType:   cardType,
-			FileName:   file.Filename,
-			FileSize:   file.Size,
-			MimeType:   file.Header.Get("Content-Type"),
+			CardType:   input.cardType,
+			FileName:   input.fileName,
+			FileSize:   input.fileSize,
+			MimeType:   input.mimeType,
 			ImageURL:   imageURL,
-			ImageBytes: image,
+			ImageBytes: input.image,
 		})
 	}
 
@@ -165,6 +177,109 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 		err = h.saveFarmerCardInfo(farmerID, stationID, result)
 	}
 	commonRouter.ToJson(context, result, err)
+}
+
+func readRecognizeCardInput(context *gin.Context) (*recognizeCardInput, error) {
+	if strings.HasPrefix(context.ContentType(), "application/json") {
+		var req recognizeCardJSONRequest
+		if err := context.ShouldBindJSON(&req); err != nil {
+			return nil, errors.New("参数错误")
+		}
+		image, mimeType, err := downloadCloudStorageImage(strings.TrimSpace(req.ImageURL))
+		if err != nil {
+			return nil, err
+		}
+		fileName := strings.TrimSpace(req.FileName)
+		if fileName == "" {
+			fileName = filepath.Base(strings.TrimSpace(req.CloudFileID))
+		}
+		if fileName == "." || fileName == "/" || fileName == "" {
+			fileName = "card.jpg"
+		}
+		if req.MimeType != "" {
+			mimeType = req.MimeType
+		}
+		fileSize := req.FileSize
+		if fileSize <= 0 {
+			fileSize = int64(len(image))
+		}
+		return &recognizeCardInput{
+			cardType:    strings.TrimSpace(req.CardType),
+			farmerID:    strings.TrimSpace(req.FarmerID),
+			imageSide:   strings.TrimSpace(req.ImageSide),
+			fileName:    fileName,
+			fileSize:    fileSize,
+			mimeType:    mimeType,
+			imageURL:    strings.TrimSpace(req.ImageURL),
+			cloudFileID: strings.TrimSpace(req.CloudFileID),
+			image:       image,
+		}, nil
+	}
+
+	cardType := strings.TrimSpace(context.PostForm("cardType"))
+	file, err := context.FormFile("file")
+	if err != nil {
+		return nil, errors.New("请上传识别照片")
+	}
+	openFile, err := file.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer openFile.Close()
+	image, err := io.ReadAll(openFile)
+	if err != nil {
+		return nil, err
+	}
+	return &recognizeCardInput{
+		cardType:  cardType,
+		farmerID:  strings.TrimSpace(context.PostForm("farmerId")),
+		imageSide: strings.TrimSpace(context.PostForm("imageSide")),
+		fileName:  file.Filename,
+		fileSize:  file.Size,
+		mimeType:  file.Header.Get("Content-Type"),
+		image:     image,
+	}, nil
+}
+
+func downloadCloudStorageImage(rawURL string) ([]byte, string, error) {
+	if rawURL == "" {
+		return nil, "", errors.New("imageUrl不能为空")
+	}
+	if !strings.HasPrefix(rawURL, "https://") && !strings.HasPrefix(rawURL, "http://") {
+		return nil, "", errors.New("imageUrl必须是HTTP地址")
+	}
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("下载云存储图片失败：%d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCloudOcrImageSize+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(data) == 0 {
+		return nil, "", errors.New("云存储图片为空")
+	}
+	if len(data) > maxCloudOcrImageSize {
+		return nil, "", errors.New("图片不能超过10MB")
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "" {
+		if parsed, _, err := mime.ParseMediaType(contentType); err == nil {
+			contentType = parsed
+		}
+	}
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	return data, contentType, nil
 }
 
 // resolveBusinessID 查找或创建图片记录，返回业务唯一ID

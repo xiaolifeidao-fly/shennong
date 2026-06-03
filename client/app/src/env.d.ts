@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_CLOUD_ENV?: string
   readonly VITE_APP_CLOUD_SERVICE?: string
   readonly VITE_APP_CLOUD_FILE_BASE_URL?: string
+  readonly VITE_APP_CLOUD_STORAGE_PREFIX?: string
 }
 
 interface ImportMeta {

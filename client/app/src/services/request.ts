@@ -33,6 +33,20 @@ interface WechatCloudContainer {
     method: HttpMethod
     data?: RequestData
   }): Promise<ApiRawResponse<TData>>
+  uploadFile(options: {
+    cloudPath: string
+    filePath: string
+  }): Promise<{ fileID: string }>
+  getTempFileURL(options: {
+    fileList: string[]
+  }): Promise<{
+    fileList: Array<{
+      fileID: string
+      tempFileURL: string
+      status: number
+      errMsg?: string
+    }>
+  }>
 }
 
 declare const wx: {
@@ -56,6 +70,10 @@ declare const wx: {
 
 function getWechatCloud() {
   return (typeof wx === 'undefined' ? undefined : wx.cloud)
+}
+
+export function isCloudTransport() {
+  return apiTransport === 'cloud'
 }
 
 function authHeaders() {
@@ -197,6 +215,37 @@ export async function upload<TData>(
     return payload.data
   } finally {
     uni.hideLoading()
+  }
+}
+
+export async function uploadToCloudStorage(filePath: string, cloudPath: string) {
+  if (!cloudEnv) {
+    throw new Error('云存储配置缺失')
+  }
+  const wechatCloud = getWechatCloud()
+  if (!wechatCloud?.uploadFile || !wechatCloud.getTempFileURL) {
+    throw new Error('当前环境不支持云存储上传')
+  }
+
+  const uploadResult = await wechatCloud.uploadFile({
+    cloudPath,
+    filePath,
+  })
+  if (!uploadResult.fileID) {
+    throw new Error('云存储上传失败')
+  }
+
+  const tempURLResult = await wechatCloud.getTempFileURL({
+    fileList: [uploadResult.fileID],
+  })
+  const file = tempURLResult.fileList?.[0]
+  if (!file?.tempFileURL || file.status !== 0) {
+    throw new Error(file?.errMsg || '获取图片访问地址失败')
+  }
+
+  return {
+    fileID: uploadResult.fileID,
+    tempFileURL: file.tempFileURL,
   }
 }
 
