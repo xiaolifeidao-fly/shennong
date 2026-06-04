@@ -7,26 +7,25 @@ import (
 
 type UserDTO struct {
 	baseDTO.BaseDTO
-	Name           string    `json:"name"`
-	Username       string    `json:"username"`
-	Email          string    `json:"email"`
-	Phone          string    `json:"phone"`
-	Department     string    `json:"department"`
-	TenantID       uint64    `json:"tenantId"`
-	Role           string    `json:"role"`
-	Password       string    `json:"password"`
-	OriginPassword string    `json:"originPassword"`
-	Status         string    `json:"status"`
-	LastLoginTime  time.Time `json:"lastLoginTime"`
-	SecretKey      string    `json:"secretKey"`
-	Remark         string    `json:"remark"`
-	PubToken       string    `json:"pubToken"`
-	BanCount       uint32    `json:"banCount"`
-	AccountID      int       `json:"accountId"`
-	AccountStatus  string    `json:"accountStatus"`
-	BalanceAmount  string    `json:"balanceAmount"`
-	TenantIDs      []uint64  `json:"tenantIds,omitempty"`
-	TenantNames    []string  `json:"tenantNames,omitempty"`
+	Name           string     `json:"name"`
+	Username       string     `json:"username"`
+	Email          string     `json:"email"`
+	Phone          string     `json:"phone"`
+	Department     string     `json:"department"`
+	TenantID       uint64     `json:"tenantId"`
+	Role           string     `json:"role"`
+	Password       string     `json:"password"`
+	OriginPassword string     `json:"originPassword"`
+	Status         string     `json:"status"`
+	LastLoginTime  *time.Time `json:"lastLoginTime"`
+	SecretKey      string     `json:"secretKey"`
+	Remark         string     `json:"remark"`
+	BanCount       uint32     `json:"banCount"`
+	AccountID      int        `json:"accountId"`
+	AccountStatus  string     `json:"accountStatus"`
+	BalanceAmount  string     `json:"balanceAmount"`
+	TenantIDs      []uint64   `json:"tenantIds,omitempty"`
+	TenantNames    []string   `json:"tenantNames,omitempty"`
 }
 
 type CreateUserDTO struct {
@@ -43,7 +42,6 @@ type CreateUserDTO struct {
 	LastLoginTime  time.Time `json:"lastLoginTime"`
 	SecretKey      string    `json:"secretKey"`
 	Remark         string    `json:"remark"`
-	PubToken       string    `json:"pubToken"`
 	BanCount       uint32    `json:"banCount"`
 	TenantIDs      []uint64  `json:"tenantIds,omitempty"`
 }
@@ -62,7 +60,6 @@ type UpdateUserDTO struct {
 	LastLoginTime  *time.Time `json:"lastLoginTime,omitempty"`
 	SecretKey      *string    `json:"secretKey,omitempty"`
 	Remark         *string    `json:"remark,omitempty"`
-	PubToken       *string    `json:"pubToken,omitempty"`
 	BanCount       *uint32    `json:"banCount,omitempty"`
 	TenantIDs      *[]uint64  `json:"tenantIds,omitempty"`
 }
@@ -78,10 +75,8 @@ type UserQueryDTO struct {
 	Phone      string `form:"phone"`
 	Department string `form:"department"`
 	TenantID   uint64 `form:"tenantId"`
-	Role       string `form:"role"`
 	Status     string `form:"status"`
 	SecretKey  string `form:"secretKey"`
-	PubToken   string `form:"pubToken"`
 }
 
 type UserStatsDTO struct {
@@ -100,7 +95,6 @@ type CurrentUserProfileDTO struct {
 	Phone      string `json:"phone"`
 	Department string `json:"department"`
 	TenantID   uint64 `json:"tenantId"`
-	Role       string `json:"role"`
 	Status     string `json:"status"`
 	Remark     string `json:"remark"`
 }
@@ -165,4 +159,9 @@ type UserRoleQueryDTO struct {
 	PageSize  int    `form:"pageSize"`
 	UserID    uint64 `form:"userId"`
 	RoleID    uint64 `form:"roleId"`
+}
+
+type SetUserRolesDTO struct {
+	UserID    uint64   `json:"userId"`
+	RoleCodes []string `json:"roleCodes"`
 }

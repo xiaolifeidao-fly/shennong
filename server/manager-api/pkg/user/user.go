@@ -49,6 +49,7 @@ func (h *UserHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/user-roles", h.listUserRoles)
 	engine.GET("/user-roles/:id", h.getUserRoleByID)
 	engine.POST("/user-roles", h.createUserRole)
+	engine.PUT("/user-roles/by-user", h.setUserRoles)
 	engine.PUT("/user-roles/:id", h.updateUserRole)
 	engine.DELETE("/user-roles/:id", h.deleteUserRole)
 }
@@ -293,6 +294,16 @@ func (h *UserHandler) updateUserRole(context *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *UserHandler) setUserRoles(context *gin.Context) {
+	var req userDTO.SetUserRolesDTO
+	if err := context.ShouldBindJSON(&req); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	err := h.userService.SetUserRoles(&req)
+	commonRouter.ToJson(context, gin.H{"ok": true}, err)
 }
 
 func (h *UserHandler) deleteUserRole(context *gin.Context) {

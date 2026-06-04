@@ -20,17 +20,13 @@ export class AppUserRecord {
 
   stationName = "";
 
-  password = "";
+password = "";
 
   originPassword = "";
 
   status = "active";
 
-  secretKey = "";
-
   remark = "";
-
-  pubToken = "";
 
   banCount = 0;
 
@@ -52,8 +48,7 @@ export interface AppUserPayload extends Record<string, unknown> {
   phone?: string;
   department?: string;
   stationId?: number;
-  status?: string;
-  secretKey?: string;
+status?: string;
   remark?: string;
   banCount?: number;
 }
@@ -64,7 +59,6 @@ export function fetchAppUsers(query: CrudListQuery) {
 
 export async function createAppUser(payload: AppUserPayload) {
   const { password, originPassword, ...restPayload } = payload;
-  delete restPayload.pubToken;
   const response = await instance.post<ApiResponse<AppUserRecord>>("/app-users", {
     ...restPayload,
     originPassword: originPassword || password,
@@ -89,3 +83,4 @@ export async function deleteAppUser(id: number) {
   const response = await instance.delete<ApiResponse<{ deleted: boolean }>>(`/app-users/${id}`);
   return unwrapApiResponse(response.data);
 }
+

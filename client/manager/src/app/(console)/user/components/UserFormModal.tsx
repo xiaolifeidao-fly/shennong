@@ -1,13 +1,15 @@
 "use client";
 
 import { Form, Input, Modal, Select } from "antd";
-import type { TenantOption, UserPayload, UserRecord } from "../api/user.api";
+import type { RoleOption, TenantOption, UserPayload, UserRecord } from "../api/user.api";
+import { CryptoUtil } from "@/utils/crypto.util";
 
 interface UserFormModalProps {
   open: boolean;
   submitting: boolean;
   user: UserRecord | null;
   tenantOptions: TenantOption[];
+  roleOptions: RoleOption[];
   onCancel: () => void;
   onSubmit: (payload: UserPayload) => Promise<void>;
 }
@@ -20,13 +22,6 @@ interface UserFormValues {
   remark?: string;
 }
 
-const roleOptions = [
-  { label: "普通成员", value: "member" },
-  { label: "管理员", value: "admin" },
-  { label: "经理", value: "manager" },
-  { label: "审计员", value: "auditor" },
-];
-
 const statusOptions = [
   { label: "启用", value: "active" },
   { label: "停用", value: "inactive" },
@@ -38,9 +33,11 @@ export function UserFormModal({
   submitting,
   user,
   tenantOptions: _tenantOptions,
+  roleOptions,
   onCancel,
   onSubmit,
 }: UserFormModalProps) {
+  const selectableRoles = roleOptions.map((r) => ({ label: r.name, value: r.code }));
   const [form] = Form.useForm<UserFormValues>();
   const isEdit = Boolean(user);
 
@@ -55,7 +52,7 @@ export function UserFormModal({
     };
     const password = values.password?.trim();
     if (password) {
-      payload.password = password;
+      payload.password = CryptoUtil.encrypt(password);
       payload.originPassword = password;
     }
     await onSubmit(payload);
@@ -83,7 +80,7 @@ export function UserFormModal({
         }
         form.setFieldsValue({
           username: user?.username ?? "",
-          role: user?.role ?? "member",
+          role: user?.role ?? roleOptions[0]?.code ?? "",
           status: user?.status ?? "active",
           remark: user?.remark ?? "",
           password: "",
@@ -104,7 +101,7 @@ export function UserFormModal({
           name="role"
           rules={[{ required: true, message: "请选择角色" }]}
         >
-          <Select options={roleOptions} placeholder="请选择角色" />
+          <Select options={selectableRoles} placeholder="请选择角色" />
         </Form.Item>
 
         <Form.Item

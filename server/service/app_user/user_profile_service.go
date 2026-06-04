@@ -248,31 +248,36 @@ func (s *AppUserService) CreateUser(req *appUserDTO.CreateAppUserDTO) (*appUserD
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
-	created, err := s.appUserRepository.Create(&appUserRepository.AppUser{
-		Name:            name,
-		Username:        username,
-		Email:           email,
-		Phone:           phone,
-		Department:      department,
-		Password:        password,
-		OriginPassword:  originPassword,
-		Status:          status,
-		LastLoginTime:   req.LastLoginTime,
-		SecretKey:       secretKey,
-		Remark:          remark,
-		BanCount:        req.BanCount,
-		OpenUID:         strings.TrimSpace(req.OpenUID),
-		UnionID:         strings.TrimSpace(req.UnionID),
-		WxSessionKey:    strings.TrimSpace(req.WxSessionKey),
-		WxNickname:      strings.TrimSpace(req.WxNickname),
-		WxAvatar:        strings.TrimSpace(req.WxAvatar),
-		WxGender:        req.WxGender,
-		WxCountry:       strings.TrimSpace(req.WxCountry),
-		WxProvince:      strings.TrimSpace(req.WxProvince),
-		WxCity:          strings.TrimSpace(req.WxCity),
-		WxLanguage:      strings.TrimSpace(req.WxLanguage),
-		WxLastLoginTime: req.WxLastLoginTime,
-	})
+	newUser := &appUserRepository.AppUser{
+		Name:           name,
+		Username:       username,
+		Email:          email,
+		Phone:          phone,
+		Department:     department,
+		Password:       password,
+		OriginPassword: originPassword,
+		Status:         status,
+		SecretKey:      secretKey,
+		Remark:         remark,
+		BanCount:       req.BanCount,
+		OpenUID:        strings.TrimSpace(req.OpenUID),
+		UnionID:        strings.TrimSpace(req.UnionID),
+		WxSessionKey:   strings.TrimSpace(req.WxSessionKey),
+		WxNickname:     strings.TrimSpace(req.WxNickname),
+		WxAvatar:       strings.TrimSpace(req.WxAvatar),
+		WxGender:       req.WxGender,
+		WxCountry:      strings.TrimSpace(req.WxCountry),
+		WxProvince:     strings.TrimSpace(req.WxProvince),
+		WxCity:         strings.TrimSpace(req.WxCity),
+		WxLanguage:     strings.TrimSpace(req.WxLanguage),
+	}
+	if req.LastLoginTime != nil && !req.LastLoginTime.IsZero() {
+		newUser.LastLoginTime = req.LastLoginTime
+	}
+	if req.WxLastLoginTime != nil && !req.WxLastLoginTime.IsZero() {
+		newUser.WxLastLoginTime = req.WxLastLoginTime
+	}
+	created, err := s.appUserRepository.Create(newUser)
 	if err != nil {
 		return nil, err
 	}

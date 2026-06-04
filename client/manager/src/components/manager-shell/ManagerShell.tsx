@@ -34,15 +34,25 @@ import {
 } from "antd";
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
-import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ComponentType,
+  PropsWithChildren,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { clearAuthToken } from "@/utils/auth";
+import { CryptoUtil } from "@/utils/crypto.util";
 import { withoutBasePath } from "@/utils/routes";
 import {
   changeCurrentUserPassword,
-  fetchCurrentUserPermittedPageUrls,
+  fetchCurrentUserMenuResources,
   fetchCurrentUserProfile,
   updateCurrentUserProfile,
   type CurrentUserProfile,
+  type ResourceItem,
   type UpdateCurrentUserProfilePayload,
 } from "./api/profile.api";
 
@@ -53,6 +63,7 @@ const { useBreakpoint } = Grid;
 interface ManagerShellProps extends PropsWithChildren {}
 
 type MenuItem = Required<MenuProps>["items"][number];
+type IconComponent = ComponentType;
 
 type ProfileFormValues = UpdateCurrentUserProfilePayload;
 
@@ -62,7 +73,15 @@ interface PasswordFormValues {
   confirmPassword: string;
 }
 
-const pageTitleMap: Record<string, string> = {
+const menuLoadingRows = [
+  { key: "dashboard", width: "72%" },
+  { key: "user", width: "58%" },
+  { key: "permission", width: "78%" },
+  { key: "grain", width: "64%" },
+  { key: "settings", width: "52%" },
+];
+
+const fallbackPageTitleMap: Record<string, string> = {
   "/manager-dashboard": "数据总览",
   "/user/maintenance": "用户维护",
   "/user/tenant": "租户配置",
@@ -79,44 +98,123 @@ const pageTitleMap: Record<string, string> = {
   "/grain/entries": "收粮明细",
 };
 
-function getOpenKeys(pathname: string) {
-  if (pathname.startsWith("/user")) {
-    return ["/user"];
+const fallbackQuickActionIcons: Record<string, ReactNode> = {
+  "/manager-dashboard": <AppstoreOutlined />,
+  "/user/maintenance": <TeamOutlined />,
+  "/permission": <SafetyCertificateOutlined />,
+  "/app-user": <TeamOutlined />,
+  "/grain/dashboard": <BarChartOutlined />,
+  "/grain/entries": <DatabaseOutlined />,
+};
+
+const menuIconMap: Record<string, IconComponent> = {
+  AppstoreOutlined,
+  BankOutlined,
+  BarChartOutlined,
+  DatabaseOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined,
+  UsergroupAddOutlined,
+};
+
+function normalizeResourceType(resourceType: string) {
+  return resourceType.trim().toLowerCase();
+}
+
+function normalizePageKey(resource: ResourceItem) {
+  return resource.pageUrl || resource.resourceUrl || `resource:${resource.id}`;
+}
+
+function getResourceLabel(resource: ResourceItem) {
+  return resource.menuName || resource.name || resource.code || `资源 ${resource.id}`;
+}
+
+function getResourceIcon(resource: ResourceItem) {
+  const IconComponent = menuIconMap[resource.component];
+  return IconComponent ? <IconComponent /> : undefined;
+}
+
+function sortResources(a: ResourceItem, b: ResourceItem) {
+  return a.sortId - b.sortId || a.id - b.id;
+}
+
+function buildDynamicMenuItems(resources: ResourceItem[]): MenuItem[] {
+  const menuResources = resources
+    .filter((resource) => ["menu", "page"].includes(normalizeResourceType(resource.resourceType)))
+    .sort(sortResources);
+  const childrenByParent = new Map<number, ResourceItem[]>();
+
+  for (const resource of menuResources) {
+    const siblings = childrenByParent.get(resource.parentId) ?? [];
+    siblings.push(resource);
+    childrenByParent.set(resource.parentId, siblings);
   }
-  if (pathname.startsWith("/activation-code")) {
-    return ["/activation-code"];
-  }
-  if (pathname.startsWith("/product")) {
-    return ["/product"];
-  }
-  if (pathname.startsWith("/collect")) {
-    return ["/collect"];
-  }
-  if (pathname.startsWith("/shop")) {
-    return ["/shop"];
-  }
-  if (pathname.startsWith("/app-user")) {
-    return ["/grain-farmer-group"];
-  }
-  if (pathname.startsWith("/permission") || pathname.startsWith("/tenant")) {
-    return ["/system-group"];
-  }
-  if (pathname.startsWith("/grain")) {
-    if (
-      pathname.startsWith("/grain/stations") ||
-      pathname.startsWith("/grain/config") ||
-      pathname.startsWith("/grain/payment-methods")
-    ) {
-      return ["/grain-station-group"];
+
+  const buildItem = (resource: ResourceItem): MenuItem | null => {
+    const resourceType = normalizeResourceType(resource.resourceType);
+    const key = normalizePageKey(resource);
+
+    if (resourceType === "page") {
+      if (!resource.pageUrl) {
+        return null;
+      }
+      return {
+        key,
+        icon: resource.parentId === 0 ? getResourceIcon(resource) : undefined,
+        label:
+          resource.parentId === 0
+            ? renderMenuLabel(getResourceLabel(resource), resource.meta)
+            : getResourceLabel(resource),
+      };
     }
-    if (pathname.startsWith("/grain/farmers")) {
-      return ["/grain-farmer-group"];
+
+    const children = (childrenByParent.get(resource.id) ?? [])
+      .sort(sortResources)
+      .map(buildItem)
+      .filter((item): item is MenuItem => item !== null);
+
+    if (children.length === 0) {
+      return null;
     }
-    if (pathname.startsWith("/grain/dashboard") || pathname.startsWith("/grain/entries")) {
-      return ["/grain-purchase-group"];
+
+    return {
+      key,
+      icon: getResourceIcon(resource),
+      label: renderMenuLabel(getResourceLabel(resource), resource.meta),
+      children,
+    };
+  };
+
+  return (childrenByParent.get(0) ?? [])
+    .sort(sortResources)
+    .map(buildItem)
+    .filter((item): item is MenuItem => item !== null);
+}
+
+function getOpenKeysFromMenuItems(pathname: string, items: MenuItem[]) {
+  const keys: string[] = [];
+
+  const visit = (item: MenuItem, parents: string[]): boolean => {
+    if (!item || typeof item !== "object") {
+      return false;
     }
-  }
-  return [];
+
+    const menuItem = item as { key?: string; children?: MenuItem[] };
+    const itemKey = typeof menuItem.key === "string" ? menuItem.key : "";
+    if (itemKey && pathname.startsWith(itemKey) && !menuItem.children) {
+      keys.push(...parents);
+      return true;
+    }
+
+    if (Array.isArray(menuItem.children)) {
+      return menuItem.children.some((child) => visit(child, itemKey ? [...parents, itemKey] : parents));
+    }
+
+    return false;
+  };
+
+  items.some((item) => visit(item, []));
+  return Array.from(new Set(keys));
 }
 
 function renderMenuLabel(label: string, hint?: string) {
@@ -133,52 +231,51 @@ export function ManagerShell({ children }: ManagerShellProps) {
   const router = useRouter();
   const screens = useBreakpoint();
   const activePath = withoutBasePath(pathname ?? "/manager-dashboard");
-  const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(activePath));
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const [profileForm] = Form.useForm<ProfileFormValues>();
   const [passwordForm] = Form.useForm<PasswordFormValues>();
   const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
-  const [permittedUrls, setPermittedUrls] = useState<Set<string> | null>(null);
+  const [menuResources, setMenuResources] = useState<ResourceItem[]>([]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
-  const quickActions = useMemo(
-    () => [
-      {
-        key: "/manager-dashboard",
-        label: "数据总览",
-        icon: <AppstoreOutlined />,
-      },
-      {
-        key: "/user/maintenance",
-        label: "用户管理",
-        icon: <TeamOutlined />,
-      },
-      {
-        key: "/permission",
-        label: "权限管理",
-        icon: <SafetyCertificateOutlined />,
-      },
-      {
-        key: "/app-user",
-        label: "业务员管理",
-        icon: <TeamOutlined />,
-      },
-      {
-        key: "/grain/dashboard",
-        label: "收粮大盘",
-        icon: <BarChartOutlined />,
-      },
-      {
-        key: "/grain/entries",
-        label: "收粮明细",
-        icon: <DatabaseOutlined />,
-      },
-    ],
-    [],
+  const [menuLoading, setMenuLoading] = useState(true);
+  const menuItems = useMemo(() => buildDynamicMenuItems(menuResources), [menuResources]);
+  const pageResources = useMemo(
+    () =>
+      menuResources
+        .filter((resource) => normalizeResourceType(resource.resourceType) === "page" && resource.pageUrl)
+        .sort(sortResources),
+    [menuResources],
   );
+  const permittedUrls = useMemo(() => new Set(pageResources.map((resource) => resource.pageUrl)), [pageResources]);
+  const quickActions = useMemo(() => {
+    const preferredOrder = [
+      "/manager-dashboard",
+      "/user/maintenance",
+      "/permission",
+      "/app-user",
+      "/grain/dashboard",
+      "/grain/entries",
+    ];
+    const resourceByUrl = new Map(pageResources.map((resource) => [resource.pageUrl, resource]));
+    return preferredOrder.flatMap((pageUrl) => {
+      const resource = resourceByUrl.get(pageUrl);
+      if (!resource) {
+        return [];
+      }
+      return [
+        {
+          key: pageUrl,
+          label: getResourceLabel(resource),
+          icon: fallbackQuickActionIcons[pageUrl] ?? getResourceIcon(resource),
+        },
+      ];
+    });
+  }, [pageResources]);
 
   const currentModule =
     activePath.startsWith("/grain/farmers") || activePath.startsWith("/app-user")
@@ -192,152 +289,6 @@ export function ManagerShell({ children }: ManagerShellProps) {
             : activePath.startsWith("/user")
               ? "用户中心"
               : "经营总览";
-
-  const items = useMemo<MenuItem[]>(
-    () => [
-      {
-        type: "group",
-        label: "工作台",
-        key: "group-workbench",
-      },
-      {
-        key: "/manager-dashboard",
-        icon: <AppstoreOutlined />,
-        label: renderMenuLabel("数据总览", "经营指标"),
-      },
-      {
-        type: "group",
-        label: "组织与权限",
-        key: "group-organization",
-      },
-      {
-        key: "/user",
-        icon: <TeamOutlined />,
-        label: renderMenuLabel("用户管理", "后台账号"),
-        children: [
-          {
-            key: "/user/maintenance",
-            label: "用户维护",
-          },
-          {
-            key: "/tenant",
-            label: "租户配置",
-          },
-        ],
-      },
-      {
-        key: "/system-group",
-        icon: <SafetyCertificateOutlined />,
-        label: renderMenuLabel("系统设置", "授权配置"),
-        children: [
-          {
-            key: "/permission",
-            label: "角色资源",
-          },
-          {
-            key: "/tenant",
-            label: "租户配置",
-          },
-        ],
-      },
-      {
-        type: "group",
-        label: "粮食收购",
-        key: "group-grain",
-      },
-      {
-        key: "/grain-station-group",
-        icon: <BankOutlined />,
-        label: renderMenuLabel("粮站管理", "基础资料"),
-        children: [
-          {
-            key: "/grain/stations",
-            label: "粮站列表",
-          },
-          {
-            key: "/grain/config",
-            label: "基础设置",
-          },
-          {
-            key: "/grain/payment-methods",
-            label: "付款方式",
-          },
-        ],
-      },
-      {
-        key: "/grain-farmer-group",
-        icon: <UsergroupAddOutlined />,
-        label: renderMenuLabel("粮户管理", "农户与业务员"),
-        children: [
-          {
-            key: "/grain/farmers",
-            label: "农户管理",
-          },
-          {
-            key: "/app-user",
-            label: "业务员管理",
-          },
-        ],
-      },
-      {
-        key: "/grain-purchase-group",
-        icon: <DatabaseOutlined />,
-        label: renderMenuLabel("收粮管理", "入库流水"),
-        children: [
-          {
-            key: "/grain/dashboard",
-            label: "收粮大盘",
-          },
-          {
-            key: "/grain/entries",
-            label: "收粮明细",
-          },
-        ],
-      },
-    ],
-    [],
-  );
-  const filteredItems = useMemo<MenuItem[]>(() => {
-    if (permittedUrls === null) {
-      return items;
-    }
-    const isAllowed = (key: string) => permittedUrls.has(key);
-
-    const result: MenuItem[] = [];
-    for (const item of items) {
-      if (!item || typeof item !== "object") {
-        result.push(item);
-        continue;
-      }
-      const menuItem = item as { type?: string; key?: string; children?: { key?: string }[] };
-      if (menuItem.type === "group") {
-        result.push(item);
-        continue;
-      }
-      if (Array.isArray(menuItem.children)) {
-        const allowedChildren = menuItem.children.filter(
-          (child) => child.key && isAllowed(child.key as string),
-        );
-        if (allowedChildren.length > 0) {
-          result.push({ ...item, children: allowedChildren } as MenuItem);
-        }
-      } else if (menuItem.key && isAllowed(menuItem.key as string)) {
-        result.push(item);
-      }
-    }
-
-    // Remove trailing group items with no following content
-    const cleaned: MenuItem[] = [];
-    for (let i = 0; i < result.length; i++) {
-      const cur = result[i] as { type?: string };
-      if (cur?.type === "group") {
-        const next = result[i + 1] as { type?: string } | undefined;
-        if (!next || next.type === "group") continue;
-      }
-      cleaned.push(result[i]);
-    }
-    return cleaned;
-  }, [items, permittedUrls]);
 
   const selectedKey = activePath === "/activation-code" ? "/activation-code/admin" : activePath;
 
@@ -360,27 +311,26 @@ export function ManagerShell({ children }: ManagerShellProps) {
   const avatarText = displayName.trim().charAt(0).toUpperCase() || "A";
 
   const loadProfile = useCallback(async () => {
+    setMenuLoading(true);
     try {
       const result = await fetchCurrentUserProfile();
       setProfile(result);
-      if (result.role === "admin") {
-        setPermittedUrls(null);
-      } else {
-        const urls = await fetchCurrentUserPermittedPageUrls(result.id);
-        setPermittedUrls(urls);
-      }
+      const resources = await fetchCurrentUserMenuResources();
+      setMenuResources(resources);
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : "获取个人信息失败");
+    } finally {
+      setMenuLoading(false);
     }
   }, [messageApi]);
 
   useEffect(() => {
-    const pathOpenKeys = getOpenKeys(activePath);
+    const pathOpenKeys = getOpenKeysFromMenuItems(activePath, menuItems);
     if (pathOpenKeys.length === 0) {
       return;
     }
     setOpenKeys((currentKeys) => Array.from(new Set([...currentKeys, ...pathOpenKeys])));
-  }, [activePath]);
+  }, [activePath, menuItems]);
 
   useEffect(() => {
     setCollapsed(!screens.lg);
@@ -434,8 +384,8 @@ export function ManagerShell({ children }: ManagerShellProps) {
       const values = await passwordForm.validateFields();
       setPasswordSaving(true);
       await changeCurrentUserPassword({
-        oldPassword: values.oldPassword,
-        newPassword: values.newPassword,
+        oldPassword: CryptoUtil.encrypt(values.oldPassword),
+        newPassword: CryptoUtil.encrypt(values.newPassword),
       });
       setPasswordOpen(false);
       passwordForm.resetFields();
@@ -450,7 +400,8 @@ export function ManagerShell({ children }: ManagerShellProps) {
   };
 
   const pageTitle =
-    Object.entries(pageTitleMap).find(([path]) => activePath.startsWith(path))?.[1] ??
+    pageResources.find((resource) => activePath.startsWith(resource.pageUrl))?.menuName ||
+    Object.entries(fallbackPageTitleMap).find(([path]) => activePath.startsWith(path))?.[1] ||
     "管理工作台";
 
   return (
@@ -499,23 +450,38 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 </Tag>
               </div>
 
-              <Menu
-                className="manager-shell-menu"
-                mode="inline"
-                selectedKeys={[selectedKey]}
-                openKeys={openKeys}
-                onOpenChange={(keys) => setOpenKeys(keys as string[])}
-                items={filteredItems}
-                onClick={({ key }) => {
-                  if (typeof key === "string" && key.startsWith("/")) {
-                    router.push(key);
-                  }
-                }}
-                style={{
-                  fontSize: 15,
-                  marginTop: 2,
-                }}
-              />
+              {menuLoading ? (
+                <div className="manager-menu-loading" aria-label="菜单加载中" aria-busy="true">
+                  {menuLoadingRows.map((row, index) => (
+                    <div
+                      className="manager-menu-loading-row"
+                      key={row.key}
+                      style={{ animationDelay: `${index * 70}ms` }}
+                    >
+                      <span />
+                      <i style={{ width: row.width }} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Menu
+                  className="manager-shell-menu"
+                  mode="inline"
+                  selectedKeys={[selectedKey]}
+                  openKeys={openKeys}
+                  onOpenChange={(keys) => setOpenKeys(keys as string[])}
+                  items={menuItems}
+                  onClick={({ key }) => {
+                    if (typeof key === "string" && permittedUrls.has(key)) {
+                      router.push(key);
+                    }
+                  }}
+                  style={{
+                    fontSize: 15,
+                    marginTop: 2,
+                  }}
+                />
+              )}
               <div className="manager-sidebar-foot">
                 <div className="manager-sidebar-status-icon">
                   <SettingOutlined />
@@ -565,7 +531,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
                     </Text>
                   </Space>
                   <Space size={10} wrap style={{ width: "100%" }}>
-                    {quickActions.filter((a) => permittedUrls === null || permittedUrls.has(a.key)).map((action) => {
+                    {quickActions.map((action) => {
                       const isActive = activePath === action.key;
 
                       return (

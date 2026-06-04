@@ -36,7 +36,6 @@ func (s *UserService) EnsureSalesmanUser(username, name, phone, rawPassword stri
 		}
 	}
 
-	role := string(permission.RoleCodeSalesman)
 	entity, err := s.userRepository.FindByUsername(username)
 	if err != nil {
 		if err != gorm.ErrRecordNotFound {
@@ -46,9 +45,8 @@ func (s *UserService) EnsureSalesmanUser(username, name, phone, rawPassword stri
 			Name:          name,
 			Username:      username,
 			Phone:         phone,
-			Role:          role,
 			Status:        "active",
-			LastLoginTime: time.Now(),
+			LastLoginTime: func() *time.Time { t := time.Now(); return &t }(),
 		}
 		applySyncedUserPassword(entity, rawPassword)
 		created, err := s.userRepository.Create(entity)
@@ -59,12 +57,12 @@ func (s *UserService) EnsureSalesmanUser(username, name, phone, rawPassword stri
 	} else {
 		entity.Name = name
 		entity.Phone = phone
-		entity.Role = role
 		if strings.TrimSpace(entity.Status) == "" {
 			entity.Status = "active"
 		}
-		if entity.LastLoginTime.IsZero() {
-			entity.LastLoginTime = time.Now()
+		if entity.LastLoginTime == nil {
+			t := time.Now()
+			entity.LastLoginTime = &t
 		}
 		if rawPassword != "" {
 			applySyncedUserPassword(entity, rawPassword)
@@ -136,10 +134,6 @@ func (s *UserService) saveUserPasswordAndSyncSalesmanAppUser(entity *userReposit
 }
 
 func userHasSalesmanRole(tx *gorm.DB, entity *userRepository.User) (bool, error) {
-	if strings.EqualFold(strings.TrimSpace(entity.Role), string(permission.RoleCodeSalesman)) {
-		return true, nil
-	}
-
 	var count int64
 	err := tx.Table("user_role").
 		Joins("INNER JOIN `role` r ON r.id = user_role.role_id").

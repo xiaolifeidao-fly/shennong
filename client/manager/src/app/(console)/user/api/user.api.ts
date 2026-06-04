@@ -41,8 +41,6 @@ export class UserRecord {
 
   secretKey = "";
 
-  pubToken = "";
-
   banCount = 0;
 
   accountId?: number;
@@ -86,7 +84,7 @@ export interface UserPayload {
   department?: string;
   tenantId?: number;
   tenantIds?: number[];
-  role: string;
+  role?: string;
   status: string;
   remark?: string;
   tineUserId?: string;
@@ -96,7 +94,6 @@ export interface UserPayload {
   password?: string;
   originPassword?: string;
   secretKey?: string;
-  pubToken?: string;
   banCount?: number;
 }
 
@@ -107,8 +104,36 @@ export class TenantOption {
   status = "";
 }
 
+export class RoleOption {
+  id!: number;
+  name = "";
+  code = "";
+}
+
 export async function fetchTenantOptions() {
   return getPage(TenantOption, "/tenants", { pageIndex: 1, pageSize: 200 });
+}
+
+export async function fetchRoleOptions() {
+  return getPage(RoleOption, "/roles", { pageIndex: 1, pageSize: 200 });
+}
+
+export class UserRoleRecord {
+  id!: number;
+  userId!: number;
+  roleId!: number;
+}
+
+export async function fetchUserRoles(userId: number) {
+  return getPage(UserRoleRecord, "/user-roles", { userId, pageIndex: 1, pageSize: 100 });
+}
+
+export async function setUserRoles(userId: number, roleCodes: string[]) {
+  const response = await instance.put<ApiResponse<{ ok: boolean }>>("/user-roles/by-user", {
+    userId,
+    roleCodes,
+  });
+  return unwrapApiResponse(response.data);
 }
 
 export async function fetchUsers(query: UserListQuery) {

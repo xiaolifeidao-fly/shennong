@@ -1043,10 +1043,15 @@ select {
 }
 
 .permission-tree-panel .ant-tree-node-content-wrapper {
+  flex: 1;
   min-height: 44px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   border-radius: 8px;
+}
+
+.permission-tree-panel .ant-tree-title {
+  width: 100%;
 }
 
 .permission-tree-panel .ant-tree-node-selected {
@@ -2085,6 +2090,44 @@ body {
   place-items: center;
 }
 
+.ant-layout-sider-collapsed .manager-menu-loading {
+  align-items: center;
+  padding-right: 0;
+}
+
+.ant-layout-sider-collapsed .manager-menu-loading-row {
+  width: 46px;
+  padding: 0;
+  justify-content: center;
+}
+
+.ant-layout-sider-collapsed .manager-menu-loading-row i {
+  display: none;
+}
+
+@keyframes managerMenuLoadingRise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes managerMenuLoadingShine {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  58%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
 .manager-sidebar-brand {
   min-height: 74px;
   padding: 10px;
@@ -2213,6 +2256,62 @@ body {
 .manager-shell-menu.ant-menu::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.18);
+}
+
+.manager-menu-loading {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow: hidden;
+}
+
+.manager-menu-loading-row {
+  height: 46px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(223, 243, 216, 0.04)),
+    rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+  animation: managerMenuLoadingRise 420ms ease both;
+}
+
+.manager-menu-loading-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  animation: managerMenuLoadingShine 1.35s ease-in-out infinite;
+}
+
+.manager-menu-loading-row span,
+.manager-menu-loading-row i {
+  display: block;
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.manager-menu-loading-row span {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 6px;
+}
+
+.manager-menu-loading-row i {
+  height: 12px;
+  max-width: 126px;
+  border-radius: 999px;
 }
 
 .manager-shell-menu.ant-menu .ant-menu-item-group-title {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type Key, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ApartmentOutlined,
   ApiOutlined,
@@ -58,12 +58,12 @@ const resourceTypeOptions = [
   { label: "菜单", value: "menu" },
   { label: "接口", value: "api" },
   { label: "按钮", value: "button" },
-  { label: "页面", value: "page" },
   { label: "数据", value: "data" },
 ];
 
 const resourceTypeMeta: Record<string, { label: string; color: string; icon: ReactNode }> = {
   menu: { label: "菜单", color: "green", icon: <ApartmentOutlined /> },
+  api_group: { label: "接口分组", color: "geekblue", icon: <ApiOutlined /> },
   api: { label: "接口", color: "blue", icon: <ApiOutlined /> },
   button: { label: "按钮", color: "gold", icon: <AppstoreAddOutlined /> },
   page: { label: "页面", color: "purple", icon: <FileTextOutlined /> },
@@ -90,31 +90,86 @@ function getTypeMeta(type?: string) {
   };
 }
 
-function renderResourceTitle(resource: PermissionResourceRecord) {
+function renderResourceTitle(
+  resource: PermissionResourceRecord,
+  subtreeSelected: boolean,
+  onToggleSubtree?: (resourceId: number, selected: boolean) => void,
+) {
   const meta = getTypeMeta(resource.resourceType);
   const subtitle = resource.resourceUrl || resource.pageUrl || resource.code || "未设置访问路径";
+  const showSelectAll = resource.parentId === 0 && normalizeType(resource.resourceType) === "menu";
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-      <span style={{ color: "var(--manager-primary)", display: "inline-flex" }}>{meta.icon}</span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <Text strong style={{ color: "var(--manager-text)" }}>
-            {resource.name || resource.menuName || resource.code || `资源 #${resource.id}`}
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 12,
+        alignItems: "center",
+        minWidth: 0,
+        width: "100%",
+      }}
+    >
+      <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+        <span style={{ color: "var(--manager-primary)", display: "inline-flex" }}>{meta.icon}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <Text strong style={{ color: "var(--manager-text)" }}>
+              {resource.name || resource.menuName || resource.code || `资源 #${resource.id}`}
+            </Text>
+            <Tag color={meta.color} style={{ margin: 0 }}>
+              {meta.label}
+            </Tag>
+          </div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {subtitle}
           </Text>
-          <Tag color={meta.color} style={{ margin: 0 }}>
-            {meta.label}
-          </Tag>
         </div>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {subtitle}
-        </Text>
       </div>
+      {showSelectAll ? (
+        <Button
+          type="link"
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSubtree?.(resource.id, !subtreeSelected);
+          }}
+          style={{ paddingInline: 4, fontWeight: 700, flex: "0 0 auto" }}
+        >
+          {subtreeSelected ? "取消" : "全选"}
+        </Button>
+      ) : null}
     </div>
   );
 }
 
-function buildResourceTree(resources: PermissionResourceRecord[]): DataNode[] {
+function collectSubtreeResourceIds(rootId: number, resources: PermissionResourceRecord[]) {
+  const childrenByParent = new Map<number, PermissionResourceRecord[]>();
+
+  for (const resource of resources) {
+    const siblings = childrenByParent.get(resource.parentId) ?? [];
+    siblings.push(resource);
+    childrenByParent.set(resource.parentId, siblings);
+  }
+
+  const ids: number[] = [];
+  const visit = (resourceId: number) => {
+    ids.push(resourceId);
+    for (const child of childrenByParent.get(resourceId) ?? []) {
+      visit(child.id);
+    }
+  };
+
+  visit(rootId);
+  return ids;
+}
+
+function buildResourceTree(
+  resources: PermissionResourceRecord[],
+  allResources: PermissionResourceRecord[],
+  checkedIds: Set<number>,
+  onToggleSubtree?: (resourceId: number, selected: boolean) => void,
+): DataNode[] {
   const ordered = [...resources].sort((a, b) => {
     const sortGap = (a.sortId ?? 0) - (b.sortId ?? 0);
     return sortGap || a.id - b.id;
@@ -131,7 +186,11 @@ function buildResourceTree(resources: PermissionResourceRecord[]): DataNode[] {
 
   const toNode = (resource: PermissionResourceRecord): DataNode => ({
     key: resource.id,
-    title: renderResourceTitle(resource),
+    title: renderResourceTitle(
+      resource,
+      collectSubtreeResourceIds(resource.id, allResources).every((id) => checkedIds.has(id)),
+      onToggleSubtree,
+    ),
     children: (childrenByParent.get(resource.id) ?? []).map(toNode),
   });
 
@@ -148,15 +207,58 @@ function roleToFormValue(role?: PermissionRoleRecord | null): Partial<RoleFormVa
   };
 }
 
-function toNumberKeys(keys: Key[]) {
-  return keys.map((key) => Number(key)).filter((key) => Number.isFinite(key) && key > 0);
+function uniqueSortedIds(ids: number[]) {
+  return Array.from(new Set(ids)).sort((a, b) => a - b);
+}
+
+function withSelectedMenuAncestors(ids: number[], resources: PermissionResourceRecord[]) {
+  const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
+  const nextIds = new Set(ids);
+
+  for (const id of ids) {
+    let resource = resourceById.get(id);
+    while (resource?.parentId) {
+      const parent = resourceById.get(resource.parentId);
+      if (!parent) {
+        break;
+      }
+      if (normalizeType(parent.resourceType) === "menu") {
+        nextIds.add(parent.id);
+      }
+      resource = parent;
+    }
+  }
+
+  return uniqueSortedIds(Array.from(nextIds));
+}
+
+function toExplicitResourceIds(ids: number[], resources: PermissionResourceRecord[]) {
+  const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
+  const autoMenuIds = new Set<number>();
+
+  for (const id of ids) {
+    const resource = resourceById.get(id);
+    if (!resource || normalizeType(resource.resourceType) !== "page") {
+      continue;
+    }
+
+    let parent = resource.parentId ? resourceById.get(resource.parentId) : undefined;
+    while (parent) {
+      if (normalizeType(parent.resourceType) === "menu") {
+        autoMenuIds.add(parent.id);
+      }
+      parent = parent.parentId ? resourceById.get(parent.parentId) : undefined;
+    }
+  }
+
+  return uniqueSortedIds(ids.filter((id) => !autoMenuIds.has(id)));
 }
 
 export function PermissionManagementPanel() {
   const [roleForm] = Form.useForm<RoleFormValue>();
   const [roles, setRoles] = useState<PermissionRoleRecord[]>([]);
   const [resources, setResources] = useState<PermissionResourceRecord[]>([]);
-  const [checkedResourceIds, setCheckedResourceIds] = useState<number[]>([]);
+  const [explicitResourceIds, setExplicitResourceIds] = useState<number[]>([]);
   const [savedResourceIds, setSavedResourceIds] = useState<number[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null);
@@ -177,6 +279,10 @@ export function PermissionManagementPanel() {
   const selectedResource = useMemo(
     () => resources.find((resource) => resource.id === selectedResourceId) ?? null,
     [resources, selectedResourceId],
+  );
+  const checkedResourceIds = useMemo(
+    () => withSelectedMenuAncestors(explicitResourceIds, resources),
+    [explicitResourceIds, resources],
   );
   const checkedSet = useMemo(() => new Set(checkedResourceIds), [checkedResourceIds]);
   const unsaved = useMemo(() => {
@@ -200,12 +306,30 @@ export function PermissionManagementPanel() {
         `${resource.name} ${resource.code} ${resource.resourceUrl} ${resource.pageUrl} ${resource.menuName}`
           .toLowerCase()
           .includes(keyword);
-      const hitType = !resourceType || normalizeType(resource.resourceType) === resourceType;
+      const hitType =
+        !resourceType ||
+        (resourceType === "menu"
+          ? ["menu", "page"].includes(normalizeType(resource.resourceType))
+          : resourceType === "api"
+            ? ["api_group", "api"].includes(normalizeType(resource.resourceType))
+            : normalizeType(resource.resourceType) === resourceType);
       return hitKeyword && hitType;
     });
   }, [resourceSearch, resourceType, resources]);
 
-  const treeData = useMemo(() => buildResourceTree(filteredResources), [filteredResources]);
+  const handleToggleSubtree = useCallback((resourceId: number, selected: boolean) => {
+    const subtreeIds = collectSubtreeResourceIds(resourceId, resources);
+    const subtreeIdSet = new Set(subtreeIds);
+    setExplicitResourceIds((prev) =>
+      selected
+        ? uniqueSortedIds([...prev, ...subtreeIds])
+        : uniqueSortedIds(prev.filter((id) => !subtreeIdSet.has(id))),
+    );
+  }, [resources]);
+  const treeData = useMemo(
+    () => buildResourceTree(filteredResources, resources, checkedSet, handleToggleSubtree),
+    [checkedSet, filteredResources, handleToggleSubtree, resources],
+  );
   const selectedRoleResourceCount = useMemo(
     () => resources.filter((resource) => checkedSet.has(resource.id)).length,
     [checkedSet, resources],
@@ -240,12 +364,15 @@ export function PermissionManagementPanel() {
     setBindingLoading(true);
     try {
       const result = await fetchRoleResources(roleId);
-      const nextIds = result.data.map((item) => item.resourceId);
-      setCheckedResourceIds(nextIds);
+      const nextIds = withSelectedMenuAncestors(
+        result.data.map((item) => item.resourceId),
+        resources,
+      );
+      setExplicitResourceIds(toExplicitResourceIds(nextIds, resources));
       setSavedResourceIds(nextIds);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载角色资源失败");
-      setCheckedResourceIds([]);
+      setExplicitResourceIds([]);
       setSavedResourceIds([]);
     } finally {
       setBindingLoading(false);
@@ -258,12 +385,15 @@ export function PermissionManagementPanel() {
 
   useEffect(() => {
     if (!selectedRoleId) {
-      setCheckedResourceIds([]);
+      setExplicitResourceIds([]);
       setSavedResourceIds([]);
       return;
     }
+    if (resources.length === 0) {
+      return;
+    }
     void loadRoleBindings(selectedRoleId);
-  }, [selectedRoleId]);
+  }, [selectedRoleId, resources]);
 
   const openRoleModal = (mode: RoleModalMode, role?: PermissionRoleRecord) => {
     setRoleModalMode(mode);
@@ -322,6 +452,7 @@ export function PermissionManagementPanel() {
     setSubmitting(true);
     try {
       const result = await syncRoleResources(selectedRoleId, checkedResourceIds);
+      setExplicitResourceIds(toExplicitResourceIds(checkedResourceIds, resources));
       setSavedResourceIds(checkedResourceIds);
       message.success(`授权已保存，新增 ${result.created} 项，移除 ${result.deleted} 项`);
     } catch (error) {
@@ -476,15 +607,24 @@ export function PermissionManagementPanel() {
               {treeData.length > 0 ? (
                 <Tree
                   checkable
+                  checkStrictly
                   blockNode
                   showLine
                   defaultExpandAll
-                  checkedKeys={checkedResourceIds}
+                  checkedKeys={{ checked: checkedResourceIds, halfChecked: [] }}
                   selectedKeys={selectedResourceId ? [selectedResourceId] : []}
                   treeData={treeData}
-                  onCheck={(keys) => {
-                    const nextKeys = Array.isArray(keys) ? keys : keys.checked;
-                    setCheckedResourceIds(toNumberKeys(nextKeys));
+                  onCheck={(_, info) => {
+                    const resourceId = Number(info.node.key);
+                    if (!Number.isFinite(resourceId) || resourceId <= 0) {
+                      return;
+                    }
+                    setExplicitResourceIds((prev) => {
+                      const nextIds = info.checked
+                        ? [...prev, resourceId]
+                        : prev.filter((id) => id !== resourceId);
+                      return uniqueSortedIds(nextIds);
+                    });
                   }}
                   onSelect={(keys) => setSelectedResourceId(keys.length > 0 ? Number(keys[0]) : null)}
                 />

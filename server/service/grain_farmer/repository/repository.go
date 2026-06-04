@@ -59,9 +59,12 @@ func buildFarmerListWhere(query grainFarmerDTO.GrainFarmerQueryDTO) (string, []i
 		values = append(values, query.AppUserID)
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
-		likeValue := "%" + value + "%"
-		clauses = append(clauses, "(f.id_number_digest = ? OR f.phone LIKE ? OR f.address LIKE ?)")
-		values = append(values, query.SearchIDNumberDigest, likeValue, likeValue)
+		clauses = append(clauses, "(f.id_number_digest = ? OR f.phone = ?)")
+		values = append(values, query.SearchIDNumberDigest, value)
+	}
+	if value := strings.TrimSpace(query.Name); value != "" {
+		clauses = append(clauses, "f.name_search LIKE ?")
+		values = append(values, "%"+value+"%")
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		clauses = append(clauses, "f.status = ?")
@@ -109,8 +112,10 @@ func applyFarmerQuery(dbQuery *gorm.DB, query grainFarmerDTO.GrainFarmerQueryDTO
 		dbQuery = dbQuery.Where("app_user_id = ?", query.AppUserID)
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
-		likeValue := "%" + value + "%"
-		dbQuery = dbQuery.Where("(id_number_digest = ? OR phone LIKE ? OR address LIKE ?)", query.SearchIDNumberDigest, likeValue, likeValue)
+		dbQuery = dbQuery.Where("(id_number_digest = ? OR phone = ?)", query.SearchIDNumberDigest, value)
+	}
+	if value := strings.TrimSpace(query.Name); value != "" {
+		dbQuery = dbQuery.Where("name_search LIKE ?", "%"+value+"%")
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		dbQuery = dbQuery.Where("status = ?", value)

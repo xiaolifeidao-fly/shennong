@@ -49,16 +49,6 @@ func (r *UserRepository) FindByUsernameOrPhone(account string) (*User, error) {
 	return &entity, nil
 }
 
-func (r *UserRepository) CountActiveByRoles(roles []string) (int64, error) {
-	if r.Db == nil {
-		return 0, fmt.Errorf("database is not initialized")
-	}
-	if len(roles) == 0 {
-		return 0, nil
-	}
-	return r.CountBySQL("SELECT id FROM user WHERE active = 1 AND role IN ?", roles)
-}
-
 func (r *UserRepository) CountRecentLoginUsers() (int64, error) {
 	if r.Db == nil {
 		return 0, fmt.Errorf("database is not initialized")
@@ -93,9 +83,9 @@ func (r *UserRepository) ListUsersByQuery(query userDTO.UserQueryDTO, pageIndex,
 	whereSQL, values := buildUserListWhere(query)
 	sql := `SELECT
 		u.id, u.active, u.created_time, u.updated_time, u.created_by, u.updated_by,
-		u.name, u.username, u.email, u.phone, u.department, u.tenant_id, u.role, u.password,
+		u.name, u.username, u.email, u.phone, u.department, u.tenant_id, u.password,
 		u.origin_password, u.status, u.last_login_time, u.secret_key, u.remark,
-		u.pub_token, u.ban_count
+		u.ban_count
 	FROM user u ` + whereSQL + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
 	values = append(values, pageSize, (pageIndex-1)*pageSize)
 	var rows []UserListRow
@@ -156,10 +146,6 @@ func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 		clauses = append(clauses, "u.tenant_id = ?")
 		values = append(values, query.TenantID)
 	}
-	if value := strings.TrimSpace(query.Role); value != "" {
-		clauses = append(clauses, "u.role = ?")
-		values = append(values, value)
-	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		clauses = append(clauses, `(u.status = ? OR EXISTS (
 			SELECT 1 FROM account a
@@ -169,10 +155,6 @@ func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 	}
 	if value := strings.TrimSpace(query.SecretKey); value != "" {
 		clauses = append(clauses, "u.secret_key = ?")
-		values = append(values, value)
-	}
-	if value := strings.TrimSpace(query.PubToken); value != "" {
-		clauses = append(clauses, "u.pub_token = ?")
 		values = append(values, value)
 	}
 
@@ -214,7 +196,9 @@ func (r *UserTenantRepository) ReplaceActiveTenants(userID uint64, tenantIDs []u
 		return err
 	}
 	for _, tenantID := range uniquePositiveUint64(tenantIDs) {
-		if _, err := r.Create(&UserTenant{UserID: userID, TenantID: tenantID}); err != nil {
+		newTenant := &UserTenant{UserID: userID, TenantID: tenantID}
+		newTenant.Active = 1
+		if _, err := r.Create(newTenant); err != nil {
 			return err
 		}
 	}
@@ -240,6 +224,18 @@ func (r *UserTenantRepository) ListActiveTenantIDs(userID uint64) ([]uint64, err
 		result = append(result, row.TenantID)
 	}
 	return result, nil
+}
+
+func (r *UserRepository) FindFirstRoleCodeByUserID(userID int) string {
+	if r.Db == nil || userID == 0 {
+		return ""
+	}
+	var result struct{ Code string }
+	r.Db.Raw(`SELECT r.code FROM user_role ur
+		INNER JOIN role r ON r.id = ur.role_id AND r.active = 1
+		WHERE ur.user_id = ? AND ur.active = 1
+		ORDER BY ur.id ASC LIMIT 1`, userID).Scan(&result)
+	return result.Code
 }
 
 func uniquePositiveUint64(values []uint64) []uint64 {

@@ -2,7 +2,9 @@ package permission
 
 import (
 	commonRouter "common/middleware/routers"
+	webAuth "manager-api/auth"
 	"net/http"
+	authService "service/manager_auth"
 	permissionService "service/manager_permission"
 	permissionDTO "service/manager_permission/dto"
 	"strconv"
@@ -27,6 +29,8 @@ func NewPermissionHandler() *PermissionHandler {
 }
 
 func (h *PermissionHandler) RegisterHandler(engine *gin.RouterGroup) {
+	engine.GET("/current-user-menus", h.listCurrentUserMenus)
+
 	engine.GET("/resources", h.listResources)
 	engine.GET("/resources/:id", h.getResourceByID)
 	engine.POST("/resources", h.createResource)
@@ -44,6 +48,16 @@ func (h *PermissionHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/role-resources", h.createRoleResource)
 	engine.PUT("/role-resources/:id", h.updateRoleResource)
 	engine.DELETE("/role-resources/:id", h.deleteRoleResource)
+}
+
+func (h *PermissionHandler) listCurrentUserMenus(context *gin.Context) {
+	userID, ok := currentPermissionUserID(context)
+	if !ok {
+		commonRouter.ToError(context, "user not login")
+		return
+	}
+	result, err := h.permissionService.ListCurrentUserMenuResources(userID)
+	commonRouter.ToJson(context, result, err)
 }
 
 func (h *PermissionHandler) listResources(context *gin.Context) {
@@ -250,4 +264,16 @@ func parsePermissionID(context *gin.Context) (uint, bool) {
 		return 0, false
 	}
 	return uint(id), true
+}
+
+func currentPermissionUserID(context *gin.Context) (uint64, bool) {
+	value, ok := context.Get(webAuth.ContextUserKey)
+	if !ok {
+		return 0, false
+	}
+	user, ok := value.(*authService.LoginUser)
+	if !ok || user.ID == 0 {
+		return 0, false
+	}
+	return user.ID, true
 }

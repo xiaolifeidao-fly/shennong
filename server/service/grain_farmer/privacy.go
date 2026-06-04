@@ -42,6 +42,7 @@ func prepareFarmerForSave(entity *grainFarmerRepository.GrainFarmer) error {
 		}
 	}
 	entity.IDNumberDigest = utils.DigestField(plainIDNumber, key, farmerFieldScope("id_number"))
+	entity.NameSearch = strings.TrimSpace(entity.Name)
 	if entity.Name, err = utils.EncryptField(entity.Name, key, farmerFieldScope("name")); err != nil {
 		return err
 	}

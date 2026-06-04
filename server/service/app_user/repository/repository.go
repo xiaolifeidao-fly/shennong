@@ -183,6 +183,18 @@ func buildAppUserListWhere(query appUserDTO.AppUserQueryDTO) (string, []interfac
 		clauses = append(clauses, "u.union_id = ?")
 		values = append(values, value)
 	}
+	if query.ScopedStationIDs != nil {
+		if len(query.ScopedStationIDs) == 0 {
+			clauses = append(clauses, "1 = 0")
+		} else {
+			clauses = append(clauses, `EXISTS (
+				SELECT 1 FROM grain_station_user su2
+				WHERE su2.active = 1 AND su2.status = 'active'
+				  AND su2.app_user_id = u.id
+				  AND su2.station_id IN ?)`)
+			values = append(values, query.ScopedStationIDs)
+		}
+	}
 
 	return strings.Join(clauses, " AND "), values
 }

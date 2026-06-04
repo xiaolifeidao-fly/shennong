@@ -3,12 +3,14 @@ package permission
 import (
 	"common/middleware/db"
 	permissionRepository "service/manager_permission/repository"
+	userRepository "service/manager_user/repository"
 )
 
 type PermissionService struct {
 	resourceRepository     *permissionRepository.ResourceRepository
 	roleRepository         *permissionRepository.RoleRepository
 	roleResourceRepository *permissionRepository.RoleResourceRepository
+	userRoleRepository     *userRepository.UserRoleRepository
 }
 
 func NewPermissionService() *PermissionService {
@@ -16,6 +18,7 @@ func NewPermissionService() *PermissionService {
 		resourceRepository:     db.GetRepository[permissionRepository.ResourceRepository](),
 		roleRepository:         db.GetRepository[permissionRepository.RoleRepository](),
 		roleResourceRepository: db.GetRepository[permissionRepository.RoleResourceRepository](),
+		userRoleRepository:     db.GetRepository[userRepository.UserRoleRepository](),
 	}
 }
 

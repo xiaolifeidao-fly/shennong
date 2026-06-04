@@ -26,6 +26,7 @@ type GrainFarmerQueryDTO struct {
 	StationIDs           []uint64 `form:"-"`
 	AppUserID            uint64   `form:"appUserId"`
 	Search               string   `form:"search"`
+	Name                 string   `form:"name"`
 	SearchIDNumberDigest string   `form:"-"`
 	Status               string   `form:"status"`
 }

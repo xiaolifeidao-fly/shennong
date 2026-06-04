@@ -116,6 +116,7 @@ interface CrudManagementPanelProps<R extends CrudRecord, P extends Record<string
   actionWidth?: number;
   modalWidth?: number;
   formSections?: CrudFormSection<R>[];
+  extraFilters?: { param: string; placeholder: string }[];
   formExtra?: (context: {
     form: FormInstance;
     editingRecord: R | null;
@@ -207,6 +208,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
   actionWidth = 132,
   modalWidth = 720,
   formSections,
+  extraFilters,
   formExtra,
 }: CrudManagementPanelProps<R, P>) {
   const [form] = Form.useForm();
@@ -218,6 +220,7 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
   });
   const [searchValue, setSearchValue] = useState("");
   const [statusValue, setStatusValue] = useState<string | number | undefined>();
+  const [extraFilterValues, setExtraFilterValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -339,6 +342,9 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
     pageIndex: 1,
     [searchParam]: searchValue.trim() || undefined,
     ...(statusField ? { [statusField]: statusValue } : {}),
+    ...Object.fromEntries(
+      Object.entries(extraFilterValues).map(([k, v]) => [k, v.trim() || undefined]),
+    ),
   });
 
   const visibleFields = fields
@@ -467,6 +473,19 @@ export function CrudManagementPanel<R extends CrudRecord, P extends Record<strin
               onPressEnter={() => void loadRecords(filterQuery())}
               style={{ width: 260, maxWidth: "100%" }}
             />
+            {extraFilters?.map((filter) => (
+              <Input
+                key={filter.param}
+                className="manager-filter-input"
+                placeholder={filter.placeholder}
+                value={extraFilterValues[filter.param] ?? ""}
+                onChange={(event) =>
+                  setExtraFilterValues((prev) => ({ ...prev, [filter.param]: event.target.value }))
+                }
+                onPressEnter={() => void loadRecords(filterQuery())}
+                style={{ width: 200 }}
+              />
+            ))}
             {statusField && statusOptions ? (
               <Select
                 allowClear

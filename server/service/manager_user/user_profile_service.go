@@ -3,6 +3,7 @@ package user
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"common/utils"
 	"fmt"
 	userDTO "service/manager_user/dto"
 	userPassword "service/manager_user/password"
@@ -12,6 +13,14 @@ import (
 
 	"gorm.io/gorm"
 )
+
+// decryptPassword 尝试解密前端混淆的密码，解密失败则返回原值
+func decryptPassword(encrypted string) string {
+	if plain, err := utils.DecryptContent(encrypted); err == nil {
+		return plain
+	}
+	return encrypted
+}
 
 // fillUserTenants attaches TenantIDs and TenantNames to each UserDTO.
 func (s *UserService) fillUserTenants(items []*userDTO.UserDTO) error {
@@ -57,7 +66,7 @@ func (s *UserService) GetCurrentUserProfile(id uint) (*userDTO.CurrentUserProfil
 	if entity.Active == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-	return toCurrentUserProfileDTO(entity), nil
+	return s.toCurrentUserProfileDTO(entity), nil
 }
 
 func (s *UserService) UpdateCurrentUserProfile(id uint, req *userDTO.UpdateCurrentUserProfileDTO) (*userDTO.CurrentUserProfileDTO, error) {
@@ -109,7 +118,7 @@ func (s *UserService) UpdateCurrentUserProfile(id uint, req *userDTO.UpdateCurre
 	if err != nil {
 		return nil, err
 	}
-	return toCurrentUserProfileDTO(saved), nil
+	return s.toCurrentUserProfileDTO(saved), nil
 }
 
 func (s *UserService) ChangeCurrentUserPassword(id uint, req *userDTO.ChangeCurrentUserPasswordDTO) error {
@@ -124,8 +133,8 @@ func (s *UserService) ChangeCurrentUserPassword(id uint, req *userDTO.ChangeCurr
 		return gorm.ErrRecordNotFound
 	}
 
-	oldPassword := strings.TrimSpace(req.OldPassword)
-	newPassword := strings.TrimSpace(req.NewPassword)
+	oldPassword := decryptPassword(strings.TrimSpace(req.OldPassword))
+	newPassword := decryptPassword(strings.TrimSpace(req.NewPassword))
 	if oldPassword == "" {
 		return fmt.Errorf("old password is required")
 	}
@@ -174,10 +183,6 @@ func (s *UserService) GetUserStats() (*userDTO.UserStatsDTO, error) {
 	if err := s.userRepository.Db.Model(&userRepository.User{}).Where("active = ?", 1).Where("status = ?", "active").Count(&activeUsers).Error; err != nil {
 		return nil, err
 	}
-	privilegedUsers, err := s.userRepository.CountActiveByRoles([]string{"admin", "manager"})
-	if err != nil {
-		return nil, err
-	}
 	recentLoginUsers, err := s.userRepository.CountRecentLoginUsers()
 	if err != nil {
 		return nil, err
@@ -189,7 +194,6 @@ func (s *UserService) GetUserStats() (*userDTO.UserStatsDTO, error) {
 	return &userDTO.UserStatsDTO{
 		VisibleUsers:     int(visibleUsers),
 		AccountCount:     int(accountCount),
-		PrivilegedUsers:  int(privilegedUsers),
 		RecentLoginUsers: int(recentLoginUsers),
 		ActiveUsers:      int(activeUsers),
 	}, nil
@@ -225,14 +229,13 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 			Phone:          row.Phone,
 			Department:     row.Department,
 			TenantID:       row.TenantID,
-			Role:           row.Role,
+			Role:           row.RoleCode,
 			Password:       row.Password,
 			OriginPassword: row.OriginPassword,
 			Status:         row.Status,
 			LastLoginTime:  row.LastLoginTime,
 			SecretKey:      row.SecretKey,
 			Remark:         row.Remark,
-			PubToken:       row.PubToken,
 			BanCount:       row.BanCount,
 		})
 	}
@@ -279,6 +282,7 @@ func (s *UserService) GetUserByID(id uint) (*userDTO.UserDTO, error) {
 		return nil, gorm.ErrRecordNotFound
 	}
 	result := db.ToDTO[userDTO.UserDTO](entity)
+	result.Role = s.userRepository.FindFirstRoleCodeByUserID(entity.Id)
 	if err := s.fillUserTenants([]*userDTO.UserDTO{result}); err != nil {
 		return nil, err
 	}
@@ -298,21 +302,16 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 	phone := strings.TrimSpace(req.Phone)
 	department := strings.TrimSpace(req.Department)
 	tenantID := req.TenantID
-	role := normalizeUserRole(req.Role)
 	status := normalizeUserStatus(req.Status)
-	password := strings.TrimSpace(req.Password)
-	originPassword := strings.TrimSpace(req.OriginPassword)
+	originPassword := decryptPassword(strings.TrimSpace(req.OriginPassword))
+	password := userPassword.Encrypt(strings.TrimSpace(req.Username), originPassword)
 	secretKey := strings.TrimSpace(req.SecretKey)
 	remark := strings.TrimSpace(req.Remark)
-	pubToken := strings.TrimSpace(req.PubToken)
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
 	if username == "" {
 		return nil, fmt.Errorf("username is required")
-	}
-	if role == "" {
-		return nil, fmt.Errorf("role is invalid")
 	}
 	if status == "" {
 		return nil, fmt.Errorf("status is invalid")
@@ -327,10 +326,12 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
-	lastLoginTime := req.LastLoginTime
-	if lastLoginTime.IsZero() {
-		lastLoginTime = time.Time{}
+	var lastLoginTime *time.Time
+	if !req.LastLoginTime.IsZero() {
+		t := req.LastLoginTime
+		lastLoginTime = &t
 	}
+	roleCode := normalizeUserRole(req.Role)
 	created, err := s.userRepository.Create(&userRepository.User{
 		Name:           name,
 		Username:       username,
@@ -338,18 +339,21 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 		Phone:          phone,
 		Department:     department,
 		TenantID:       tenantID,
-		Role:           role,
 		Password:       password,
 		OriginPassword: originPassword,
 		Status:         status,
 		LastLoginTime:  lastLoginTime,
 		SecretKey:      secretKey,
 		Remark:         remark,
-		PubToken:       pubToken,
 		BanCount:       req.BanCount,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if roleCode != "" {
+		if err := s.replaceUserRole(uint64(created.Id), roleCode); err != nil {
+			return nil, err
+		}
 	}
 	if len(req.TenantIDs) > 0 {
 		if err := s.userTenantRepository.ReplaceActiveTenants(uint64(created.Id), req.TenantIDs); err != nil {
@@ -411,17 +415,16 @@ func (s *UserService) UpdateUser(id uint, req *userDTO.UpdateUserDTO) (*userDTO.
 		entity.TenantID = *req.TenantID
 	}
 	if req.Role != nil {
-		role := normalizeUserRole(*req.Role)
-		if role == "" {
-			return nil, fmt.Errorf("role is invalid")
+		if err := s.replaceUserRole(uint64(entity.Id), *req.Role); err != nil {
+			return nil, err
 		}
-		entity.Role = role
-	}
-	if req.Password != nil {
-		entity.Password = strings.TrimSpace(*req.Password)
 	}
 	if req.OriginPassword != nil {
-		entity.OriginPassword = strings.TrimSpace(*req.OriginPassword)
+		raw := decryptPassword(strings.TrimSpace(*req.OriginPassword))
+		entity.OriginPassword = raw
+		entity.Password = userPassword.Encrypt(entity.Username, raw)
+	} else if req.Password != nil {
+		entity.Password = strings.TrimSpace(*req.Password)
 	}
 	if req.Status != nil {
 		status := normalizeUserStatus(*req.Status)
@@ -431,16 +434,13 @@ func (s *UserService) UpdateUser(id uint, req *userDTO.UpdateUserDTO) (*userDTO.
 		entity.Status = status
 	}
 	if req.LastLoginTime != nil {
-		entity.LastLoginTime = *req.LastLoginTime
+		entity.LastLoginTime = req.LastLoginTime
 	}
 	if req.SecretKey != nil {
 		entity.SecretKey = strings.TrimSpace(*req.SecretKey)
 	}
 	if req.Remark != nil {
 		entity.Remark = strings.TrimSpace(*req.Remark)
-	}
-	if req.PubToken != nil {
-		entity.PubToken = strings.TrimSpace(*req.PubToken)
 	}
 	if req.BanCount != nil {
 		entity.BanCount = *req.BanCount
@@ -473,7 +473,7 @@ func (s *UserService) DeleteUser(id uint) error {
 	return err
 }
 
-func toCurrentUserProfileDTO(entity *userRepository.User) *userDTO.CurrentUserProfileDTO {
+func (s *UserService) toCurrentUserProfileDTO(entity *userRepository.User) *userDTO.CurrentUserProfileDTO {
 	return &userDTO.CurrentUserProfileDTO{
 		Id:         entity.Id,
 		Name:       entity.Name,
@@ -482,7 +482,6 @@ func toCurrentUserProfileDTO(entity *userRepository.User) *userDTO.CurrentUserPr
 		Phone:      entity.Phone,
 		Department: entity.Department,
 		TenantID:   entity.TenantID,
-		Role:       entity.Role,
 		Status:     entity.Status,
 		Remark:     entity.Remark,
 	}

@@ -48,7 +48,7 @@ func (h *GrainPurchaseHandler) getDashboard(context *gin.Context) {
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.GetDashboard(query)
@@ -63,7 +63,7 @@ func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListEntries(query)
@@ -132,7 +132,7 @@ func (h *GrainPurchaseHandler) listSnapshots(context *gin.Context) {
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListEntrySnapshots(query)
@@ -147,7 +147,7 @@ func (h *GrainPurchaseHandler) listFarmerPurchaseSummaries(context *gin.Context)
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListFarmerPurchaseSummaries(query)
@@ -172,7 +172,7 @@ func (h *GrainPurchaseHandler) listMaterials(context *gin.Context) {
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListMaterials(query)
@@ -213,7 +213,7 @@ func (h *GrainPurchaseHandler) streamMaterialImage(context *gin.Context, id uint
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		log.Printf("[grain-material-image] stream image tenant scope missing id=%d stationID=%d", id, content.StationID)
 		return
-	} else if len(stationIDs) > 0 && !stationAllowed(content.StationID, stationIDs) {
+	} else if stationIDs != nil && !stationAllowed(content.StationID, stationIDs) {
 		log.Printf("[grain-material-image] stream image station denied id=%d stationID=%d scopedStationIDs=%v", id, content.StationID, stationIDs)
 		context.Status(http.StatusNotFound)
 		return

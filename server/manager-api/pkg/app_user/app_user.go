@@ -2,6 +2,7 @@ package app_user
 
 import (
 	commonRouter "common/middleware/routers"
+	"manager-api/pkg/internal/tenantctx"
 	"net/http"
 	appUserService "service/app_user"
 	appUserDTO "service/app_user/dto"
@@ -41,6 +42,11 @@ func (h *AppUserHandler) listUsers(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	stationIDs, ok := tenantctx.ScopedStationIDs(context)
+	if !ok {
+		return
+	}
+	query.ScopedStationIDs = stationIDs
 	result, err := h.service.ListUsers(query)
 	commonRouter.ToJson(context, result, err)
 }

@@ -122,13 +122,14 @@ export function AppUserManagementPanel() {
       <CrudManagementPanel<AppUserRecord, AppUserPayload>
         title="业务员管理"
         createText="新增业务员"
-        searchPlaceholder="用户名/姓名"
+        searchPlaceholder="用户名"
         searchParam="search"
+        extraFilters={[{ param: "name", placeholder: "业务员姓名" }]}
         fields={fields}
         columns={columns}
         statusField="status"
         statusOptions={statusOptions}
-        actionWidth={240}
+        actionWidth={200}
         modalWidth={940}
         formSections={formSections}
         rowActions={(record, context) => {

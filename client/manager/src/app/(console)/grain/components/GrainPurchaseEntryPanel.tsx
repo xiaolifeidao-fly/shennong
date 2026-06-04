@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   BankOutlined,
@@ -20,6 +20,7 @@ import {
 import {
   Alert,
   Button,
+  DatePicker,
   Descriptions,
   Divider,
   Drawer,
@@ -40,6 +41,7 @@ import {
   Upload,
   message,
 } from "antd";
+import type { Dayjs } from "dayjs";
 import type { RcFile } from "antd/es/upload";
 import type { ColumnsType } from "antd/es/table";
 import { fetchAppUsers } from "../../app-user/api/app-user.api";
@@ -61,6 +63,7 @@ import {
   type GrainEntryMaterialRecord,
   type GrainPurchaseEntryRecord,
   type GrainPurchaseEntrySnapshotRecord,
+  type GrainPurchaseTypeRecord,
 } from "../api/grain.api";
 import { useAccessibleStations } from "../hooks/useAccessibleStations";
 import { SensitiveValue } from "./SensitiveValue";
@@ -173,8 +176,15 @@ export function GrainPurchaseEntryPanel() {
   const [records, setRecords] = useState<GrainPurchaseEntryRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState({ pageIndex: 1, pageSize });
-  const [searchValue, setSearchValue] = useState("");
-  const [statusValue, setStatusValue] = useState<string | number | undefined>();
+  const [filterStationId, setFilterStationId] = useState<number | undefined>(undefined);
+  const [filterPurchaseTypeIds, setFilterPurchaseTypeIds] = useState<number[]>([]);
+  const [filterDateRange, setFilterDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [filterAppUserIds, setFilterAppUserIds] = useState<number[]>([]);
+  const [filterFarmerOptions, setFilterFarmerOptions] = useState<CrudOption[]>([]);
+  const [filterFarmerIds, setFilterFarmerIds] = useState<number[]>([]);
+  const [farmerSearching, setFarmerSearching] = useState(false);
+  const [filterAppUserOptions, setFilterAppUserOptions] = useState<CrudOption[]>([]);
+  const [appUserSearching, setAppUserSearching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -231,6 +241,7 @@ export function GrainPurchaseEntryPanel() {
         setAppUserOptions(
           appUsers.data.map((user) => ({ label: user.name || user.username || `业务员 ${user.id}`, value: user.id })),
         );
+        setAllPurchaseTypes(purchaseTypes.data);
         setPurchaseTypeOptions(purchaseTypes.data.map((type) => ({ label: type.typeName, value: type.id })));
         setPaymentMethodOptions(
           paymentMethods.data.map((method) => ({ label: method.methodName, value: method.id, methodCode: method.methodCode })),
@@ -247,6 +258,15 @@ export function GrainPurchaseEntryPanel() {
     }
   }, [form, watchedAmount, watchedQuantity]);
 
+  const [allPurchaseTypes, setAllPurchaseTypes] = useState<GrainPurchaseTypeRecord[]>([]);
+
+  const filteredPurchaseTypeOptions = useMemo(() => {
+    const source = filterStationId !== undefined
+      ? allPurchaseTypes.filter((t) => t.stationId === filterStationId)
+      : allPurchaseTypes;
+    return source.map((t) => ({ label: t.typeName, value: t.id }));
+  }, [allPurchaseTypes, filterStationId]);
+
   const stats = useMemo(
     () => [
       { label: "收粮明细总数", value: total },
@@ -258,9 +278,41 @@ export function GrainPurchaseEntryPanel() {
 
   const filterQuery = () => ({
     pageIndex: 1,
-    search: searchValue.trim() || undefined,
-    status: statusValue,
+    stationIds: filterStationId !== undefined ? String(filterStationId) : undefined,
+    purchaseTypeIds: filterPurchaseTypeIds.length > 0 ? filterPurchaseTypeIds.join(",") : undefined,
+    startDate: filterDateRange?.[0]?.format("YYYY-MM-DD") ?? undefined,
+    endDate: filterDateRange?.[1]?.format("YYYY-MM-DD") ?? undefined,
+    appUserIds: filterAppUserIds.length > 0 ? filterAppUserIds.join(",") : undefined,
+    farmerIds: filterFarmerIds.length > 0 ? filterFarmerIds.join(",") : undefined,
   });
+
+  const searchFarmers = useCallback(async (keyword: string) => {
+    if (!keyword.trim()) return;
+    setFarmerSearching(true);
+    try {
+      const result = await grainFarmerApi.list({ pageIndex: 1, pageSize: 50, search: keyword.trim() });
+      setFilterFarmerOptions(result.data.map((f) => ({ label: f.name || `农户 ${f.id}`, value: f.id })));
+    } catch {
+      // ignore
+    } finally {
+      setFarmerSearching(false);
+    }
+  }, []);
+
+  const searchAppUsers = useCallback(async (keyword: string) => {
+    if (!keyword.trim()) return;
+    setAppUserSearching(true);
+    try {
+      const result = await fetchAppUsers({ pageIndex: 1, pageSize: 50, search: keyword.trim(), status: "active" });
+      setFilterAppUserOptions(
+        result.data.map((u) => ({ label: u.name || u.username || `业务员 ${u.id}`, value: u.id })),
+      );
+    } catch {
+      // ignore
+    } finally {
+      setAppUserSearching(false);
+    }
+  }, []);
 
   const optionLabel = (options: CrudOption[], value: unknown) =>
     options.find((option) => option.value === value)?.label ?? String(value || "-");
@@ -652,22 +704,63 @@ export function GrainPurchaseEntryPanel() {
       <section className="manager-data-card">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
           <Space wrap size={12}>
-            <Input
-              className="manager-filter-input"
-              prefix={<SearchOutlined style={{ color: "var(--manager-text-faint)" }} />}
-              placeholder="收购类型/付款方式/地址"
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              onPressEnter={() => void loadRecords(filterQuery())}
-              style={{ width: 280, maxWidth: "100%" }}
-            />
             <Select
               allowClear
-              placeholder="状态"
-              value={statusValue}
-              onChange={setStatusValue}
-              options={statusOptions}
-              style={{ width: 160 }}
+              showSearch
+              optionFilterProp="label"
+              placeholder="粮站"
+              value={filterStationId}
+              onChange={(value: number | undefined) => {
+                setFilterStationId(value);
+                setFilterPurchaseTypeIds([]);
+              }}
+              options={stationOptions}
+              style={{ minWidth: 200 }}
+            />
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="收粮类型（可多选）"
+              value={filterPurchaseTypeIds}
+              onChange={setFilterPurchaseTypeIds}
+              options={filteredPurchaseTypeOptions}
+              style={{ minWidth: 200 }}
+            />
+            <DatePicker.RangePicker
+              value={filterDateRange}
+              onChange={(dates) => setFilterDateRange(dates as [Dayjs, Dayjs] | null)}
+              format="YYYY-MM-DD"
+              style={{ width: 260 }}
+            />
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              filterOption={false}
+              placeholder="业务员（搜索姓名）"
+              value={filterAppUserIds}
+              onChange={setFilterAppUserIds}
+              onSearch={(keyword) => void searchAppUsers(keyword)}
+              options={filterAppUserOptions}
+              loading={appUserSearching}
+              notFoundContent={appUserSearching ? "搜索中..." : "输入姓名搜索"}
+              style={{ minWidth: 180 }}
+            />
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              filterOption={false}
+              placeholder="农户（搜索姓名）"
+              value={filterFarmerIds}
+              onChange={setFilterFarmerIds}
+              onSearch={(keyword) => void searchFarmers(keyword)}
+              options={filterFarmerOptions}
+              loading={farmerSearching}
+              notFoundContent={farmerSearching ? "搜索中..." : "输入姓名搜索"}
+              style={{ minWidth: 180 }}
             />
             <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadRecords(filterQuery())}>
               查询

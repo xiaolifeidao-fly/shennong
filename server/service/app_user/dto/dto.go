@@ -95,19 +95,20 @@ type UpdateAppUserDTO struct {
 }
 
 type AppUserQueryDTO struct {
-	Page       int    `form:"page"`
-	PageIndex  int    `form:"pageIndex"`
-	PageSize   int    `form:"pageSize"`
-	Search     string `form:"search"`
-	Name       string `form:"name"`
-	Username   string `form:"username"`
-	Email      string `form:"email"`
-	Phone      string `form:"phone"`
-	Department string `form:"department"`
-	Status     string `form:"status"`
-	SecretKey  string `form:"secretKey"`
-	OpenUID    string `form:"openUid"`
-	UnionID    string `form:"unionId"`
+	Page             int      `form:"page"`
+	PageIndex        int      `form:"pageIndex"`
+	PageSize         int      `form:"pageSize"`
+	Search           string   `form:"search"`
+	Name             string   `form:"name"`
+	Username         string   `form:"username"`
+	Email            string   `form:"email"`
+	Phone            string   `form:"phone"`
+	Department       string   `form:"department"`
+	Status           string   `form:"status"`
+	SecretKey        string   `form:"secretKey"`
+	OpenUID          string   `form:"openUid"`
+	UnionID          string   `form:"unionId"`
+	ScopedStationIDs []uint64 `form:"-"`
 }
 
 type AppUserStatsDTO struct {

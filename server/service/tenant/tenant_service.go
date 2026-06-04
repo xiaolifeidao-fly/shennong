@@ -104,11 +104,15 @@ func (s *TenantService) UpdateTenant(id uint, req *tenantDTO.TenantDTO) (*tenant
 		return nil, gorm.ErrRecordNotFound
 	}
 	previousBase := entity.BaseEntity
+	previousName := strings.TrimSpace(entity.TenantName)
 	previousCode := strings.TrimSpace(entity.TenantCode)
 	copier.Copy(entity, req)
 	entity.Id = int(id)
 	entity.BaseEntity = previousBase
 	trimTenant(entity)
+	if entity.TenantName == "" {
+		entity.TenantName = previousName
+	}
 	if entity.TenantName == "" {
 		return nil, fmt.Errorf("tenantName is required")
 	}

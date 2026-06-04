@@ -272,8 +272,9 @@ export function GrainFarmerPanel() {
       <CrudManagementPanel<GrainFarmerRecord, GrainPayload>
         title="粮户"
         createText="新增粮户"
-        searchPlaceholder="姓名/手机号/身份证/地址"
+        searchPlaceholder="手机号 / 身份证号（精确）"
         searchParam="search"
+        extraFilters={[{ param: "name", placeholder: "农户姓名" }]}
         fields={farmerFields}
         columns={farmerColumns}
         statusField="status"

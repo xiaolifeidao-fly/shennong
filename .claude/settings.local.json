@@ -75,7 +75,17 @@
       "Bash(go test *)",
       "Bash(xargs ls)",
       "Bash(npx vue-tsc *)",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(mysql -h rm-bp11qx2byv7h5is0gio.mysql.rds.aliyuncs.com -P 3306 -u sn -pshennongA4622511z3! shennong -e ' *)",
+      "Bash(brew list *)",
+      "Read(//opt/homebrew/Cellar/**)",
+      "Read(//Users/fly/go/bin/**)",
+      "Read(//usr/**)",
+      "Bash(pip3 show *)",
+      "Bash(python3 -c \"import pymysql; print\\('ok'\\)\")",
+      "Bash(pip3 install *)",
+      "Bash(role)",
+      "Bash(grep -r \"pub_token\\\\|PubToken\\\\|\\\\\"role\\\\\"\\\\|`role`\\\\|column:role\" /Users/fly/Documents/develop/project/private/shennong/server --include=\"*.go\" -n)"
     ]
   }
 }

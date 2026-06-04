@@ -5,8 +5,10 @@ import (
 	"common/middleware/db"
 	"fmt"
 	authService "service/manager_auth"
+	permissionRepository "service/manager_permission/repository"
 	userDTO "service/manager_user/dto"
 	userRepository "service/manager_user/repository"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -58,10 +60,17 @@ func (s *UserService) CreateUserRole(req *userDTO.CreateUserRoleDTO) (*userDTO.U
 	if err := ensureUserExists(s.userRepository, req.UserID); err != nil {
 		return nil, err
 	}
-	created, err := s.userRoleRepository.Create(&userRepository.UserRole{
+	if err := s.userRoleRepository.Db.
+		Where("user_id = ?", req.UserID).
+		Delete(&userRepository.UserRole{}).Error; err != nil {
+		return nil, err
+	}
+	newEntity := &userRepository.UserRole{
 		UserID: req.UserID,
 		RoleID: req.RoleID,
-	})
+	}
+	newEntity.Active = 1
+	created, err := s.userRoleRepository.Create(newEntity)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +108,46 @@ func (s *UserService) UpdateUserRole(id uint, req *userDTO.UpdateUserRoleDTO) (*
 	}
 	authService.ClearUserRoleCache(entity.UserID)
 	return db.ToDTO[userDTO.UserRoleDTO](saved), nil
+}
+
+func (s *UserService) SetUserRoles(req *userDTO.SetUserRolesDTO) error {
+	if s.userRoleRepository.Db == nil || s.roleRepository.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	if req == nil {
+		return fmt.Errorf("request is nil")
+	}
+	if err := ensureUserExists(s.userRepository, req.UserID); err != nil {
+		return err
+	}
+	if err := s.userRoleRepository.Db.
+		Where("user_id = ?", req.UserID).
+		Delete(&userRepository.UserRole{}).Error; err != nil {
+		return err
+	}
+	for _, code := range req.RoleCodes {
+		code = strings.ToLower(strings.TrimSpace(code))
+		if code == "" {
+			continue
+		}
+		var role permissionRepository.Role
+		if err := s.roleRepository.Db.Where("code = ? AND active = ?", code, 1).First(&role).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return fmt.Errorf("role '%s' not found", code)
+			}
+			return err
+		}
+		newEntity := &userRepository.UserRole{
+			UserID: req.UserID,
+			RoleID: uint64(role.Id),
+		}
+		newEntity.Active = 1
+		if _, err := s.userRoleRepository.Create(newEntity); err != nil {
+			return err
+		}
+	}
+	authService.ClearUserRoleCache(req.UserID)
+	return nil
 }
 
 func (s *UserService) DeleteUserRole(id uint) error {

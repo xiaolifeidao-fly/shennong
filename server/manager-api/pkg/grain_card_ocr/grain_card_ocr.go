@@ -168,7 +168,7 @@ func stationAllowed(context *gin.Context, stationID uint64) bool {
 	if !ok {
 		return false
 	}
-	if len(stationIDs) == 0 {
+	if stationIDs == nil {
 		return true
 	}
 	for _, allowedID := range stationIDs {

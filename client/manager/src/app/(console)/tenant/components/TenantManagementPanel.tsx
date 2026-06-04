@@ -65,7 +65,7 @@ export function TenantManagementPanel() {
     { name: "status", label: "状态", width: 100 },
   ];
 
-  const handleConfigStations = (record: TenantRecord) => {
+  const handleConfigStations = (record: TenantRecord, reload: () => Promise<void>) => {
     let nextStationIds: number[] = Array.isArray(record.stationIds) ? (record.stationIds as number[]) : [];
     Modal.confirm({
       title: `配置粮站 — ${record.tenantName}`,
@@ -87,6 +87,7 @@ export function TenantManagementPanel() {
       onOk: async () => {
         await tenantApi.update(record.id, { stationIds: nextStationIds });
         message.success("粮站配置已更新");
+        await reload();
       },
     });
   };
@@ -102,9 +103,9 @@ export function TenantManagementPanel() {
       statusField="status"
       statusOptions={statusOptions}
       actionWidth={160}
-      rowActions={(record) => (
+      rowActions={(record, context) => (
         <Tooltip title="配置粮站">
-          <Button type="text" icon={<ApartmentOutlined />} onClick={() => handleConfigStations(record)} />
+          <Button type="text" icon={<ApartmentOutlined />} onClick={() => handleConfigStations(record, context.reload)} />
         </Tooltip>
       )}
       api={tenantApi}

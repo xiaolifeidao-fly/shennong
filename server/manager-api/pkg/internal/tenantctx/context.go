@@ -3,6 +3,7 @@ package tenantctx
 import (
 	commonRouter "common/middleware/routers"
 	"common/middleware/db"
+	permissionRepository "service/manager_permission/repository"
 	tenantRepository "service/tenant/repository"
 	userRepository "service/manager_user/repository"
 
@@ -11,11 +12,14 @@ import (
 
 const contextScopedStationIDsKey = "tenantctx.scopedStationIDs"
 
-// ScopedStationIDs returns the station IDs accessible to the current user based on
-// their tenant associations. Returns (nil, true) if the user has no tenant restrictions.
-// Returns (nil, false) and writes an error response if the user ID cannot be resolved.
+// ScopedStationIDs returns the station IDs accessible to the current user.
+// Returns (nil, true)        → admin user, no restriction.
+// Returns ([]uint64{}, true) → non-admin user with no tenant, restrict to nothing.
+// Returns (ids, true)        → restrict to these station IDs.
+// Returns (nil, false)       → error, response already written.
 func ScopedStationIDs(c *gin.Context) ([]uint64, bool) {
 	if cached, exists := c.Get(contextScopedStationIDsKey); exists {
+		// cached nil means admin (no restriction); cached non-nil may be empty slice
 		ids, _ := cached.([]uint64)
 		return ids, true
 	}
@@ -32,12 +36,18 @@ func ScopedStationIDs(c *gin.Context) ([]uint64, bool) {
 		return nil, true
 	}
 
+	// Check if the user has super_admin role → no station restriction
+	if isAdmin, _ := userHasSuperAdmin(userID); isAdmin {
+		c.Set(contextScopedStationIDsKey, []uint64(nil))
+		return nil, true
+	}
+
 	userTenantRepo := db.GetRepository[userRepository.UserTenantRepository]()
 	tenantIDs, err := userTenantRepo.ListActiveTenantIDs(userID)
 	if err != nil || len(tenantIDs) == 0 {
-		// No tenant associations → no restriction (super-admin behaviour)
-		c.Set(contextScopedStationIDsKey, []uint64(nil))
-		return nil, true
+		// Non-admin with no tenant → can see nothing
+		c.Set(contextScopedStationIDsKey, []uint64{})
+		return []uint64{}, true
 	}
 
 	tenantStationRepo := db.GetRepository[tenantRepository.TenantStationRepository]()
@@ -59,6 +69,21 @@ func ScopedStationIDs(c *gin.Context) ([]uint64, bool) {
 
 	c.Set(contextScopedStationIDsKey, stationIDs)
 	return stationIDs, true
+}
+
+// userHasSuperAdmin checks whether the user has a role with code "super_admin".
+func userHasSuperAdmin(userID uint64) (bool, error) {
+	roleRepo := db.GetRepository[permissionRepository.RoleRepository]()
+	if roleRepo.Db == nil {
+		return false, nil
+	}
+	var count int64
+	err := roleRepo.Db.Raw(`
+		SELECT COUNT(1) FROM user_role ur
+		JOIN role r ON r.id = ur.role_id AND r.active = 1
+		WHERE ur.active = 1 AND ur.user_id = ? AND r.code = 'super_admin'
+	`, userID).Scan(&count).Error
+	return count > 0, err
 }
 
 func CurrentTenantID(context *gin.Context) uint64 {

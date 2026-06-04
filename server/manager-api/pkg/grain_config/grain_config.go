@@ -47,6 +47,11 @@ func (h *GrainConfigHandler) listStations(context *gin.Context) {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if stationIDs != nil {
+		query.StationIDs = stationIDs
+	}
 	result, err := h.service.ListStations(query)
 	commonRouter.ToJson(context, result, err)
 }
@@ -97,7 +102,7 @@ func (h *GrainConfigHandler) listPurchaseTypes(context *gin.Context) {
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListPurchaseTypesPage(query)

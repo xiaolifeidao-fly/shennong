@@ -27,23 +27,21 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import {
   createAccount,
+  fetchRoleOptions,
   fetchTenantOptions,
+  fetchUserRoles,
+  setUserRoles,
   updateAccount,
+  type RoleOption,
   type TenantOption,
   type UserPayload,
   type UserRecord,
 } from "../api/user.api";
+import { CryptoUtil } from "@/utils/crypto.util";
 import { UserFormModal } from "./UserFormModal";
 import { useUserManagement } from "../hooks/useUserManagement";
 
 const { Text } = Typography;
-
-const roleColors: Record<string, string> = {
-  admin: "var(--manager-green-soft)",
-  manager: "var(--manager-blue-soft)",
-  auditor: "var(--manager-gold-soft)",
-  member: "#f7faf5",
-};
 
 const statusColors: Record<string, string> = {
   normal: "rgba(95,198,163,0.14)",
@@ -79,24 +77,25 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
 
   useEffect(() => {
     fetchTenantOptions()
       .then((result) => setTenantOptions(result.data))
       .catch((error) => message.error(error instanceof Error ? error.message : "加载租户失败"));
+    fetchRoleOptions()
+      .then((result) => setRoleOptions(result.data))
+      .catch((error) => message.error(error instanceof Error ? error.message : "加载角色失败"));
   }, []);
 
   const activeCount = users.filter((item) => resolveUserStatus(item) === "normal").length;
-  const totalBalance = users.reduce((sum, item) => sum + resolveBalance(item), 0);
 
   const heroStats = useMemo(
     () => [
       { label: "可见用户", value: stats.visibleUsers },
       { label: "活跃用户", value: stats.activeUsers || activeCount },
-      { label: "资金账户", value: stats.accountCount },
-      { label: "钱包总额", value: formatCurrency(totalBalance) },
     ],
-    [activeCount, stats.accountCount, stats.activeUsers, stats.visibleUsers, totalBalance],
+    [activeCount, stats.activeUsers, stats.visibleUsers],
   );
 
   const handleCreate = () => {
@@ -120,28 +119,68 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
     }
   };
 
-  const handleChangeRole = (record: UserRecord) => {
-    let nextRole = record.role;
+  const handleChangeRole = async (record: UserRecord) => {
+    const selectableRoles = roleOptions.map((r) => ({ label: r.name, value: r.code }));
+    let currentCodes: string[] = [];
+    try {
+      const result = await fetchUserRoles(record.id);
+      currentCodes = result.data
+        .map((ur) => roleOptions.find((r) => r.id === ur.roleId)?.code)
+        .filter((code): code is string => !!code);
+    } catch {
+      // 拉取失败时用用户当前 role 兜底
+      if (record.role) currentCodes = [record.role];
+    }
+    let nextCodes: string[] = [...currentCodes];
     Modal.confirm({
-      title: "修改角色",
+      title: `配置角色 — ${record.username}`,
+      width: 480,
       content: (
-        <Select<string>
-          defaultValue={record.role || "member"}
+        <Select<string[]>
+          mode="multiple"
+          defaultValue={currentCodes}
           style={{ width: "100%", marginTop: 16 }}
-          onChange={(value) => {
-            nextRole = value;
+          options={selectableRoles}
+          optionFilterProp="label"
+          placeholder="请选择角色（可多选）"
+          onChange={(values) => {
+            nextCodes = values;
           }}
-          options={[
-            { label: "管理员", value: "admin" },
-            { label: "经理", value: "manager" },
-            { label: "审计", value: "auditor" },
-            { label: "代理", value: "member" },
-          ]}
         />
       ),
       onOk: async () => {
-        await patchUser(record.id, { role: nextRole });
+        await setUserRoles(record.id, nextCodes);
+        await refresh();
         message.success("角色已更新");
+      },
+    });
+  };
+
+  const handleConfigTenants = (record: UserRecord) => {
+    let nextTenantIds: number[] = record.tenantIds ?? [];
+    const selectableTenants = tenantOptions
+      .filter((t) => t.status !== "inactive")
+      .map((t) => ({ label: t.tenantName, value: t.id }));
+    Modal.confirm({
+      title: `配置租户 — ${record.username}`,
+      width: 480,
+      content: (
+        <Select<number[]>
+          mode="multiple"
+          defaultValue={record.tenantIds ?? []}
+          style={{ width: "100%", marginTop: 16 }}
+          placeholder="请选择关联租户（可多选）"
+          options={selectableTenants}
+          optionFilterProp="label"
+          maxTagCount="responsive"
+          onChange={(value) => {
+            nextTenantIds = value;
+          }}
+        />
+      ),
+      onOk: async () => {
+        await patchUser(record.id, { tenantIds: nextTenantIds });
+        message.success("租户配置已更新");
       },
     });
   };
@@ -187,39 +226,10 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
           throw new Error("请输入新密码");
         }
         await patchUser(record.id, {
-          password,
+          password: CryptoUtil.encrypt(password),
           originPassword: password,
         });
         message.success("密码已更新");
-      },
-    });
-  };
-
-  const handleConfigTenants = (record: UserRecord) => {
-    let nextTenantIds: number[] = record.tenantIds ?? [];
-    const selectableTenants = tenantOptions
-      .filter((t) => t.status !== "inactive")
-      .map((t) => ({ label: t.tenantName, value: t.id }));
-    Modal.confirm({
-      title: `配置租户 — ${record.username}`,
-      width: 480,
-      content: (
-        <Select<number[]>
-          mode="multiple"
-          defaultValue={record.tenantIds ?? []}
-          style={{ width: "100%", marginTop: 16 }}
-          placeholder="请选择关联租户（可多选）"
-          options={selectableTenants}
-          optionFilterProp="label"
-          maxTagCount="responsive"
-          onChange={(value) => {
-            nextTenantIds = value;
-          }}
-        />
-      ),
-      onOk: async () => {
-        await patchUser(record.id, { tenantIds: nextTenantIds });
-        message.success("租户配置已更新");
       },
     });
   };
@@ -299,34 +309,6 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
       render: (value: string) => value || "-",
     },
     {
-      title: "角色",
-      dataIndex: "role",
-      key: "role",
-      width: 110,
-      render: (value: string) => (
-        <Tag
-          style={{
-            width: "fit-content",
-            color: "var(--manager-text)",
-            background: roleColors[value] || "rgba(239,244,251,0.98)",
-            border: "none",
-          }}
-        >
-          {formatRole(value)}
-        </Tag>
-      ),
-    },
-    {
-      title: "余额",
-      key: "balanceAmount",
-      width: 140,
-      align: "right",
-      render: (_, record) => {
-        const balance = resolveBalance(record);
-        return <Text style={{ color: "var(--manager-text)" }}>{formatNumber(balance)}</Text>;
-      },
-    },
-    {
       title: "状态",
       key: "status",
       width: 110,
@@ -348,7 +330,7 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
     {
       title: "操作",
       key: "actions",
-      width: 280,
+      width: 240,
       fixed: "right",
       render: (_, record) => {
         const frozen = resolveUserStatus(record) === "frozen";
@@ -371,7 +353,7 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
                 onClick={() => handleConfigTenants(record)}
               />
             </Tooltip>
-            <Tooltip title="修改角色">
+            <Tooltip title="配置角色">
               <Button
                 size="small"
                 type="text"
@@ -448,20 +430,6 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
             />
             <Select
               className="manager-filter-input"
-              value={query.role || undefined}
-              allowClear
-              placeholder="角色筛选"
-              onChange={(value) => void refresh({ pageIndex: 1, role: value ?? "" })}
-              style={{ width: 160 }}
-              options={[
-                { label: "管理员", value: "admin" },
-                { label: "经理", value: "manager" },
-                { label: "审计", value: "auditor" },
-                { label: "代理", value: "member" },
-              ]}
-            />
-            <Select
-              className="manager-filter-input"
               value={query.status || undefined}
               allowClear
               placeholder="状态筛选"
@@ -510,7 +478,7 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
       <section className="manager-data-card manager-table">
         <Table<UserRecord>
           rowKey="id"
-          scroll={{ x: 1700 }}
+          scroll={{ x: 1500 }}
           loading={loading}
           dataSource={users}
           columns={columns}
@@ -529,6 +497,7 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
         submitting={submitting}
         user={editingUser}
         tenantOptions={tenantOptions}
+        roleOptions={roleOptions}
         onCancel={() => {
           setModalOpen(false);
           setEditingUser(null);
@@ -554,21 +523,6 @@ function resolveDisplayStatus(record: UserRecord) {
   return record.status || record.accountStatus || "active";
 }
 
-function formatRole(value: string) {
-  switch (value) {
-    case "admin":
-      return "管理员";
-    case "manager":
-      return "经理";
-    case "auditor":
-      return "审计";
-    case "member":
-      return "代理";
-    default:
-      return value || "-";
-  }
-}
-
 function formatStatus(value: string) {
   switch (value) {
     case "ACTIVE":
@@ -587,21 +541,6 @@ function formatStatus(value: string) {
     default:
       return value ? `未知(${value})` : "-";
   }
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("zh-CN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 4,
-  }).format(value);
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    maximumFractionDigits: 2,
-  }).format(value);
 }
 
 function wrapText(value?: string) {

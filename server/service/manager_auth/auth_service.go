@@ -38,7 +38,6 @@ type LoginUser struct {
 	Name     string   `json:"name"`
 	Username string   `json:"username"`
 	TenantID uint64   `json:"tenantId"`
-	Role     string   `json:"role"`
 	Status   string   `json:"status"`
 	RoleIDs  []uint64 `json:"roleIds,omitempty"`
 }
@@ -95,7 +94,8 @@ func (s *AuthService) Login(account, password, ip string, maxLoginErrorNum int64
 		return "", nil, ErrInvalidCredential
 	}
 
-	user.LastLoginTime = time.Now()
+	now := time.Now()
+	user.LastLoginTime = &now
 	if _, err := s.userRepository.SaveOrUpdate(user); err != nil {
 		return "", nil, err
 	}
@@ -355,7 +355,7 @@ func buildResourceURLCandidates(resourceURL string) []string {
 func isSelfServiceResource(resourceURL string) bool {
 	for _, candidate := range buildResourceURLCandidates(resourceURL) {
 		switch candidate {
-		case "/user-profile", "/user-profile/password":
+		case "/current-user-menus", "/user-profile", "/user-profile/password":
 			return true
 		}
 	}
@@ -400,7 +400,6 @@ func toLoginUser(user *userRepository.User) *LoginUser {
 		Name:     user.Name,
 		Username: user.Username,
 		TenantID: user.TenantID,
-		Role:     user.Role,
 		Status:   user.Status,
 	}
 }

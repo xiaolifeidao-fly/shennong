@@ -47,7 +47,7 @@ func (h *GrainFarmerHandler) listFarmers(context *gin.Context) {
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	}
 	result, err := h.service.ListFarmers(query)
@@ -167,7 +167,7 @@ func (h *GrainFarmerHandler) ensureFarmerAccess(context *gin.Context, id uint) b
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return false
-	} else if len(stationIDs) > 0 {
+	} else if stationIDs != nil {
 		for _, stationID := range stationIDs {
 			if farmer.StationID == stationID {
 				return true

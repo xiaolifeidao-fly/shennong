@@ -4,7 +4,7 @@ import (
 	"common/middleware/db"
 	"fmt"
 	"net/mail"
-	permission "service/manager_permission"
+	authService "service/manager_auth"
 	permissionRepository "service/manager_permission/repository"
 	userRepository "service/manager_user/repository"
 	"strings"
@@ -78,23 +78,6 @@ func normalizeUserStatus(status string) string {
 	}
 }
 
-func normalizeUserRole(role string) string {
-	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "", "member":
-		return "member"
-	case "admin":
-		return "admin"
-	case "manager":
-		return "manager"
-	case "auditor":
-		return "auditor"
-	case string(permission.RoleCodeSalesman):
-		return string(permission.RoleCodeSalesman)
-	default:
-		return ""
-	}
-}
-
 func validateEmail(email string) error {
 	if email == "" {
 		return nil
@@ -114,6 +97,42 @@ func validateUserPassword(password string) error {
 	if len(password) > 50 {
 		return fmt.Errorf("password must be at most 50 characters")
 	}
+	return nil
+}
+
+func normalizeUserRole(role string) string {
+	return strings.ToLower(strings.TrimSpace(role))
+}
+
+func (s *UserService) replaceUserRole(userID uint64, roleCode string) error {
+	roleCode = strings.ToLower(strings.TrimSpace(roleCode))
+	if roleCode == "" {
+		return nil
+	}
+	if s.roleRepository.Db == nil || s.userRoleRepository.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	var role permissionRepository.Role
+	if err := s.roleRepository.Db.Where("code = ? AND active = ?", roleCode, 1).First(&role).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("role '%s' not found", roleCode)
+		}
+		return err
+	}
+	if err := s.userRoleRepository.Db.
+		Where("user_id = ?", userID).
+		Delete(&userRepository.UserRole{}).Error; err != nil {
+		return err
+	}
+	newEntity := &userRepository.UserRole{
+		UserID: userID,
+		RoleID: uint64(role.Id),
+	}
+	newEntity.Active = 1
+	if _, err := s.userRoleRepository.Create(newEntity); err != nil {
+		return err
+	}
+	authService.ClearUserRoleCache(userID)
 	return nil
 }
 

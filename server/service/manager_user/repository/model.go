@@ -13,14 +13,12 @@ type User struct {
 	Phone          string    `gorm:"column:phone;type:varchar(32);index:idx_phone" orm:"column(phone);size(32);null" description:"手机号"`
 	Department     string    `gorm:"column:department;type:varchar(100);index:idx_department" orm:"column(department);size(100);null" description:"部门"`
 	TenantID       uint64    `gorm:"column:tenant_id;type:bigint unsigned;index:idx_tenant_id" description:"租户ID"`
-	Role           string    `gorm:"column:role;type:varchar(50);index:idx_role" orm:"column(role);size(50);null" description:"角色"`
 	Password       string    `gorm:"column:password;type:varchar(50)" orm:"column(password);size(50);null" description:"密码"`
 	OriginPassword string    `gorm:"column:origin_password;type:varchar(50)" orm:"column(origin_password);size(50);null" description:"原始密码"`
 	Status         string    `gorm:"column:status;type:varchar(50)" orm:"column(status);size(50);null" description:"状态"`
-	LastLoginTime  time.Time `gorm:"column:last_login_time;type:datetime" orm:"column(last_login_time);null" description:"最后登录时间"`
+	LastLoginTime  *time.Time `gorm:"column:last_login_time;type:datetime" orm:"column(last_login_time);null" description:"最后登录时间"`
 	SecretKey      string    `gorm:"column:secret_key;type:varchar(50);index:idx_secret_key" orm:"column(secret_key);size(50);null" description:"密钥"`
 	Remark         string    `gorm:"column:remark;type:varchar(50)" orm:"column(remark);size(50);null" description:"备注"`
-	PubToken       string    `gorm:"column:pub_token;type:varchar(100);uniqueIndex:pub_token" orm:"column(pub_token);size(100);null" description:"公钥token"`
 	BanCount       uint32    `gorm:"column:ban_count;type:int unsigned;default:0" orm:"column(ban_count);null" description:"封禁次数"`
 }
 
@@ -56,14 +54,13 @@ type UserListRow struct {
 	Phone          string    `gorm:"column:phone"`
 	Department     string    `gorm:"column:department"`
 	TenantID       uint64    `gorm:"column:tenant_id"`
-	Role           string    `gorm:"column:role"`
+	RoleCode       string    `gorm:"column:role_code"`
 	Password       string    `gorm:"column:password"`
 	OriginPassword string    `gorm:"column:origin_password"`
 	Status         string    `gorm:"column:status"`
-	LastLoginTime  time.Time `gorm:"column:last_login_time"`
+	LastLoginTime  *time.Time `gorm:"column:last_login_time"`
 	SecretKey      string    `gorm:"column:secret_key"`
 	Remark         string    `gorm:"column:remark"`
-	PubToken       string    `gorm:"column:pub_token"`
 	BanCount       uint32    `gorm:"column:ban_count"`
 }
 
