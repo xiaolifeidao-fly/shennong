@@ -68,6 +68,25 @@ type GrainStationExtraDTO struct {
 	BusinessLicenseKey  string `json:"businessLicenseKey"`
 }
 
+type GrainStationDetailDTO struct {
+	baseDTO.BaseDTO
+	StationName        string `json:"stationName"`
+	StationCode        string `json:"stationCode"`
+	TenantID           uint64 `json:"tenantId"`
+	TenantName         string `json:"tenantName"`
+	ContactName        string `json:"contactName"`
+	ContactPhone       string `json:"contactPhone"`
+	Province           string `json:"province"`
+	City               string `json:"city"`
+	District           string `json:"district"`
+	Address            string `json:"address"`
+	Longitude          string `json:"longitude"`
+	Latitude           string `json:"latitude"`
+	Status             string `json:"status"`
+	Remark             string `json:"remark"`
+	BusinessLicenseUrl string `json:"businessLicenseUrl"`
+}
+
 type GrainStationQueryDTO struct {
 	Page       int      `form:"page"`
 	PageIndex  int      `form:"pageIndex"`

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	grainConfigDTO "service/grain_config/dto"
 	grainConfigRepository "service/grain_config/repository"
+	tenantRepository "service/tenant/repository"
 	"strings"
 	"time"
 
@@ -48,6 +49,56 @@ func (s *GrainConfigService) EnsureTable() error {
 		}
 	}
 	return nil
+}
+
+func (s *GrainConfigService) GetStationDetail(stationID uint64) (*grainConfigDTO.GrainStationDetailDTO, error) {
+	if stationID == 0 {
+		return nil, fmt.Errorf("stationId is required")
+	}
+	station, err := s.stationRepository.FindById(uint(stationID))
+	if err != nil {
+		return nil, err
+	}
+	if station == nil || station.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	detail := &grainConfigDTO.GrainStationDetailDTO{
+		BaseDTO: baseDTO.BaseDTO{
+			Id:          station.Id,
+			Active:      station.Active,
+			CreatedTime: station.CreatedTime,
+			CreatedBy:   station.CreatedBy,
+			UpdatedTime: station.UpdatedTime,
+			UpdatedBy:   station.UpdatedBy,
+		},
+		StationName:  station.StationName,
+		StationCode:  station.StationCode,
+		TenantID:     station.TenantID,
+		ContactName:  station.ContactName,
+		ContactPhone: station.ContactPhone,
+		Province:     station.Province,
+		City:         station.City,
+		District:     station.District,
+		Address:      station.Address,
+		Longitude:    station.Longitude,
+		Latitude:     station.Latitude,
+		Status:       station.Status,
+		Remark:       station.Remark,
+	}
+	extra, err := s.stationExtraRepository.FindByStationID(stationID)
+	if err == nil && extra != nil {
+		detail.BusinessLicenseUrl = extra.BusinessLicenseUrl
+	} else if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	if station.TenantID > 0 {
+		tenantRepo := db.GetRepository[tenantRepository.TenantRepository]()
+		tenant, tenantErr := tenantRepo.FindById(uint(station.TenantID))
+		if tenantErr == nil && tenant != nil && tenant.Active == 1 {
+			detail.TenantName = tenant.TenantName
+		}
+	}
+	return detail, nil
 }
 
 func (s *GrainConfigService) GetStationExtra(stationID uint64) (*grainConfigDTO.GrainStationExtraDTO, error) {

@@ -83,5 +83,7 @@ export interface AppUserProfile {
   wxAvatar?: string
   wxLastLoginTime?: string
   hasOriginPassword?: boolean
+  stationId?: number
+  stationName?: string
   [key: string]: unknown
 }

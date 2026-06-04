@@ -26,6 +26,7 @@ export interface GrainEntry {
   displayUnit: string
   amount: number
   buyTime: string
+  payTime: string
   placeId: number
   place: string
   locationName: string
@@ -72,6 +73,7 @@ export interface GrainEntryDraft {
   unit: string
   amount: number
   buyTime: string
+  payTime: string
   placeId: number
   place: string
   locationName: string
@@ -145,6 +147,25 @@ export interface GrainStation {
   remark: string
 }
 
+export interface GrainStationDetail {
+  id: number
+  stationName: string
+  stationCode: string
+  tenantId: number
+  tenantName: string
+  contactName: string
+  contactPhone: string
+  province: string
+  city: string
+  district: string
+  address: string
+  longitude: string
+  latitude: string
+  status: string
+  remark: string
+  businessLicenseUrl: string
+}
+
 export interface GrainPurchaseType {
   id: number
   stationId: number
@@ -205,6 +226,7 @@ export interface GrainPurchaseEntryDTO {
   amount: number
   unitPrice: number
   buyTime: string
+  payTime: string
   placeId: number
   place: string
   locationName: string
@@ -245,6 +267,7 @@ export interface GrainEntrySnapshotDTO {
   amount: number
   unitPrice: number
   buyTime: string
+  payTime: string
   placeId: number
   place: string
   locationName: string

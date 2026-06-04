@@ -25,6 +25,7 @@ type GrainPurchaseEntryDTO struct {
 	Amount           float64    `json:"amount"`
 	UnitPrice        float64    `json:"unitPrice"`
 	BuyTime          *time.Time `json:"buyTime"`
+	PayTime          *time.Time `json:"payTime"`
 	PlaceID          uint64     `json:"placeId"`
 	Place            string     `json:"place"`
 	LocationName     string     `json:"locationName"`
@@ -65,6 +66,7 @@ type GrainPurchaseEntrySnapshotDTO struct {
 	Amount            float64    `json:"amount"`
 	UnitPrice         float64    `json:"unitPrice"`
 	BuyTime           *time.Time `json:"buyTime"`
+	PayTime           *time.Time `json:"payTime"`
 	PlaceID           uint64     `json:"placeId"`
 	Place             string     `json:"place"`
 	LocationName      string     `json:"locationName"`

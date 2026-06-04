@@ -18,6 +18,7 @@ type GrainPurchaseEntry struct {
 	Amount          float64    `gorm:"column:amount;type:decimal(12,2);default:0" description:"金额"`
 	UnitPrice       float64    `gorm:"column:unit_price;type:decimal(12,4);default:0" description:"单价"`
 	BuyTime         *time.Time `gorm:"column:buy_time;type:datetime;index:idx_buy_time" description:"收购时间"`
+	PayTime         *time.Time `gorm:"column:pay_time;type:datetime;index:idx_pay_time" description:"支付时间（可选，后期补填）"`
 	PlaceID         uint64     `gorm:"column:place_id;type:bigint unsigned;index:idx_place_id" description:"收购地点ID"`
 	Place           string     `gorm:"column:place;type:varchar(100);index:idx_place" description:"收购地点名称冗余"`
 	LocationName    string     `gorm:"column:location_name;type:varchar(100)" description:"定位名称"`
@@ -64,6 +65,7 @@ type GrainPurchaseEntrySnapshot struct {
 	Amount          float64    `gorm:"column:amount;type:decimal(12,2);default:0" description:"金额"`
 	UnitPrice       float64    `gorm:"column:unit_price;type:decimal(12,4);default:0" description:"单价"`
 	BuyTime         *time.Time `gorm:"column:buy_time;type:datetime" description:"收购时间"`
+	PayTime         *time.Time `gorm:"column:pay_time;type:datetime" description:"支付时间"`
 	PlaceID         uint64     `gorm:"column:place_id;type:bigint unsigned" description:"收购地点ID"`
 	Place           string     `gorm:"column:place;type:varchar(100)" description:"收购地点"`
 	LocationName    string     `gorm:"column:location_name;type:varchar(100)" description:"定位名称"`

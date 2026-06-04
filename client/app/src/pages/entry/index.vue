@@ -347,24 +347,12 @@ function validateDraft(value: GrainEntryDraft) {
   if (!value.idNumber.trim()) {
     return '请填写身份证号'
   }
-  if (!value.payType.trim()) {
-    return '请选择付款方式'
+  const phone = value.phone.trim()
+  if (!phone) {
+    return '请填写农户电话'
   }
-  const paymentMethodCode =
-    value.paymentMethodCode ||
-    grainStore.preset.paymentMethods.find((item) => item.id === value.paymentMethodId)?.methodCode ||
-    grainStore.preset.paymentMethods.find((item) => item.methodName === value.payType)?.methodCode ||
-    ''
-  const isBankPayment = paymentMethodCode === 'Bank'
-  const isAccountPayment = paymentMethodCode === 'Alipay' || paymentMethodCode === 'WECHAT'
-  if (isBankPayment && !value.bankNumber.trim()) {
-    return '请扫描或填写银行卡号'
-  }
-  if (isAccountPayment && !value.bankName.trim()) {
-    return '请填写收款人姓名'
-  }
-  if (isAccountPayment && !value.bankNumber.trim()) {
-    return '请填写收款账号'
+  if (!/^\d{11}$/.test(phone)) {
+    return '农户电话必须为 11 位数字'
   }
   if (!value.crop.trim()) {
     return '请选择或填写收购类型'

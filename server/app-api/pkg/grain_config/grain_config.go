@@ -25,6 +25,7 @@ func NewGrainConfigHandler() *GrainConfigHandler {
 
 func (h *GrainConfigHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-stations", h.listStations)
+	engine.GET("/grain-stations/mine", h.getMyStationDetail)
 	engine.POST("/grain-stations", h.createStation)
 	engine.GET("/grain-purchase-types", h.listPurchaseTypes)
 	engine.POST("/grain-purchase-types", h.createPurchaseType)
@@ -32,6 +33,15 @@ func (h *GrainConfigHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/grain-payment-methods", h.createPaymentMethod)
 	engine.GET("/grain-purchase-places", h.listPurchasePlaces)
 	engine.POST("/grain-purchase-places", h.createPurchasePlace)
+}
+
+func (h *GrainConfigHandler) getMyStationDetail(context *gin.Context) {
+	stationID, ok := requiredStationID(context)
+	if !ok {
+		return
+	}
+	result, err := h.grainConfigService.GetStationDetail(stationID)
+	commonRouter.ToJson(context, result, err)
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {

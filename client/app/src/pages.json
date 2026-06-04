@@ -67,6 +67,12 @@
       "style": {
         "navigationBarTitleText": "我的"
       }
+    },
+    {
+      "path": "pages/station/detail",
+      "style": {
+        "navigationBarTitleText": "粮站详情"
+      }
     }
   ],
   "tabBar": {

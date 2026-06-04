@@ -36,6 +36,10 @@
               <text class="kv-label">位置名称</text>
               <text class="kv-value">{{ entry.locationName || '-' }}</text>
             </view>
+            <view class="kv">
+              <text class="kv-label">支付时间</text>
+              <text class="kv-value">{{ entry.payTime || '未填写' }}</text>
+            </view>
           </view>
           <view class="kv kv-full" style="margin-top: 16rpx;">
             <text class="kv-label">详细地址</text>
@@ -93,8 +97,36 @@
           </view>
           <view class="field">
             <text class="label">付款方式</text>
-            <input v-model="editForm.payType" class="input" placeholder="请输入付款方式" />
+            <input v-model="editForm.payType" class="input" placeholder="请输入付款方式（可不填）" />
           </view>
+          <view class="field">
+            <text class="label">支付时间</text>
+            <input v-model="editForm.payTime" class="input" placeholder="YYYY-MM-DD HH:mm（可不填）" />
+          </view>
+
+          <view class="field">
+            <view class="label-row">
+              <text class="label">附件图片</text>
+              <button class="upload-btn" @click="addMaterials">追加上传</button>
+            </view>
+            <view class="img-row">
+              <view
+                v-for="(img, idx) in editForm.materialImages"
+                :key="img + idx"
+                class="img-cell"
+              >
+                <image
+                  :src="img"
+                  class="material-img"
+                  mode="aspectFill"
+                  @click="previewImage(img, editForm.materialImages || [])"
+                />
+                <text class="img-remove" @click="removeMaterial(idx)">×</text>
+              </view>
+              <button v-if="!(editForm.materialImages && editForm.materialImages.length)" class="empty-upload" @click="addMaterials">点击上传补充资料</button>
+            </view>
+          </view>
+
           <view class="btn-row">
             <button class="secondary-btn" @click="cancelEdit">取消</button>
             <button class="primary-btn" :disabled="saving" @click="saveEntry">{{ saving ? '保存中...' : '保存' }}</button>
@@ -155,8 +187,10 @@ const editForm = reactive<Partial<GrainEntryDraft>>({
   unit: '公斤',
   amount: 0,
   buyTime: '',
+  payTime: '',
   place: '',
   payType: '',
+  materialImages: [],
 })
 
 onLoad((options) => {
@@ -174,8 +208,10 @@ watch(entry, (e) => {
     editForm.unit = e.unit
     editForm.amount = e.amount
     editForm.buyTime = e.buyTime
+    editForm.payTime = e.payTime || ''
     editForm.place = e.place
     editForm.payType = e.payType
+    editForm.materialImages = [...(e.materialImages || [])]
   }
 }, { immediate: true })
 
@@ -197,10 +233,28 @@ function cancelEdit() {
     editForm.unit = entry.value.unit
     editForm.amount = entry.value.amount
     editForm.buyTime = entry.value.buyTime
+    editForm.payTime = entry.value.payTime || ''
     editForm.place = entry.value.place
     editForm.payType = entry.value.payType
+    editForm.materialImages = [...(entry.value.materialImages || [])]
   }
   editing.value = false
+}
+
+function addMaterials() {
+  uni.chooseImage({
+    count: 6,
+    success: (res) => {
+      const next = [...(editForm.materialImages || []), ...res.tempFilePaths].slice(0, 9)
+      editForm.materialImages = next
+    },
+  })
+}
+
+function removeMaterial(index: number) {
+  const list = [...(editForm.materialImages || [])]
+  list.splice(index, 1)
+  editForm.materialImages = list
 }
 
 async function saveEntry() {
@@ -215,8 +269,10 @@ async function saveEntry() {
       unit: editForm.unit || '公斤',
       amount: Number(editForm.amount),
       buyTime: editForm.buyTime,
+      payTime: editForm.payTime || '',
       place: editForm.place,
       payType: editForm.payType,
+      materialImages: [...(editForm.materialImages || [])],
     })
     await grainStore.updateEntry(entry.value.id, draft)
     editing.value = false
@@ -443,5 +499,66 @@ function continueEntry() {
   border: 1rpx solid #e2e8dd;
   background: #ffffff;
   color: #384338;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.label-row .label {
+  margin-bottom: 0;
+}
+
+.upload-btn {
+  padding: 8rpx 22rpx;
+  border: 1rpx solid #cfe0d1;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #145535;
+  font-size: 24rpx;
+  font-weight: 760;
+}
+
+.img-cell {
+  position: relative;
+  width: 180rpx;
+  height: 180rpx;
+}
+
+.img-cell .material-img {
+  width: 100%;
+  height: 100%;
+}
+
+.img-remove {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: rgba(20, 32, 24, 0.78);
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 36rpx;
+  text-align: center;
+}
+
+.empty-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 148rpx;
+  border: 1rpx dashed rgba(35, 122, 75, 0.36);
+  border-radius: 16rpx;
+  background: #f8faf6;
+  color: #48604e;
+  font-size: 24rpx;
 }
 </style>

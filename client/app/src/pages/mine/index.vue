@@ -32,6 +32,18 @@
       </view>
     </view>
 
+    <button v-if="userStore.isLoggedIn && stationName" class="station-btn" @click="goStationDetail">
+      <text class="station-icon">
+        <text class="station-roof"></text>
+        <text class="station-body"></text>
+      </text>
+      <view class="station-text">
+        <text class="station-label">所属粮站</text>
+        <text class="station-name">{{ stationName }}</text>
+      </view>
+      <text class="chevron-icon"></text>
+    </button>
+
     <button v-if="userStore.isLoggedIn" class="password-btn" @click="goChangePassword">
       <text class="lock-icon">
         <text class="lock-shackle"></text>
@@ -57,6 +69,10 @@ const displayNickname = computed(() => {
 })
 const avatarText = computed(() => displayNickname.value.slice(0, 1))
 const avatarUrl = computed(() => userStore.profile?.wxAvatar || userStore.profile?.avatar || '')
+const stationName = computed(() => {
+  const value = userStore.profile?.stationName
+  return typeof value === 'string' ? value.trim() : ''
+})
 const profileItems = computed(() => {
   const profile = userStore.profile
   if (!profile) {
@@ -90,6 +106,10 @@ function goProfile() {
 
 function goChangePassword() {
   uni.navigateTo({ url: '/pages/change-password/index' })
+}
+
+function goStationDetail() {
+  uni.navigateTo({ url: '/pages/station/detail' })
 }
 
 async function loadProfile() {
@@ -247,7 +267,8 @@ async function handleLogout() {
   padding: 30rpx;
 }
 
-.password-btn {
+.password-btn,
+.station-btn {
   display: grid;
   grid-template-columns: 40rpx 1fr 28rpx;
   gap: 18rpx;
@@ -266,8 +287,77 @@ async function handleLogout() {
   box-shadow: 0 10rpx 24rpx rgba(31, 47, 31, 0.05);
 }
 
-.password-btn::after {
+.password-btn::after,
+.station-btn::after {
   border: 0;
+}
+
+.station-btn {
+  min-height: 120rpx;
+  padding-top: 18rpx;
+  padding-bottom: 18rpx;
+  line-height: 1.3;
+}
+
+.station-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6rpx;
+}
+
+.station-label {
+  color: #6b7280;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.station-name {
+  color: #172018;
+  font-size: 30rpx;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-icon {
+  position: relative;
+  display: block;
+  width: 40rpx;
+  height: 40rpx;
+}
+
+.station-roof {
+  position: absolute;
+  left: 0;
+  top: 6rpx;
+  width: 0;
+  height: 0;
+  border-left: 20rpx solid transparent;
+  border-right: 20rpx solid transparent;
+  border-bottom: 14rpx solid #237a4b;
+}
+
+.station-body {
+  position: absolute;
+  left: 5rpx;
+  bottom: 2rpx;
+  width: 30rpx;
+  height: 22rpx;
+  border-radius: 4rpx;
+  background: #237a4b;
+}
+
+.station-body::after {
+  position: absolute;
+  left: 11rpx;
+  top: 6rpx;
+  width: 8rpx;
+  height: 14rpx;
+  border-radius: 2rpx;
+  background: #ffffff;
+  content: '';
 }
 
 .lock-icon,

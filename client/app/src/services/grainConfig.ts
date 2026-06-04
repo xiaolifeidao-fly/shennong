@@ -1,7 +1,13 @@
 import { http } from './request'
 import { buildQuery } from './query'
 import type { PageResponse } from '@/types/api'
-import type { GrainPaymentMethod, GrainPurchasePlace, GrainPurchaseType, GrainStation } from '@/types/grain'
+import type {
+  GrainPaymentMethod,
+  GrainPurchasePlace,
+  GrainPurchaseType,
+  GrainStation,
+  GrainStationDetail,
+} from '@/types/grain'
 
 export interface GrainStationQuery {
   page?: number
@@ -14,6 +20,10 @@ export interface GrainStationQuery {
 
 export function listGrainStations(query: GrainStationQuery = {}) {
   return http.get<PageResponse<GrainStation>>(`/grain-stations${buildQuery(query)}`)
+}
+
+export function getMyGrainStationDetail() {
+  return http.get<GrainStationDetail>('/grain-stations/mine')
 }
 
 export function createGrainStation(data: Partial<GrainStation>) {

@@ -59,6 +59,15 @@
     </view>
 
     <view class="field">
+      <text class="label">支付时间</text>
+      <input
+        v-model="model.payTime"
+        class="input"
+        placeholder="可暂不填写，后期可修改（YYYY-MM-DD HH:mm）"
+      />
+    </view>
+
+    <view class="field">
       <view class="label-row">
         <text class="label">其他材料</text>
         <button class="scan-btn" @click="chooseMaterials">

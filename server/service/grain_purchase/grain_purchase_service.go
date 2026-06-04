@@ -559,6 +559,7 @@ func (s *GrainPurchaseService) createEntrySnapshot(entry *grainPurchaseRepositor
 		Amount:            entry.Amount,
 		UnitPrice:         entry.UnitPrice,
 		BuyTime:           entry.BuyTime,
+		PayTime:           entry.PayTime,
 		PlaceID:           entry.PlaceID,
 		Place:             entry.Place,
 		LocationName:      entry.LocationName,

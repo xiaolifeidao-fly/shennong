@@ -57,36 +57,36 @@
     </view>
 
     <view class="field">
-      <text class="label required">付款方式</text>
+      <text class="label">付款方式</text>
       <picker :value="payTypeIndex" :range="payTypeNames" @change="selectPayType">
-        <view class="picker-value">{{ model.payType || '请选择付款方式' }}</view>
+        <view class="picker-value">{{ model.payType || '请选择付款方式（可不填）' }}</view>
       </picker>
     </view>
 
-    <view v-if="isBankPayment" class="field">
+    <view class="field">
       <view class="label-row">
-        <text class="label required">银行卡信息</text>
-        <button class="scan-btn" @click="$emit('scan-bank')">
+        <text class="label">收款人姓名</text>
+        <button v-if="isBankPayment" class="scan-btn" @click="$emit('scan-bank')">
           <text class="mini-icon card-mini"></text>
           <text>拍银行卡</text>
         </button>
       </view>
-      <input v-model="model.bankNumber" class="input" placeholder="银行卡号" />
-    </view>
-    <view v-if="isBankPayment" class="field">
-      <input v-model="model.bankName" class="input" placeholder="开户行" />
-    </view>
-    <view v-else-if="isAccountPayment" class="field">
-      <text class="label required">收款人姓名</text>
       <input v-model="model.bankName" class="input" placeholder="请输入收款人姓名" />
     </view>
-    <view v-if="isAccountPayment" class="field">
-      <text class="label required">收款账号</text>
+    <view class="field">
+      <text class="label">{{ accountLabel }}</text>
       <input v-model="model.bankNumber" class="input" :placeholder="accountPlaceholder" />
     </view>
     <view class="field last">
-      <text class="label">农户电话</text>
-      <input v-model="model.phone" class="input" placeholder="手动输入农户电话" />
+      <text class="label required">农户电话</text>
+      <input
+        v-model="model.phone"
+        class="input"
+        type="number"
+        maxlength="11"
+        placeholder="请输入 11 位农户手机号"
+        @input="handlePhoneInput"
+      />
     </view>
   </view>
 </template>
@@ -139,8 +139,11 @@ const selectedPaymentMethod = computed(() =>
 )
 const paymentMethodCode = computed(() => model.value.paymentMethodCode || selectedPaymentMethod.value?.methodCode || '')
 const isBankPayment = computed(() => paymentMethodCode.value === 'Bank')
-const isAccountPayment = computed(() => paymentMethodCode.value === 'Alipay' || paymentMethodCode.value === 'WECHAT')
+const accountLabel = computed(() => (paymentMethodCode.value === 'Bank' ? '银行卡号' : '收款账号'))
 const accountPlaceholder = computed(() => {
+  if (paymentMethodCode.value === 'Bank') {
+    return '请输入银行卡号'
+  }
   if (paymentMethodCode.value === 'Alipay') {
     return '请输入支付宝账号'
   }
@@ -171,6 +174,15 @@ function selectPayType(event: { detail: { value: number | string } }) {
   model.value.paymentMethodId = option?.id || 0
   model.value.paymentMethodCode = option?.methodCode || ''
   model.value.payType = option?.methodName || payTypeNames.value[Number(event.detail.value)] || model.value.payType
+}
+
+function handlePhoneInput(event: unknown) {
+  const raw =
+    typeof event === 'object' && event && 'detail' in event
+      ? String((event as { detail?: { value?: string } }).detail?.value ?? model.value.phone ?? '')
+      : String(model.value.phone ?? '')
+  const digits = raw.replace(/\D/g, '').slice(0, 11)
+  model.value.phone = digits
 }
 </script>
 

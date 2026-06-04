@@ -143,6 +143,15 @@ function toServerTime(value: string) {
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
 }
 
+function toOptionalServerTime(value: string) {
+  if (!value || !value.trim()) {
+    return undefined
+  }
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+}
+
 function toFarmerProfile(dto: GrainFarmerDTO): FarmerProfile {
   return {
     id: String(dto.id),
@@ -172,6 +181,7 @@ function toEntry(dto: GrainPurchaseEntryDTO): GrainEntry {
     displayUnit: dto.displayUnit || '公斤',
     amount: Number(dto.amount) || 0,
     buyTime: formatDateTime(dto.buyTime),
+    payTime: formatDateTime(dto.payTime),
     placeId: Number(dto.placeId) || 0,
     place: dto.place || '',
     locationName: dto.locationName || '',
@@ -249,6 +259,7 @@ function createDraft(farmer: FarmerProfile | undefined, preset: GrainPreset): Gr
     unit: firstPurchaseType?.unit || '公斤',
     amount: 0,
     buyTime: nowText(),
+    payTime: '',
     placeId: firstPlace?.id || 0,
     place: firstPlace?.placeName || preset.places[0] || '',
     locationName: firstPlace?.placeName || '',
@@ -284,6 +295,7 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
     unit: displayUnit,
     amount: entry.amount,
     buyTime: entry.buyTime,
+    payTime: entry.payTime || '',
     placeId: entry.placeId,
     place: entry.place,
     locationName: entry.locationName,
@@ -373,6 +385,7 @@ function buildEntryPayload(draft: GrainEntryDraft, farmerId: number): Partial<Gr
     displayUnit,
     amount: Number(draft.amount) || 0,
     buyTime: toServerTime(draft.buyTime),
+    payTime: toOptionalServerTime(draft.payTime),
     placeId: draft.placeId || 0,
     place: draft.place,
     locationName: draft.locationName,
@@ -694,10 +707,12 @@ export const useGrainStore = defineStore('grain', {
     async recognizeIdCard(filePath: string, draft: GrainEntryDraft, side: IDCardSide = 'front') {
       const farmerId = draft.farmerId !== 'new' ? draft.farmerId : undefined
       const result = await recognizeGrainCard(filePath, 'id-card', { farmerId, imageSide: side })
+      const recognizedName = result.name || ''
       return {
-        farmerName: result.name || draft.farmerName,
+        farmerName: recognizedName || draft.farmerName,
         idNumber: result.idNumber || draft.idNumber,
         address: result.address || draft.address,
+        bankName: recognizedName || draft.bankName,
         materialImages: applyMaterialImage(draft, result.ossUrl),
         cardImages: applyCardImage(draft, toDraftCardImage(result, side)),
       }
