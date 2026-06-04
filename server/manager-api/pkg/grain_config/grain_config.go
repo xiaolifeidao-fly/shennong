@@ -2,10 +2,16 @@ package grain_config
 
 import (
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/oss"
+	"fmt"
+	"io"
 	"manager-api/pkg/internal/tenantctx"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -27,6 +33,9 @@ func (h *GrainConfigHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/grain-stations", h.createStation)
 	engine.PUT("/grain-stations/:id", h.updateStation)
 	engine.DELETE("/grain-stations/:id", h.deleteStation)
+	engine.GET("/grain-stations/:id/extra", h.getStationExtra)
+	engine.PUT("/grain-stations/:id/extra", h.saveStationExtra)
+	engine.POST("/grain-stations/:id/extra/business-license", h.uploadBusinessLicense)
 	engine.GET("/grain-purchase-types", h.listPurchaseTypes)
 	engine.POST("/grain-purchase-types", h.createPurchaseType)
 	engine.PUT("/grain-purchase-types/:id", h.updatePurchaseType)
@@ -39,6 +48,77 @@ func (h *GrainConfigHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/grain-purchase-places", h.createPurchasePlace)
 	engine.PUT("/grain-purchase-places/:id", h.updatePurchasePlace)
 	engine.DELETE("/grain-purchase-places/:id", h.deletePurchasePlace)
+}
+
+func (h *GrainConfigHandler) getStationExtra(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	result, err := h.service.GetStationExtra(uint64(id))
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainConfigHandler) saveStationExtra(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	var req grainConfigDTO.GrainStationExtraDTO
+	if err := context.ShouldBindJSON(&req); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	result, err := h.service.SaveStationExtra(uint64(id), &req)
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainConfigHandler) uploadBusinessLicense(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	file, err := context.FormFile("file")
+	if err != nil {
+		commonRouter.ToError(context, "请上传营业执照文件")
+		return
+	}
+	openFile, err := file.Open()
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	defer openFile.Close()
+	data, err := io.ReadAll(openFile)
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	now := time.Now()
+	objectPath := fmt.Sprintf("grain-station-extra/%d/business-license/%s%s", id, now.Format("20060102150405000"), ext)
+	if err := oss.Put(objectPath, data); err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	ossObjectKey := ""
+	ossURL := ""
+	if oss.Oss != nil {
+		ossObjectKey = oss.Oss.BuildKey(objectPath)
+		expireDuration := 365 * 24 * time.Hour
+		if url, urlErr := oss.GetUrl(objectPath, &expireDuration); urlErr == nil {
+			ossURL = url
+		}
+	}
+	req := &grainConfigDTO.GrainStationExtraDTO{
+		BusinessLicenseUrl: ossURL,
+		BusinessLicenseKey: ossObjectKey,
+	}
+	result, err := h.service.SaveStationExtra(uint64(id), req)
+	commonRouter.ToJson(context, result, err)
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {

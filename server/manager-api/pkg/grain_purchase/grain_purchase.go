@@ -65,9 +65,36 @@ func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
 		return
 	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
+	} else if raw := strings.TrimSpace(context.Query("stationIds")); raw != "" {
+		query.StationIDs = parseUint64List(raw)
+	}
+	if raw := strings.TrimSpace(context.Query("appUserIds")); raw != "" {
+		query.AppUserIDs = parseUint64List(raw)
+	}
+	if raw := strings.TrimSpace(context.Query("farmerIds")); raw != "" {
+		query.FarmerIDs = parseUint64List(raw)
+	}
+	if raw := strings.TrimSpace(context.Query("purchaseTypeIds")); raw != "" {
+		query.PurchaseTypeIDs = parseUint64List(raw)
 	}
 	result, err := h.service.ListEntries(query)
 	commonRouter.ToJson(context, result, err)
+}
+
+func parseUint64List(raw string) []uint64 {
+	parts := strings.Split(raw, ",")
+	result := make([]uint64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		v, err := strconv.ParseUint(p, 10, 64)
+		if err == nil && v > 0 {
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func (h *GrainPurchaseHandler) createEntry(context *gin.Context) {

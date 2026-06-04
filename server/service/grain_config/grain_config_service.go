@@ -16,6 +16,7 @@ import (
 type GrainConfigService struct {
 	stationRepository       *grainConfigRepository.GrainStationRepository
 	stationUserRepository   *grainConfigRepository.GrainStationUserRepository
+	stationExtraRepository  *grainConfigRepository.GrainStationExtraRepository
 	purchaseTypeRepository  *grainConfigRepository.GrainPurchaseTypeRepository
 	paymentMethodRepository *grainConfigRepository.GrainPaymentMethodRepository
 	purchasePlaceRepository *grainConfigRepository.GrainPurchasePlaceRepository
@@ -25,6 +26,7 @@ func NewGrainConfigService() *GrainConfigService {
 	return &GrainConfigService{
 		stationRepository:       db.GetRepository[grainConfigRepository.GrainStationRepository](),
 		stationUserRepository:   db.GetRepository[grainConfigRepository.GrainStationUserRepository](),
+		stationExtraRepository:  db.GetRepository[grainConfigRepository.GrainStationExtraRepository](),
 		purchaseTypeRepository:  db.GetRepository[grainConfigRepository.GrainPurchaseTypeRepository](),
 		paymentMethodRepository: db.GetRepository[grainConfigRepository.GrainPaymentMethodRepository](),
 		purchasePlaceRepository: db.GetRepository[grainConfigRepository.GrainPurchasePlaceRepository](),
@@ -35,6 +37,7 @@ func (s *GrainConfigService) EnsureTable() error {
 	steps := []func() error{
 		s.stationRepository.EnsureTable,
 		s.stationUserRepository.EnsureTable,
+		s.stationExtraRepository.EnsureTable,
 		s.purchaseTypeRepository.EnsureTable,
 		s.paymentMethodRepository.EnsureTable,
 		s.purchasePlaceRepository.EnsureTable,
@@ -45,6 +48,47 @@ func (s *GrainConfigService) EnsureTable() error {
 		}
 	}
 	return nil
+}
+
+func (s *GrainConfigService) GetStationExtra(stationID uint64) (*grainConfigDTO.GrainStationExtraDTO, error) {
+	entity, err := s.stationExtraRepository.FindByStationID(stationID)
+	if err == gorm.ErrRecordNotFound {
+		return &grainConfigDTO.GrainStationExtraDTO{StationID: stationID}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &grainConfigDTO.GrainStationExtraDTO{
+		StationID:          entity.StationID,
+		AccountHolderName:  entity.AccountHolderName,
+		BankName:           entity.BankName,
+		BankAccountNumber:  entity.BankAccountNumber,
+		BusinessLicenseUrl: entity.BusinessLicenseUrl,
+		BusinessLicenseKey: entity.BusinessLicenseKey,
+	}, nil
+}
+
+func (s *GrainConfigService) SaveStationExtra(stationID uint64, req *grainConfigDTO.GrainStationExtraDTO) (*grainConfigDTO.GrainStationExtraDTO, error) {
+	entity := &grainConfigRepository.GrainStationExtra{
+		StationID:          stationID,
+		AccountHolderName:  strings.TrimSpace(req.AccountHolderName),
+		BankName:           strings.TrimSpace(req.BankName),
+		BankAccountNumber:  strings.TrimSpace(req.BankAccountNumber),
+		BusinessLicenseUrl: strings.TrimSpace(req.BusinessLicenseUrl),
+		BusinessLicenseKey: strings.TrimSpace(req.BusinessLicenseKey),
+	}
+	result, err := s.stationExtraRepository.Upsert(entity)
+	if err != nil {
+		return nil, err
+	}
+	return &grainConfigDTO.GrainStationExtraDTO{
+		StationID:          result.StationID,
+		AccountHolderName:  result.AccountHolderName,
+		BankName:           result.BankName,
+		BankAccountNumber:  result.BankAccountNumber,
+		BusinessLicenseUrl: result.BusinessLicenseUrl,
+		BusinessLicenseKey: result.BusinessLicenseKey,
+	}, nil
 }
 
 func (s *GrainConfigService) ListStations(query grainConfigDTO.GrainStationQueryDTO) (*baseDTO.PageDTO[grainConfigDTO.GrainStationDTO], error) {

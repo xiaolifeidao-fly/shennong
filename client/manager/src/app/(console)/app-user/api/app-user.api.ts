@@ -20,7 +20,7 @@ export class AppUserRecord {
 
   stationName = "";
 
-password = "";
+  password = "";
 
   originPassword = "";
 
@@ -29,6 +29,16 @@ password = "";
   remark = "";
 
   banCount = 0;
+
+  idNumber = "";
+
+  idCardFrontUrl = "";
+
+  idCardFrontKey = "";
+
+  idCardBackUrl = "";
+
+  idCardBackKey = "";
 
   lastLoginTime?: string;
 
@@ -48,9 +58,14 @@ export interface AppUserPayload extends Record<string, unknown> {
   phone?: string;
   department?: string;
   stationId?: number;
-status?: string;
+  status?: string;
   remark?: string;
   banCount?: number;
+  idNumber?: string;
+  idCardFrontUrl?: string;
+  idCardFrontKey?: string;
+  idCardBackUrl?: string;
+  idCardBackKey?: string;
 }
 
 export function fetchAppUsers(query: CrudListQuery) {
@@ -83,4 +98,3 @@ export async function deleteAppUser(id: number) {
   const response = await instance.delete<ApiResponse<{ deleted: boolean }>>(`/app-users/${id}`);
   return unwrapApiResponse(response.data);
 }
-

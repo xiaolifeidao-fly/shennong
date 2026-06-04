@@ -153,7 +153,11 @@ func (s *AppUserService) ListUsers(query appUserDTO.AppUserQueryDTO) (*baseDTO.P
 		return nil, err
 	}
 	items := make([]*appUserDTO.AppUserDTO, 0, len(rows))
-	for _, row := range rows {
+	for i := range rows {
+		if err := decryptAppUserListRowIDNumber(&rows[i]); err != nil {
+			return nil, err
+		}
+		row := rows[i]
 		items = append(items, &appUserDTO.AppUserDTO{
 			BaseDTO: baseDTO.BaseDTO{
 				Id:          row.Id,
@@ -188,6 +192,11 @@ func (s *AppUserService) ListUsers(query appUserDTO.AppUserQueryDTO) (*baseDTO.P
 			WxLastLoginTime: row.WxLastLoginTime,
 			StationID:       row.StationID,
 			StationName:     row.StationName,
+			IDNumber:        row.IDNumber,
+			IDCardFrontURL:  row.IDCardFrontURL,
+			IDCardFrontKey:  row.IDCardFrontKey,
+			IDCardBackURL:   row.IDCardBackURL,
+			IDCardBackKey:   row.IDCardBackKey,
 		})
 	}
 	return baseDTO.BuildPage(int(total), items), nil
@@ -270,6 +279,14 @@ func (s *AppUserService) CreateUser(req *appUserDTO.CreateAppUserDTO) (*appUserD
 		WxProvince:     strings.TrimSpace(req.WxProvince),
 		WxCity:         strings.TrimSpace(req.WxCity),
 		WxLanguage:     strings.TrimSpace(req.WxLanguage),
+		IDNumber:       strings.TrimSpace(req.IDNumber),
+		IDCardFrontURL: strings.TrimSpace(req.IDCardFrontURL),
+		IDCardFrontKey: strings.TrimSpace(req.IDCardFrontKey),
+		IDCardBackURL:  strings.TrimSpace(req.IDCardBackURL),
+		IDCardBackKey:  strings.TrimSpace(req.IDCardBackKey),
+	}
+	if err := prepareAppUserIDCardForSave(newUser); err != nil {
+		return nil, err
 	}
 	if req.LastLoginTime != nil && !req.LastLoginTime.IsZero() {
 		newUser.LastLoginTime = req.LastLoginTime
@@ -456,6 +473,24 @@ func (s *AppUserService) UpdateUser(id uint, req *appUserDTO.UpdateAppUserDTO) (
 	if req.WxLastLoginTime != nil {
 		entity.WxLastLoginTime = req.WxLastLoginTime
 	}
+	if req.IDNumber != nil {
+		entity.IDNumber = strings.TrimSpace(*req.IDNumber)
+	}
+	if req.IDCardFrontURL != nil {
+		entity.IDCardFrontURL = strings.TrimSpace(*req.IDCardFrontURL)
+	}
+	if req.IDCardFrontKey != nil {
+		entity.IDCardFrontKey = strings.TrimSpace(*req.IDCardFrontKey)
+	}
+	if req.IDCardBackURL != nil {
+		entity.IDCardBackURL = strings.TrimSpace(*req.IDCardBackURL)
+	}
+	if req.IDCardBackKey != nil {
+		entity.IDCardBackKey = strings.TrimSpace(*req.IDCardBackKey)
+	}
+	if err := prepareAppUserIDCardForSave(entity); err != nil {
+		return nil, err
+	}
 	saved, err := s.appUserRepository.SaveOrUpdate(entity)
 	if err != nil {
 		return nil, err
@@ -514,6 +549,9 @@ func toCurrentAppUserProfileDTO(entity *appUserRepository.AppUser) *appUserDTO.C
 }
 
 func (s *AppUserService) toAppUserDTO(entity *appUserRepository.AppUser) (*appUserDTO.AppUserDTO, error) {
+	if err := decryptAppUserIDNumber(entity); err != nil {
+		return nil, err
+	}
 	result := db.ToDTO[appUserDTO.AppUserDTO](entity)
 	if entity == nil || entity.Id == 0 {
 		return result, nil

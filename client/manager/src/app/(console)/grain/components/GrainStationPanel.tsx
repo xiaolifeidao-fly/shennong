@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { message } from "antd";
+import { Button, message, Tooltip } from "antd";
+import { FileTextOutlined } from "@ant-design/icons";
 import {
   CrudManagementPanel,
   type CrudCascaderOption,
@@ -16,6 +17,7 @@ import {
   type GrainStationRecord,
   type RegionTreeRecord,
 } from "../api/grain.api";
+import { GrainStationExtraDrawer } from "./GrainStationExtraDrawer";
 
 const statusOptions: CrudOption[] = [
   { label: "启用", value: "active" },
@@ -46,6 +48,8 @@ function toCascaderOptions(regions: RegionTreeRecord[]): CrudCascaderOption[] {
 
 export function GrainStationPanel() {
   const [regionOptions, setRegionOptions] = useState<CrudCascaderOption[]>([]);
+  const [extraOpen, setExtraOpen] = useState(false);
+  const [extraStation, setExtraStation] = useState<GrainStationRecord | null>(null);
 
   useEffect(() => {
     listRegionTree()
@@ -71,16 +75,39 @@ export function GrainStationPanel() {
   ];
 
   return (
-    <CrudManagementPanel<GrainStationRecord, GrainPayload>
-      title="粮站"
-      createText="新增粮站"
-      searchPlaceholder="粮站名称/联系人"
-      searchParam="search"
-      fields={fields}
-      columns={columns}
-      statusField="status"
-      statusOptions={statusOptions}
-      api={grainStationApi}
-    />
+    <>
+      <CrudManagementPanel<GrainStationRecord, GrainPayload>
+        title="粮站"
+        createText="新增粮站"
+        searchPlaceholder="粮站名称/联系人"
+        searchParam="search"
+        fields={fields}
+        columns={columns}
+        statusField="status"
+        statusOptions={statusOptions}
+        api={grainStationApi}
+        rowActions={(record) => (
+          <Tooltip title="证件材料">
+            <Button
+              type="text"
+              icon={<FileTextOutlined />}
+              onClick={() => {
+                setExtraStation(record);
+                setExtraOpen(true);
+              }}
+            />
+          </Tooltip>
+        )}
+      />
+      <GrainStationExtraDrawer
+        open={extraOpen}
+        stationId={extraStation?.id ?? null}
+        stationName={extraStation?.stationName ?? ""}
+        onClose={() => {
+          setExtraOpen(false);
+          setExtraStation(null);
+        }}
+      />
+    </>
   );
 }

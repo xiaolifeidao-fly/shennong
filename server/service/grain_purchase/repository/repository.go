@@ -308,11 +308,20 @@ func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntry
 	if len(query.StationIDs) > 0 {
 		dbQuery = dbQuery.Where("e.station_id IN ?", query.StationIDs)
 	}
-	if query.AppUserID > 0 {
+	if len(query.AppUserIDs) > 0 {
+		dbQuery = dbQuery.Where("e.app_user_id IN ?", query.AppUserIDs)
+	} else if query.AppUserID > 0 {
 		dbQuery = dbQuery.Where("e.app_user_id = ?", query.AppUserID)
 	}
-	if query.FarmerID > 0 {
+	if len(query.FarmerIDs) > 0 {
+		dbQuery = dbQuery.Where("e.farmer_id IN ?", query.FarmerIDs)
+	} else if query.FarmerID > 0 {
 		dbQuery = dbQuery.Where("e.farmer_id = ?", query.FarmerID)
+	}
+	if len(query.PurchaseTypeIDs) > 0 {
+		dbQuery = dbQuery.Where("e.purchase_type_id IN ?", query.PurchaseTypeIDs)
+	} else if query.PurchaseTypeID > 0 {
+		dbQuery = dbQuery.Where("e.purchase_type_id = ?", query.PurchaseTypeID)
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
 		likeValue := "%" + value + "%"
@@ -321,11 +330,21 @@ func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntry
 	if value := strings.TrimSpace(query.Status); value != "" {
 		dbQuery = dbQuery.Where("e.status = ?", value)
 	}
-	if query.StartTime != nil {
+	if startDate := strings.TrimSpace(query.StartDate); startDate != "" {
+		dbQuery = dbQuery.Where("DATE(e.created_time) >= ?", startDate)
+	} else if query.StartTime != nil {
 		dbQuery = dbQuery.Where("e.buy_time >= ?", query.StartTime)
 	}
-	if query.EndTime != nil {
+	if endDate := strings.TrimSpace(query.EndDate); endDate != "" {
+		dbQuery = dbQuery.Where("DATE(e.created_time) <= ?", endDate)
+	} else if query.EndTime != nil {
 		dbQuery = dbQuery.Where("e.buy_time <= ?", query.EndTime)
+	}
+	if query.MinAmount != nil {
+		dbQuery = dbQuery.Where("e.amount >= ?", *query.MinAmount)
+	}
+	if query.MaxAmount != nil {
+		dbQuery = dbQuery.Where("e.amount <= ?", *query.MaxAmount)
 	}
 	return dbQuery
 }

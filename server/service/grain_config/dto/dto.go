@@ -59,6 +59,15 @@ type GrainPurchasePlaceDTO struct {
 	Status    string `json:"status"`
 }
 
+type GrainStationExtraDTO struct {
+	StationID           uint64 `json:"stationId"`
+	AccountHolderName   string `json:"accountHolderName"`
+	BankName            string `json:"bankName"`
+	BankAccountNumber   string `json:"bankAccountNumber"`
+	BusinessLicenseUrl  string `json:"businessLicenseUrl"`
+	BusinessLicenseKey  string `json:"businessLicenseKey"`
+}
+
 type GrainStationQueryDTO struct {
 	Page       int      `form:"page"`
 	PageIndex  int      `form:"pageIndex"`

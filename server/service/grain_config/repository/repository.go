@@ -163,6 +163,42 @@ func (r *GrainPaymentMethodRepository) ListByQuery(query grainConfigDTO.GrainCon
 	return entities, err
 }
 
+type GrainStationExtraRepository struct {
+	db.Repository[*GrainStationExtra]
+}
+
+func (r *GrainStationExtraRepository) EnsureTable() error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.AutoMigrate(&GrainStationExtra{})
+}
+
+func (r *GrainStationExtraRepository) FindByStationID(stationID uint64) (*GrainStationExtra, error) {
+	var entity GrainStationExtra
+	err := r.Db.Where("active = ? AND station_id = ?", 1, stationID).First(&entity).Error
+	return &entity, err
+}
+
+func (r *GrainStationExtraRepository) Upsert(entity *GrainStationExtra) (*GrainStationExtra, error) {
+	var existing GrainStationExtra
+	err := r.Db.Where("active = ? AND station_id = ?", 1, entity.StationID).First(&existing).Error
+	if err == gorm.ErrRecordNotFound {
+		return r.Create(entity)
+	}
+	if err != nil {
+		return nil, err
+	}
+	existing.AccountHolderName = entity.AccountHolderName
+	existing.BankName = entity.BankName
+	existing.BankAccountNumber = entity.BankAccountNumber
+	if entity.BusinessLicenseUrl != "" {
+		existing.BusinessLicenseUrl = entity.BusinessLicenseUrl
+		existing.BusinessLicenseKey = entity.BusinessLicenseKey
+	}
+	return r.SaveOrUpdate(&existing)
+}
+
 type GrainPurchasePlaceRepository struct {
 	db.Repository[*GrainPurchasePlace]
 }

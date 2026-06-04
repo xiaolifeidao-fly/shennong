@@ -30,6 +30,12 @@ type AppUser struct {
 	WxCity          string     `gorm:"column:wx_city;type:varchar(100)" orm:"column(wx_city);size(100);null" description:"微信城市"`
 	WxLanguage      string     `gorm:"column:wx_language;type:varchar(50)" orm:"column(wx_language);size(50);null" description:"微信语言"`
 	WxLastLoginTime *time.Time `gorm:"column:wx_last_login_time;type:datetime" orm:"column(wx_last_login_time);null" description:"微信最后登录时间"`
+	IDNumber        string     `gorm:"column:id_number;type:varchar(128)" description:"身份证号（加密）"`
+	IDNumberDigest  string     `gorm:"column:id_number_digest;type:char(64);index:idx_app_user_id_number_digest" description:"身份证号检索摘要"`
+	IDCardFrontURL  string     `gorm:"column:id_card_front_url;type:varchar(500)" description:"身份证人像面OSS URL"`
+	IDCardFrontKey  string     `gorm:"column:id_card_front_key;type:varchar(500)" description:"身份证人像面OSS Key"`
+	IDCardBackURL   string     `gorm:"column:id_card_back_url;type:varchar(500)" description:"身份证国徽面OSS URL"`
+	IDCardBackKey   string     `gorm:"column:id_card_back_key;type:varchar(500)" description:"身份证国徽面OSS Key"`
 }
 
 func (u *AppUser) TableName() string {
@@ -73,4 +79,9 @@ type AppUserListRow struct {
 	WxLastLoginTime *time.Time `gorm:"column:wx_last_login_time"`
 	StationID       uint64     `gorm:"column:station_id"`
 	StationName     string     `gorm:"column:station_name"`
+	IDNumber       string `gorm:"column:id_number"`
+	IDCardFrontURL string `gorm:"column:id_card_front_url"`
+	IDCardFrontKey string `gorm:"column:id_card_front_key"`
+	IDCardBackURL  string `gorm:"column:id_card_back_url"`
+	IDCardBackKey  string `gorm:"column:id_card_back_key"`
 }

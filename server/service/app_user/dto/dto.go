@@ -32,6 +32,11 @@ type AppUserDTO struct {
 	WxLastLoginTime *time.Time `json:"wxLastLoginTime"`
 	StationID       uint64     `json:"stationId"`
 	StationName     string     `json:"stationName"`
+	IDNumber        string     `json:"idNumber"`
+	IDCardFrontURL  string     `json:"idCardFrontUrl"`
+	IDCardFrontKey  string     `json:"idCardFrontKey"`
+	IDCardBackURL   string     `json:"idCardBackUrl"`
+	IDCardBackKey   string     `json:"idCardBackKey"`
 }
 
 type CreateAppUserDTO struct {
@@ -59,6 +64,11 @@ type CreateAppUserDTO struct {
 	WxLanguage      string     `json:"wxLanguage"`
 	WxLastLoginTime *time.Time `json:"wxLastLoginTime"`
 	StationID       uint64     `json:"stationId"`
+	IDNumber        string     `json:"idNumber"`
+	IDCardFrontURL  string     `json:"idCardFrontUrl"`
+	IDCardFrontKey  string     `json:"idCardFrontKey"`
+	IDCardBackURL   string     `json:"idCardBackUrl"`
+	IDCardBackKey   string     `json:"idCardBackKey"`
 }
 
 type RegisterAppUserDTO struct {
@@ -92,6 +102,11 @@ type UpdateAppUserDTO struct {
 	WxLanguage      *string    `json:"wxLanguage,omitempty"`
 	WxLastLoginTime *time.Time `json:"wxLastLoginTime,omitempty"`
 	StationID       *uint64    `json:"stationId,omitempty"`
+	IDNumber        *string    `json:"idNumber,omitempty"`
+	IDCardFrontURL  *string    `json:"idCardFrontUrl,omitempty"`
+	IDCardFrontKey  *string    `json:"idCardFrontKey,omitempty"`
+	IDCardBackURL   *string    `json:"idCardBackUrl,omitempty"`
+	IDCardBackKey   *string    `json:"idCardBackKey,omitempty"`
 }
 
 type AppUserQueryDTO struct {

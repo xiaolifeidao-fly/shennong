@@ -235,6 +235,15 @@ export class GrainPurchasePlaceRecord {
   [key: string]: unknown;
 }
 
+export class GrainStationExtraRecord {
+  stationId = 0;
+  accountHolderName = "";
+  bankName = "";
+  bankAccountNumber = "";
+  businessLicenseUrl = "";
+  businessLicenseKey = "";
+}
+
 export type GrainPayload = Record<string, unknown>;
 
 export interface RegionTreeRecord {
@@ -283,6 +292,26 @@ export const grainEntryMaterialApi = {
 export const grainPurchaseTypeApi = crudApi(GrainPurchaseTypeRecord, "/grain-purchase-types");
 export const grainPaymentMethodApi = crudApi(GrainPaymentMethodRecord, "/grain-payment-methods");
 export const grainPurchasePlaceApi = crudApi(GrainPurchasePlaceRecord, "/grain-purchase-places");
+
+export async function getStationExtra(stationId: number) {
+  return getData(GrainStationExtraRecord, `/grain-stations/${stationId}/extra`);
+}
+
+export async function saveStationExtra(stationId: number, payload: Partial<GrainStationExtraRecord>) {
+  const response = await instance.put<ApiResponse<GrainStationExtraRecord>>(`/grain-stations/${stationId}/extra`, payload);
+  return unwrapApiResponse(response.data);
+}
+
+export async function uploadBusinessLicense(stationId: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await instance.post<ApiResponse<GrainStationExtraRecord>>(
+    `/grain-stations/${stationId}/extra/business-license`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return unwrapApiResponse(response.data);
+}
 
 export async function voidGrainPurchaseEntry(id: number) {
   const response = await instance.put<ApiResponse<{ voided: boolean }>>(`/grain-purchase-entries/${id}/void`);

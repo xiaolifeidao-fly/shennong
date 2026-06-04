@@ -172,17 +172,25 @@ type GrainEntryMaterialDTO struct {
 }
 
 type GrainPurchaseEntryQueryDTO struct {
-	Page       int        `form:"page"`
-	PageIndex  int        `form:"pageIndex"`
-	PageSize   int        `form:"pageSize"`
-	StationID  uint64     `form:"stationId"`
-	StationIDs []uint64   `form:"-"`
-	AppUserID  uint64     `form:"appUserId"`
-	FarmerID   uint64     `form:"farmerId"`
-	Search     string     `form:"search"`
-	Status     string     `form:"status"`
-	StartTime  *time.Time `form:"startTime" time_format:"2006-01-02 15:04:05"`
-	EndTime    *time.Time `form:"endTime" time_format:"2006-01-02 15:04:05"`
+	Page            int        `form:"page"`
+	PageIndex       int        `form:"pageIndex"`
+	PageSize        int        `form:"pageSize"`
+	StationID       uint64     `form:"stationId"`
+	StationIDs      []uint64   `form:"-"`
+	AppUserID       uint64     `form:"appUserId"`
+	AppUserIDs      []uint64   `form:"-"`
+	FarmerID        uint64     `form:"farmerId"`
+	FarmerIDs       []uint64   `form:"-"`
+	PurchaseTypeID  uint64     `form:"purchaseTypeId"`
+	PurchaseTypeIDs []uint64   `form:"-"`
+	Search          string     `form:"search"`
+	Status          string     `form:"status"`
+	StartDate       string     `form:"startDate"`
+	EndDate         string     `form:"endDate"`
+	StartTime       *time.Time `form:"startTime" time_format:"2006-01-02 15:04:05"`
+	EndTime         *time.Time `form:"endTime" time_format:"2006-01-02 15:04:05"`
+	MinAmount       *float64   `form:"minAmount"`
+	MaxAmount       *float64   `form:"maxAmount"`
 }
 
 type GrainEntrySnapshotQueryDTO struct {

@@ -60,6 +60,20 @@ func (g *GrainPaymentMethod) TableName() string {
 	return "grain_payment_method"
 }
 
+type GrainStationExtra struct {
+	db.BaseEntity
+	StationID           uint64 `gorm:"column:station_id;type:bigint unsigned;uniqueIndex:uk_station_id" description:"粮站ID"`
+	AccountHolderName   string `gorm:"column:account_holder_name;type:varchar(100)" description:"户名"`
+	BankName            string `gorm:"column:bank_name;type:varchar(100)" description:"开户行"`
+	BankAccountNumber   string `gorm:"column:bank_account_number;type:varchar(100)" description:"开户号"`
+	BusinessLicenseUrl  string `gorm:"column:business_license_url;type:varchar(500)" description:"营业执照OSS URL"`
+	BusinessLicenseKey  string `gorm:"column:business_license_key;type:varchar(500)" description:"营业执照OSS对象Key"`
+}
+
+func (g *GrainStationExtra) TableName() string {
+	return "grain_station_extra"
+}
+
 type GrainPurchasePlace struct {
 	db.BaseEntity
 	AppUserID uint64 `gorm:"column:app_user_id;type:bigint unsigned;index:idx_app_user_id" description:"业务员ID"`

@@ -185,6 +185,8 @@ export function GrainPurchaseEntryPanel() {
   const [farmerSearching, setFarmerSearching] = useState(false);
   const [filterAppUserOptions, setFilterAppUserOptions] = useState<CrudOption[]>([]);
   const [appUserSearching, setAppUserSearching] = useState(false);
+  const [filterMinAmount, setFilterMinAmount] = useState<number | undefined>(undefined);
+  const [filterMaxAmount, setFilterMaxAmount] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -284,6 +286,8 @@ export function GrainPurchaseEntryPanel() {
     endDate: filterDateRange?.[1]?.format("YYYY-MM-DD") ?? undefined,
     appUserIds: filterAppUserIds.length > 0 ? filterAppUserIds.join(",") : undefined,
     farmerIds: filterFarmerIds.length > 0 ? filterFarmerIds.join(",") : undefined,
+    minAmount: filterMinAmount,
+    maxAmount: filterMaxAmount,
   });
 
   const searchFarmers = useCallback(async (keyword: string) => {
@@ -762,11 +766,43 @@ export function GrainPurchaseEntryPanel() {
               notFoundContent={farmerSearching ? "搜索中..." : "输入姓名搜索"}
               style={{ minWidth: 180 }}
             />
+            <InputNumber
+              placeholder="最低金额"
+              min={0}
+              precision={2}
+              value={filterMinAmount}
+              onChange={(value) => setFilterMinAmount(value ?? undefined)}
+              addonBefore="￥"
+              style={{ width: 150 }}
+            />
+            <InputNumber
+              placeholder="最高金额"
+              min={0}
+              precision={2}
+              value={filterMaxAmount}
+              onChange={(value) => setFilterMaxAmount(value ?? undefined)}
+              addonBefore="￥"
+              style={{ width: 150 }}
+            />
             <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadRecords(filterQuery())}>
               查询
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadRecords()}>
-              刷新
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                setFilterStationId(undefined);
+                setFilterPurchaseTypeIds([]);
+                setFilterDateRange(null);
+                setFilterAppUserIds([]);
+                setFilterFarmerIds([]);
+                setFilterFarmerOptions([]);
+                setFilterAppUserOptions([]);
+                setFilterMinAmount(undefined);
+                setFilterMaxAmount(undefined);
+                void loadRecords({ pageIndex: 1 });
+              }}
+            >
+              重置
             </Button>
           </Space>
           <Space wrap>
