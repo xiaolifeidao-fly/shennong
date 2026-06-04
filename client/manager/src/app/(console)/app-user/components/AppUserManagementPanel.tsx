@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircleOutlined, LockOutlined, StopOutlined } from "@ant-design/icons";
-import { Button, Form, Input, Modal, Popconfirm, Tooltip, message } from "antd";
+import { CheckCircleOutlined, IdcardOutlined, LockOutlined, ScanOutlined, StopOutlined } from "@ant-design/icons";
+import { Button, Form, Input, Modal, Popconfirm, Space, Tooltip, Typography, Upload, message } from "antd";
+import type { FormInstance } from "antd";
+import type { RcFile } from "antd/es/upload";
 import { CrudManagementPanel } from "../../components/CrudManagementPanel";
 import type { CrudField, CrudFormSection, CrudTableColumn, CrudOption } from "../../components/CrudManagementPanel";
 import { useAccessibleStations } from "../../grain/hooks/useAccessibleStations";
+import { recognizeGrainCard, type GrainCardOcrResult } from "../../grain/api/grain.api";
+import { SensitiveValue } from "../../grain/components/SensitiveValue";
 import {
   createAppUser,
   deleteAppUser,
@@ -16,6 +20,8 @@ import {
   type AppUserPayload,
   type AppUserRecord,
 } from "../api/app-user.api";
+
+const { Text } = Typography;
 
 const statusOptions: CrudOption[] = [
   { label: "正常", value: "active" },
@@ -31,6 +37,7 @@ const baseFields: CrudField<AppUserRecord>[] = [
   { name: "email", label: "邮箱", placeholder: "用于接收通知" },
   { name: "phone", label: "手机号", placeholder: "请输入常用手机号" },
   { name: "department", label: "部门", hiddenOnEdit: true, placeholder: "例如：粮食收购一组" },
+  { name: "idNumber", label: "身份证号", placeholder: "可通过身份证识别自动回填（选填）" },
   { name: "status", label: "状态", type: "select", options: statusOptions, placeholder: "请选择账号状态" },
   { name: "remark", label: "备注", type: "textarea", span: 2, placeholder: "记录负责区域、交接说明或账号备注" },
 ];
@@ -39,6 +46,12 @@ const baseColumns: CrudTableColumn<AppUserRecord>[] = [
   { name: "username", label: "用户名", width: 150 },
   { name: "name", label: "姓名", width: 140 },
   { name: "phone", label: "手机号", width: 150 },
+  {
+    name: "idNumber",
+    label: "身份证",
+    width: 200,
+    render: (value) => (value ? <SensitiveValue value={value} keepStart={6} keepEnd={4} /> : "-"),
+  },
   { name: "email", label: "邮箱", width: 220 },
   { name: "status", label: "状态", width: 110 },
   { name: "banCount", label: "封禁次数", width: 110 },
@@ -60,6 +73,110 @@ function formatDateTime(value: unknown) {
   }
   const pad = (num: number) => String(num).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function beforeImageUpload(file: RcFile) {
+  if (!file.type.startsWith("image/")) {
+    message.error("请上传图片文件");
+    return Upload.LIST_IGNORE;
+  }
+  if (file.size / 1024 / 1024 >= 8) {
+    message.error("图片需小于 8MB");
+    return Upload.LIST_IGNORE;
+  }
+  return true;
+}
+
+type IdCardOcrState = {
+  frontLoading: boolean;
+  backLoading: boolean;
+};
+
+function AppUserIdCardOcr({
+  form,
+  editingRecord,
+}: {
+  form: FormInstance;
+  editingRecord: AppUserRecord | null;
+}) {
+  const [ocrState, setOcrState] = useState<IdCardOcrState>({ frontLoading: false, backLoading: false });
+
+  const applyOcrResult = (result: GrainCardOcrResult, imageSide: "front" | "back") => {
+    if (imageSide === "front") {
+      form.setFieldsValue({
+        name: result.name || form.getFieldValue("name"),
+        idNumber: result.idNumber || form.getFieldValue("idNumber"),
+        idCardFrontUrl: result.ossUrl || form.getFieldValue("idCardFrontUrl"),
+        idCardFrontKey: result.ossObjectKey || form.getFieldValue("idCardFrontKey"),
+      });
+      message.success(result.mock ? "模拟身份证人像面识别完成" : "身份证人像面识别完成");
+    } else {
+      form.setFieldsValue({
+        idCardBackUrl: result.ossUrl || form.getFieldValue("idCardBackUrl"),
+        idCardBackKey: result.ossObjectKey || form.getFieldValue("idCardBackKey"),
+      });
+      message.success("身份证国徽面上传完成");
+    }
+  };
+
+  const handleRecognize = async (file: File, imageSide: "front" | "back") => {
+    const stationId = form.getFieldValue("stationId") as number | undefined;
+    if (!stationId) {
+      message.warning("请先选择粮站，再进行识别");
+      return;
+    }
+    setOcrState((prev) => ({ ...prev, [`${imageSide}Loading`]: true }));
+    try {
+      const result = await recognizeGrainCard(file, {
+        cardType: "id-card",
+        imageSide,
+        stationId,
+        appUserId: editingRecord?.id,
+      });
+      applyOcrResult(result, imageSide);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "识别失败，请手动录入");
+    } finally {
+      setOcrState((prev) => ({ ...prev, [`${imageSide}Loading`]: false }));
+    }
+  };
+
+  const renderUploadButton = (imageSide: "front" | "back", label: string) => {
+    const loading = imageSide === "front" ? ocrState.frontLoading : ocrState.backLoading;
+    return (
+      <Upload
+        accept="image/*"
+        maxCount={1}
+        showUploadList={false}
+        beforeUpload={beforeImageUpload}
+        customRequest={({ file, onSuccess }) => {
+          void handleRecognize(file as File, imageSide).then(() => onSuccess?.("ok"));
+        }}
+        disabled={loading}
+      >
+        <Button icon={imageSide === "front" ? <ScanOutlined /> : <IdcardOutlined />} loading={loading}>
+          {label}
+        </Button>
+      </Upload>
+    );
+  };
+
+  return (
+    <section className="manager-form-assist">
+      <Space align="start" style={{ width: "100%", justifyContent: "space-between" }} wrap>
+        <Space direction="vertical" size={2}>
+          <Text strong>身份证识别（选填）</Text>
+          <Text type="secondary">
+            上传身份证人像面可自动回填姓名和身份证号；身份证图片将安全存储，识别结果仍可手动修正。
+          </Text>
+        </Space>
+        <Space wrap>
+          {renderUploadButton("front", "身份证人像面")}
+          {renderUploadButton("back", "身份证国徽面")}
+        </Space>
+      </Space>
+    </section>
+  );
 }
 
 export function AppUserManagementPanel() {
@@ -105,6 +222,12 @@ export function AppUserManagementPanel() {
       fields: ["phone", "email"],
     },
     {
+      key: "identity",
+      title: "身份证信息",
+      description: "身份证号加密存储，选填。",
+      fields: ["idNumber"],
+    },
+    {
       key: "status",
       title: "状态备注",
       description: "控制账号可用状态并补充内部说明。",
@@ -132,6 +255,9 @@ export function AppUserManagementPanel() {
         actionWidth={200}
         modalWidth={940}
         formSections={formSections}
+        formExtra={({ form, editingRecord }) => (
+          <AppUserIdCardOcr form={form} editingRecord={editingRecord} />
+        )}
         rowActions={(record, context) => {
           const isActive = record.status === "active";
           const nextStatus = isActive ? "inactive" : "active";
