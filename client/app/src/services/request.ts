@@ -50,6 +50,9 @@ interface WechatCloudContainer {
 }
 
 declare const wx: {
+  env?: {
+    USER_DATA_PATH: string
+  }
   cloud?: WechatCloudContainer
   uploadFile?(options: {
     url: string
@@ -66,7 +69,24 @@ declare const wx: {
     success: (response: { statusCode: number; tempFilePath: string }) => void
     fail: (error: { errMsg?: string }) => void
   }): unknown
+  getFileSystemManager?(): {
+    writeFile(options: {
+      filePath: string
+      data: string
+      encoding: 'base64'
+      success: () => void
+      fail: (error: { errMsg?: string }) => void
+    }): void
+  }
 } | undefined
+
+interface ImageBase64Payload {
+  mode?: string
+  mimeType?: string
+  fileName?: string
+  base64?: string
+  dataUrl?: string
+}
 
 function getWechatCloud() {
   return (typeof wx === 'undefined' ? undefined : wx.cloud)
@@ -278,6 +298,10 @@ export async function download(url: string) {
   if (apiTransport !== 'cloud' && /^https?:/.test(url)) {
     return url
   }
+  const base64Path = await downloadBase64Image(url)
+  if (base64Path) {
+    return base64Path
+  }
   const targetURL = fileRequestURL(url)
   const response = apiTransport === 'cloud'
     ? await downloadByWechat(targetURL)
@@ -304,6 +328,44 @@ function downloadByWechat(url: string) {
       fail: (error) => reject(new Error(error.errMsg || '下载失败')),
     })
   })
+}
+
+async function downloadBase64Image(url: string) {
+  try {
+    const payload = await request<ImageBase64Payload>(url)
+    if (payload?.mode !== 'base64' || !payload.base64) {
+      return ''
+    }
+    return writeBase64Image(payload.base64, payload.mimeType, payload.fileName)
+  } catch {
+    return ''
+  }
+}
+
+function writeBase64Image(base64: string, mimeType = 'image/jpeg', fileName = '') {
+  if (typeof wx === 'undefined' || !wx.getFileSystemManager || !wx.env?.USER_DATA_PATH) {
+    return Promise.resolve(`data:${mimeType};base64,${base64}`)
+  }
+  const ext = fileExtensionFromMime(mimeType, fileName)
+  const filePath = `${wx.env.USER_DATA_PATH}/img-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`
+  return new Promise<string>((resolve, reject) => {
+    wx.getFileSystemManager?.().writeFile({
+      filePath,
+      data: base64,
+      encoding: 'base64',
+      success: () => resolve(filePath),
+      fail: (error) => reject(new Error(error.errMsg || '图片写入失败')),
+    })
+  })
+}
+
+function fileExtensionFromMime(mimeType: string, fileName: string) {
+  const ext = fileName.match(/\.[a-z0-9]+$/i)?.[0]
+  if (ext) return ext
+  if (mimeType.includes('png')) return '.png'
+  if (mimeType.includes('webp')) return '.webp'
+  if (mimeType.includes('gif')) return '.gif'
+  return '.jpg'
 }
 
 export const http = {

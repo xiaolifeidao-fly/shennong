@@ -33,6 +33,7 @@ type BusinessLicenseContent struct {
 	StationID uint64
 	Data      []byte
 	MimeType  string
+	FileName  string
 	Base64    string
 }
 
@@ -206,6 +207,7 @@ func (s *GrainConfigService) GetBusinessLicenseContent(stationID uint64) (*Busin
 		StationID: stationID,
 		Data:      data,
 		MimeType:  mimeType,
+		FileName:  businessLicenseFileName(entity.BusinessLicenseKey, entity.BusinessLicenseUrl),
 		Base64:    base64Content,
 	}, nil
 }
@@ -588,11 +590,19 @@ func parseOssKeyFromURL(rawURL string) string {
 	return strings.TrimLeft(parsedURL.Path, "/")
 }
 
-func detectBusinessLicenseMimeType(data []byte, objectKey, fallbackURL string) string {
+func businessLicenseFileName(objectKey, fallbackURL string) string {
 	name := strings.TrimSpace(objectKey)
 	if name == "" {
 		name = parseOssKeyFromURL(fallbackURL)
 	}
+	if name == "" {
+		return "business-license.jpg"
+	}
+	return filepath.Base(name)
+}
+
+func detectBusinessLicenseMimeType(data []byte, objectKey, fallbackURL string) string {
+	name := businessLicenseFileName(objectKey, fallbackURL)
 	if ext := strings.ToLower(filepath.Ext(name)); ext != "" {
 		if mimeType := mime.TypeByExtension(ext); mimeType != "" {
 			return mimeType

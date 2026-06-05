@@ -69,6 +69,7 @@ func (h *GrainConfigHandler) getMyBusinessLicense(context *gin.Context) {
 		commonRouter.ToJson(context, imageBase64Response{
 			Mode:     "base64",
 			MimeType: content.MimeType,
+			FileName: content.FileName,
 			Base64:   content.Base64,
 			DataURL:  "data:" + content.MimeType + ";base64," + content.Base64,
 		}, nil)
@@ -81,6 +82,7 @@ func (h *GrainConfigHandler) getMyBusinessLicense(context *gin.Context) {
 type imageBase64Response struct {
 	Mode     string `json:"mode"`
 	MimeType string `json:"mimeType"`
+	FileName string `json:"fileName"`
 	Base64   string `json:"base64"`
 	DataURL  string `json:"dataUrl"`
 }
