@@ -312,6 +312,16 @@ func (r *GrainEntryMaterialRepository) FindOrCreate(entity *GrainEntryMaterial) 
 	return entity, true, nil
 }
 
+func (r *GrainEntryMaterialRepository) UpdateCloudSource(id int, wxCloudURL, lastSource string) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.Model(&GrainEntryMaterial{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"wx_cloud_url": wxCloudURL,
+		"last_source":  lastSource,
+	}).Error
+}
+
 func (r *GrainEntryMaterialRepository) DeletePhysicalByID(id uint) error {
 	if r.Db == nil {
 		return fmt.Errorf("database is not initialized")

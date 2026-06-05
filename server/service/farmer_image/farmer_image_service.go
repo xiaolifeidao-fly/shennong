@@ -2,6 +2,7 @@ package farmer_image
 
 import (
 	"common/middleware/db"
+	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"crypto/sha256"
 	"fmt"
@@ -58,6 +59,10 @@ func HashImageIdentity(imageName, ossObjectKey string) string {
 
 // FindOrCreateIDCardImage 查找或创建身份证图片记录，返回记录ID
 func (s *FarmerImageService) FindOrCreateIDCardImage(farmerID, appUserID uint64, imageSide, imageName, ossURL, ossObjectKey string) (*farmerImageRepository.FarmerIDCardImage, error) {
+	return s.FindOrCreateIDCardImageWithCloud(farmerID, appUserID, imageSide, imageName, ossURL, ossObjectKey, "", image_source.OSS)
+}
+
+func (s *FarmerImageService) FindOrCreateIDCardImageWithCloud(farmerID, appUserID uint64, imageSide, imageName, ossURL, ossObjectKey, wxCloudURL, lastSource string) (*farmerImageRepository.FarmerIDCardImage, error) {
 	imageHash := HashImageIdentity(imageName, ossObjectKey)
 	entity := &farmerImageRepository.FarmerIDCardImage{
 		FarmerID:     farmerID,
@@ -67,12 +72,25 @@ func (s *FarmerImageService) FindOrCreateIDCardImage(farmerID, appUserID uint64,
 		ImageHash:    imageHash,
 		OssURL:       ossURL,
 		OssObjectKey: ossObjectKey,
+		LastSource:   normalizeImageSource(lastSource),
+		WXCloudURL:   strings.TrimSpace(wxCloudURL),
 	}
-	return s.idcardRepo.FindOrCreate(entity)
+	result, err := s.idcardRepo.FindOrCreate(entity)
+	if err == nil && result != nil && entity.WXCloudURL != "" && (result.WXCloudURL != entity.WXCloudURL || result.LastSource != entity.LastSource) {
+		if updateErr := s.idcardRepo.UpdateCloudSource(result.Id, entity.WXCloudURL, entity.LastSource); updateErr == nil {
+			result.WXCloudURL = entity.WXCloudURL
+			result.LastSource = entity.LastSource
+		}
+	}
+	return result, err
 }
 
 // FindOrCreateBankCardImage 查找或创建银行卡图片记录
 func (s *FarmerImageService) FindOrCreateBankCardImage(farmerID, appUserID uint64, imageName, ossURL, ossObjectKey string) (*farmerImageRepository.FarmerBankCardImage, error) {
+	return s.FindOrCreateBankCardImageWithCloud(farmerID, appUserID, imageName, ossURL, ossObjectKey, "", image_source.OSS)
+}
+
+func (s *FarmerImageService) FindOrCreateBankCardImageWithCloud(farmerID, appUserID uint64, imageName, ossURL, ossObjectKey, wxCloudURL, lastSource string) (*farmerImageRepository.FarmerBankCardImage, error) {
 	imageHash := HashImageIdentity(imageName, ossObjectKey)
 	entity := &farmerImageRepository.FarmerBankCardImage{
 		FarmerID:     farmerID,
@@ -81,8 +99,17 @@ func (s *FarmerImageService) FindOrCreateBankCardImage(farmerID, appUserID uint6
 		ImageHash:    imageHash,
 		OssURL:       ossURL,
 		OssObjectKey: ossObjectKey,
+		LastSource:   normalizeImageSource(lastSource),
+		WXCloudURL:   strings.TrimSpace(wxCloudURL),
 	}
-	return s.bankcardRepo.FindOrCreate(entity)
+	result, err := s.bankcardRepo.FindOrCreate(entity)
+	if err == nil && result != nil && entity.WXCloudURL != "" && (result.WXCloudURL != entity.WXCloudURL || result.LastSource != entity.LastSource) {
+		if updateErr := s.bankcardRepo.UpdateCloudSource(result.Id, entity.WXCloudURL, entity.LastSource); updateErr == nil {
+			result.WXCloudURL = entity.WXCloudURL
+			result.LastSource = entity.LastSource
+		}
+	}
+	return result, err
 }
 
 // GetLatestFarmerImages 获取农户最新证件图片（生成新签名URL）
@@ -103,17 +130,35 @@ func (s *FarmerImageService) GetLatestFarmerImages(farmerID, appUserID uint64) *
 }
 
 func (s *FarmerImageService) HasLatestFarmerImage(farmerID, appUserID uint64, imageType string) bool {
-	_, _, _, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
+	_, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
 	return err == nil
+}
+
+func (s *FarmerImageService) LatestFarmerImageWXCloudURL(farmerID, appUserID uint64, imageType, fallbackURL string) string {
+	record, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
+	if err != nil || record == nil {
+		return ""
+	}
+	if strings.TrimSpace(record.wxCloudURL) != "" && normalizeImageSource(record.lastSource) == image_source.WXCloud {
+		return record.wxCloudURL
+	}
+	if normalizeImageSource(record.lastSource) == image_source.OSS && fallbackURL != "" {
+		if data, err := getOssObject(record.ossObjectKey, record.ossURL); err == nil && len(data) > 0 {
+			_ = record.updateCloudSource(fallbackURL, image_source.WXCloud)
+			return fallbackURL
+		}
+	}
+	return fallbackURL
 }
 
 func (s *FarmerImageService) GetLatestFarmerImageContent(farmerID, appUserID uint64, imageType string) (*FarmerImageContent, error) {
 	log.Printf("[farmer-image] get latest image content start farmerID=%d appUserID=%d imageType=%s", farmerID, appUserID, imageType)
-	imageName, objectKey, ossURL, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
+	record, err := s.findLatestImageRecord(farmerID, appUserID, imageType)
 	if err != nil {
 		log.Printf("[farmer-image] find latest image record failed farmerID=%d appUserID=%d imageType=%s err=%v", farmerID, appUserID, imageType, err)
 		return nil, err
 	}
+	imageName, objectKey, ossURL := record.imageName, record.ossObjectKey, record.ossURL
 	log.Printf("[farmer-image] latest image record found farmerID=%d appUserID=%d imageType=%s fileName=%s ossObjectKey=%s fallbackURL=%s", farmerID, appUserID, imageType, imageName, objectKey, safeURLForLog(ossURL))
 	data, err := getOssObject(objectKey, ossURL)
 	if err != nil {
@@ -129,29 +174,63 @@ func (s *FarmerImageService) GetLatestFarmerImageContent(farmerID, appUserID uin
 	}, nil
 }
 
-func (s *FarmerImageService) findLatestImageRecord(farmerID, appUserID uint64, imageType string) (string, string, string, error) {
+type latestFarmerImageRecord struct {
+	imageName         string
+	ossObjectKey      string
+	ossURL            string
+	wxCloudURL        string
+	lastSource        string
+	updateCloudSource func(wxCloudURL, lastSource string) error
+}
+
+func (s *FarmerImageService) findLatestImageRecord(farmerID, appUserID uint64, imageType string) (*latestFarmerImageRecord, error) {
 	switch strings.TrimSpace(imageType) {
 	case "id-card-front", "front":
 		image, err := s.idcardRepo.FindLatestBySide(farmerID, appUserID, "front")
 		if err != nil {
-			return "", "", "", err
+			return nil, err
 		}
-		return image.ImageName, image.OssObjectKey, image.OssURL, nil
+		return &latestFarmerImageRecord{
+			imageName: image.ImageName, ossObjectKey: image.OssObjectKey, ossURL: image.OssURL,
+			wxCloudURL: image.WXCloudURL, lastSource: image.LastSource,
+			updateCloudSource: func(wxCloudURL, lastSource string) error {
+				return s.idcardRepo.UpdateCloudSource(image.Id, wxCloudURL, lastSource)
+			},
+		}, nil
 	case "id-card-back", "back":
 		image, err := s.idcardRepo.FindLatestBySide(farmerID, appUserID, "back")
 		if err != nil {
-			return "", "", "", err
+			return nil, err
 		}
-		return image.ImageName, image.OssObjectKey, image.OssURL, nil
+		return &latestFarmerImageRecord{
+			imageName: image.ImageName, ossObjectKey: image.OssObjectKey, ossURL: image.OssURL,
+			wxCloudURL: image.WXCloudURL, lastSource: image.LastSource,
+			updateCloudSource: func(wxCloudURL, lastSource string) error {
+				return s.idcardRepo.UpdateCloudSource(image.Id, wxCloudURL, lastSource)
+			},
+		}, nil
 	case "bank-card", "bank":
 		image, err := s.bankcardRepo.FindLatest(farmerID, appUserID)
 		if err != nil {
-			return "", "", "", err
+			return nil, err
 		}
-		return image.ImageName, image.OssObjectKey, image.OssURL, nil
+		return &latestFarmerImageRecord{
+			imageName: image.ImageName, ossObjectKey: image.OssObjectKey, ossURL: image.OssURL,
+			wxCloudURL: image.WXCloudURL, lastSource: image.LastSource,
+			updateCloudSource: func(wxCloudURL, lastSource string) error {
+				return s.bankcardRepo.UpdateCloudSource(image.Id, wxCloudURL, lastSource)
+			},
+		}, nil
 	default:
-		return "", "", "", fmt.Errorf("unsupported image type")
+		return nil, fmt.Errorf("unsupported image type")
 	}
+}
+
+func normalizeImageSource(source string) string {
+	if strings.EqualFold(strings.TrimSpace(source), image_source.WXCloud) {
+		return image_source.WXCloud
+	}
+	return image_source.OSS
 }
 
 func refreshOssURL(ossObjectKey, fallbackURL string, expiry time.Duration) string {

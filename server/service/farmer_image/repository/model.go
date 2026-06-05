@@ -12,6 +12,8 @@ type FarmerIDCardImage struct {
 	ImageHash    string `gorm:"column:image_hash;type:char(64);not null;uniqueIndex:uniq_farmer_side_hash_user" description:"图片SHA-256标识"`
 	OssURL       string `gorm:"column:oss_url;type:text" description:"OSS地址"`
 	OssObjectKey string `gorm:"column:oss_object_key;type:varchar(500)" description:"OSS对象Key，用于重新生成签名URL"`
+	LastSource   string `gorm:"column:last_source;type:varchar(20);not null;default:oss" description:"图片最后来源，oss/wx_cloud"`
+	WXCloudURL   string `gorm:"column:wx_cloud_url;type:varchar(1000)" description:"微信云存储地址"`
 }
 
 func (e *FarmerIDCardImage) TableName() string {
@@ -27,6 +29,8 @@ type FarmerBankCardImage struct {
 	ImageHash    string `gorm:"column:image_hash;type:char(64);not null;uniqueIndex:uniq_farmer_hash_user" description:"图片SHA-256标识"`
 	OssURL       string `gorm:"column:oss_url;type:text" description:"OSS地址"`
 	OssObjectKey string `gorm:"column:oss_object_key;type:varchar(500)" description:"OSS对象Key，用于重新生成签名URL"`
+	LastSource   string `gorm:"column:last_source;type:varchar(20);not null;default:oss" description:"图片最后来源，oss/wx_cloud"`
+	WXCloudURL   string `gorm:"column:wx_cloud_url;type:varchar(1000)" description:"微信云存储地址"`
 }
 
 func (e *FarmerBankCardImage) TableName() string {

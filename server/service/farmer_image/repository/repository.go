@@ -45,6 +45,16 @@ func (r *FarmerIDCardImageRepository) FindOrCreate(entity *FarmerIDCardImage) (*
 	return entity, nil
 }
 
+func (r *FarmerIDCardImageRepository) UpdateCloudSource(id int, wxCloudURL, lastSource string) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.Model(&FarmerIDCardImage{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"wx_cloud_url": wxCloudURL,
+		"last_source":  lastSource,
+	}).Error
+}
+
 // FindLatestBySide 按农户ID+面查找最新一条
 func (r *FarmerIDCardImageRepository) FindLatestBySide(farmerID, appUserID uint64, imageSide string) (*FarmerIDCardImage, error) {
 	if r.Db == nil {
@@ -97,6 +107,16 @@ func (r *FarmerBankCardImageRepository) FindOrCreate(entity *FarmerBankCardImage
 		return nil, err2
 	}
 	return entity, nil
+}
+
+func (r *FarmerBankCardImageRepository) UpdateCloudSource(id int, wxCloudURL, lastSource string) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.Model(&FarmerBankCardImage{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"wx_cloud_url": wxCloudURL,
+		"last_source":  lastSource,
+	}).Error
 }
 
 // FindLatest 按农户ID查找最新一条

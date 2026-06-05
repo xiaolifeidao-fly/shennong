@@ -3,6 +3,7 @@ package grain_config
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"fmt"
 	"mime"
@@ -97,7 +98,9 @@ func (s *GrainConfigService) GetStationDetail(stationID uint64) (*grainConfigDTO
 	}
 	extra, err := s.stationExtraRepository.FindByStationID(stationID)
 	if err == nil && extra != nil {
-		detail.BusinessLicenseUrl = businessLicensePath(stationID, extra.BusinessLicenseKey, extra.BusinessLicenseUrl, extra.UpdatedTime)
+		detail.BusinessLicenseUrl = businessLicenseDisplayURL(stationID, extra.BusinessLicenseKey, extra.BusinessLicenseUrl, extra.WXCloudURL, extra.LastSource, extra.UpdatedTime)
+		detail.LastSource = extra.LastSource
+		detail.WXCloudURL = extra.WXCloudURL
 	} else if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
@@ -124,8 +127,10 @@ func (s *GrainConfigService) GetStationExtra(stationID uint64) (*grainConfigDTO.
 		AccountHolderName:        entity.AccountHolderName,
 		BankName:                 entity.BankName,
 		BankAccountNumber:        entity.BankAccountNumber,
-		BusinessLicenseUrl:       businessLicensePath(entity.StationID, entity.BusinessLicenseKey, entity.BusinessLicenseUrl, entity.UpdatedTime),
+		BusinessLicenseUrl:       businessLicenseDisplayURL(entity.StationID, entity.BusinessLicenseKey, entity.BusinessLicenseUrl, entity.WXCloudURL, entity.LastSource, entity.UpdatedTime),
 		BusinessLicenseKey:       entity.BusinessLicenseKey,
+		LastSource:               entity.LastSource,
+		WXCloudURL:               entity.WXCloudURL,
 		BusinessLicenseUpdatedAt: businessLicenseUpdatedAt(entity.UpdatedTime),
 	}, nil
 }
@@ -138,6 +143,10 @@ func (s *GrainConfigService) SaveStationExtra(stationID uint64, req *grainConfig
 		BankAccountNumber:  strings.TrimSpace(req.BankAccountNumber),
 		BusinessLicenseUrl: strings.TrimSpace(req.BusinessLicenseUrl),
 		BusinessLicenseKey: strings.TrimSpace(req.BusinessLicenseKey),
+		WXCloudURL:         strings.TrimSpace(req.WXCloudURL),
+	}
+	if entity.BusinessLicenseUrl != "" || entity.BusinessLicenseKey != "" || entity.WXCloudURL != "" {
+		entity.LastSource = normalizeImageSource(req.LastSource)
 	}
 	result, err := s.stationExtraRepository.Upsert(entity)
 	if err != nil {
@@ -148,8 +157,10 @@ func (s *GrainConfigService) SaveStationExtra(stationID uint64, req *grainConfig
 		AccountHolderName:        result.AccountHolderName,
 		BankName:                 result.BankName,
 		BankAccountNumber:        result.BankAccountNumber,
-		BusinessLicenseUrl:       businessLicensePath(result.StationID, result.BusinessLicenseKey, result.BusinessLicenseUrl, result.UpdatedTime),
+		BusinessLicenseUrl:       businessLicenseDisplayURL(result.StationID, result.BusinessLicenseKey, result.BusinessLicenseUrl, result.WXCloudURL, result.LastSource, result.UpdatedTime),
 		BusinessLicenseKey:       result.BusinessLicenseKey,
+		LastSource:               result.LastSource,
+		WXCloudURL:               result.WXCloudURL,
 		BusinessLicenseUpdatedAt: businessLicenseUpdatedAt(result.UpdatedTime),
 	}, nil
 }
@@ -159,6 +170,7 @@ func (s *GrainConfigService) SaveBusinessLicense(stationID uint64, businessLicen
 		StationID:          stationID,
 		BusinessLicenseUrl: strings.TrimSpace(businessLicenseURL),
 		BusinessLicenseKey: strings.TrimSpace(businessLicenseKey),
+		LastSource:         image_source.OSS,
 	}
 	existing, err := s.stationExtraRepository.FindByStationID(stationID)
 	if err == nil && existing != nil {
@@ -523,6 +535,20 @@ func businessLicensePath(stationID uint64, ossObjectKey, fallbackURL string, upd
 		return ""
 	}
 	return fmt.Sprintf("/grain-stations/%d/extra/business-license", stationID)
+}
+
+func businessLicenseDisplayURL(stationID uint64, ossObjectKey, fallbackURL, wxCloudURL, lastSource string, updatedTime time.Time) string {
+	if image_source.IsWXCloud() && normalizeImageSource(lastSource) == image_source.WXCloud && strings.TrimSpace(wxCloudURL) != "" {
+		return strings.TrimSpace(wxCloudURL)
+	}
+	return businessLicensePath(stationID, ossObjectKey, fallbackURL, updatedTime)
+}
+
+func normalizeImageSource(source string) string {
+	if strings.EqualFold(strings.TrimSpace(source), image_source.WXCloud) {
+		return image_source.WXCloud
+	}
+	return image_source.OSS
 }
 
 func businessLicenseUpdatedAt(updatedTime time.Time) int64 {

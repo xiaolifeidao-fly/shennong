@@ -3,6 +3,7 @@ package grain_entry_material
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"common/middleware/vipper"
 	"crypto/sha256"
@@ -49,6 +50,7 @@ type uploadMaterialInput struct {
 	fileSize        int64
 	mimeType        string
 	sortOrder       int
+	wxCloudURL      string
 	data            []byte
 }
 
@@ -144,6 +146,7 @@ func (h *GrainEntryMaterialHandler) uploadMaterial(context *gin.Context) {
 		MaterialBizType: input.materialBizType,
 		MaterialType:    input.materialType,
 		OssURL:          ossURL,
+		LastSource:      image_source.OSS,
 		FileName:        input.fileName,
 		ImageHash:       fmt.Sprintf("%x", sha256.Sum256(input.data)),
 		FileSize:        input.fileSize,
@@ -156,6 +159,10 @@ func (h *GrainEntryMaterialHandler) uploadMaterial(context *gin.Context) {
 	if req.MaterialType == "" {
 		req.MaterialType = "image"
 	}
+	if image_source.IsWXCloud() && strings.TrimSpace(input.wxCloudURL) != "" {
+		req.LastSource = image_source.WXCloud
+		req.WXCloudURL = strings.TrimSpace(input.wxCloudURL)
+	}
 	if oss.Oss != nil {
 		req.OssBucket = oss.Oss.BucketName
 		req.OssObjectKey = oss.Oss.BuildKey(objectPath)
@@ -163,6 +170,9 @@ func (h *GrainEntryMaterialHandler) uploadMaterial(context *gin.Context) {
 	result, err := h.grainPurchaseService.CreateMaterial(req)
 	if result != nil && result.Id > 0 {
 		result.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", result.Id)
+		if image_source.IsWXCloud() && strings.TrimSpace(result.WXCloudURL) != "" && result.LastSource == image_source.WXCloud {
+			result.ImageURL = result.WXCloudURL
+		}
 	}
 	commonRouter.ToJson(context, result, err)
 }
@@ -206,6 +216,7 @@ func readUploadMaterialInput(context *gin.Context) (*uploadMaterialInput, error)
 			fileSize:        fileSize,
 			mimeType:        mimeType,
 			sortOrder:       req.SortOrder,
+			wxCloudURL:      strings.TrimSpace(req.ImageURL),
 			data:            data,
 		}, nil
 	}

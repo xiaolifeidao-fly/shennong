@@ -167,6 +167,8 @@ type GrainEntryMaterialDTO struct {
 	OssBucket       string `json:"ossBucket"`
 	OssObjectKey    string `json:"ossObjectKey"`
 	OssURL          string `json:"ossUrl"`
+	LastSource      string `json:"lastSource"`
+	WXCloudURL      string `json:"wxCloudUrl"`
 	ImageURL        string `json:"imageUrl"`
 	FileName        string `json:"fileName"`
 	ImageHash       string `json:"imageHash"`

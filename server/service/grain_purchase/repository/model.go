@@ -134,6 +134,8 @@ type GrainEntryMaterial struct {
 	OssBucket       string `gorm:"column:oss_bucket;type:varchar(100)" description:"OSS Bucket"`
 	OssObjectKey    string `gorm:"column:oss_object_key;type:varchar(500);index:idx_oss_object_key" description:"OSS Object Key"`
 	OssURL          string `gorm:"column:oss_url;type:varchar(1000)" description:"OSS URL"`
+	LastSource      string `gorm:"column:last_source;type:varchar(20);not null;default:oss" description:"图片最后来源，oss/wx_cloud"`
+	WXCloudURL      string `gorm:"column:wx_cloud_url;type:varchar(1000)" description:"微信云存储地址"`
 	FileName        string `gorm:"column:file_name;type:varchar(255)" description:"文件名"`
 	ImageHash       string `gorm:"column:image_hash;type:char(64);not null;uniqueIndex:uniq_entry_image_hash" description:"文件名SHA-256，与EntryID组成唯一键"`
 	FileSize        int64  `gorm:"column:file_size;type:bigint;default:0" description:"文件大小"`

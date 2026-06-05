@@ -196,7 +196,23 @@ func (r *GrainStationExtraRepository) Upsert(entity *GrainStationExtra) (*GrainS
 		existing.BusinessLicenseUrl = entity.BusinessLicenseUrl
 		existing.BusinessLicenseKey = entity.BusinessLicenseKey
 	}
+	if entity.LastSource != "" {
+		existing.LastSource = entity.LastSource
+	}
+	if entity.WXCloudURL != "" {
+		existing.WXCloudURL = entity.WXCloudURL
+	}
 	return r.SaveOrUpdate(&existing)
+}
+
+func (r *GrainStationExtraRepository) UpdateCloudSource(stationID uint64, wxCloudURL, lastSource string) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.Model(&GrainStationExtra{}).Where("active = ? AND station_id = ?", 1, stationID).Updates(map[string]interface{}{
+		"wx_cloud_url": wxCloudURL,
+		"last_source":  lastSource,
+	}).Error
 }
 
 type GrainPurchasePlaceRepository struct {

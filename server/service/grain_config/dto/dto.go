@@ -66,6 +66,8 @@ type GrainStationExtraDTO struct {
 	BankAccountNumber        string `json:"bankAccountNumber"`
 	BusinessLicenseUrl       string `json:"businessLicenseUrl"`
 	BusinessLicenseKey       string `json:"businessLicenseKey"`
+	LastSource               string `json:"lastSource"`
+	WXCloudURL               string `json:"wxCloudUrl"`
 	BusinessLicenseUpdatedAt int64  `json:"businessLicenseUpdatedAt"`
 }
 
@@ -86,6 +88,8 @@ type GrainStationDetailDTO struct {
 	Status             string `json:"status"`
 	Remark             string `json:"remark"`
 	BusinessLicenseUrl string `json:"businessLicenseUrl"`
+	LastSource         string `json:"lastSource"`
+	WXCloudURL         string `json:"wxCloudUrl"`
 }
 
 type GrainStationQueryDTO struct {

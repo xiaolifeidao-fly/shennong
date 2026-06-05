@@ -3,6 +3,7 @@ package grain_purchase
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"crypto/sha256"
 	"encoding/json"
@@ -333,6 +334,9 @@ func (s *GrainPurchaseService) ListMaterials(query grainPurchaseDTO.GrainEntryMa
 	for _, dto := range dtos {
 		if dto != nil && dto.Id > 0 {
 			dto.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", dto.Id)
+			if image_source.IsWXCloud() && normalizeImageSource(dto.LastSource) == image_source.WXCloud && strings.TrimSpace(dto.WXCloudURL) != "" {
+				dto.ImageURL = dto.WXCloudURL
+			}
 		}
 	}
 	return baseDTO.BuildPage(int(total), dtos), nil
@@ -349,6 +353,7 @@ func (s *GrainPurchaseService) CreateMaterial(req *grainPurchaseDTO.GrainEntryMa
 	if strings.TrimSpace(entity.MaterialBizType) == "" {
 		entity.MaterialBizType = "entry"
 	}
+	entity.LastSource = normalizeImageSource(entity.LastSource)
 	if strings.TrimSpace(entity.ImageHash) == "" {
 		entity.ImageHash = hashImageName(entity.FileName)
 	}
@@ -358,6 +363,13 @@ func (s *GrainPurchaseService) CreateMaterial(req *grainPurchaseDTO.GrainEntryMa
 		var err error
 		result, created, err = txService.materialRepository.FindOrCreate(entity)
 		if err != nil || !created {
+			if err == nil && result != nil && entity.WXCloudURL != "" && (result.WXCloudURL != entity.WXCloudURL || result.LastSource != entity.LastSource) {
+				if updateErr := txService.materialRepository.UpdateCloudSource(result.Id, entity.WXCloudURL, entity.LastSource); updateErr != nil {
+					return updateErr
+				}
+				result.WXCloudURL = entity.WXCloudURL
+				result.LastSource = entity.LastSource
+			}
 			return err
 		}
 		return txService.createMaterialChangeSnapshot(result.EntryID, "material_create")
@@ -442,6 +454,12 @@ func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMate
 		log.Printf("[grain-material-image] get oss object failed id=%d entryID=%d stationID=%d fileName=%s ossObjectKey=%s fallbackURL=%s err=%v", id, entity.EntryID, entity.StationID, entity.FileName, entity.OssObjectKey, safeURLForLog(entity.OssURL), err)
 		return nil, err
 	}
+	if image_source.IsWXCloud() && normalizeImageSource(entity.LastSource) == image_source.OSS {
+		wxCloudURL := fmt.Sprintf("/grain-entry-materials?imageId=%d", id)
+		if updateErr := s.materialRepository.UpdateCloudSource(entity.Id, wxCloudURL, image_source.WXCloud); updateErr != nil {
+			log.Printf("[grain-material-image] update wx cloud source failed id=%d wxCloudURL=%s err=%v", id, wxCloudURL, updateErr)
+		}
+	}
 	mimeType := strings.TrimSpace(entity.MimeType)
 	if !strings.HasPrefix(mimeType, "image/") {
 		mimeType = detectImageMimeType(data, entity.FileName)
@@ -453,6 +471,13 @@ func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMate
 		FileName:  entity.FileName,
 		StationID: entity.StationID,
 	}, nil
+}
+
+func normalizeImageSource(source string) string {
+	if strings.EqualFold(strings.TrimSpace(source), image_source.WXCloud) {
+		return image_source.WXCloud
+	}
+	return image_source.OSS
 }
 
 func getOssObject(ossObjectKey, fallbackURL string) ([]byte, error) {

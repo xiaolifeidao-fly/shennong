@@ -3,6 +3,7 @@ package grain_card_ocr
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"common/middleware/vipper"
 	"encoding/json"
@@ -154,7 +155,13 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 
 	farmerID := parseUint64(input.farmerID)
 	if farmerID > 0 {
-		businessID, imgErr := h.resolveBusinessID(farmerID, appUserID, input.cardType, input.imageSide, input.fileName, imageURL, ossObjectKey)
+		wxCloudURL := ""
+		lastSource := image_source.OSS
+		if image_source.IsWXCloud() && strings.TrimSpace(input.imageURL) != "" {
+			wxCloudURL = strings.TrimSpace(input.imageURL)
+			lastSource = image_source.WXCloud
+		}
+		businessID, imgErr := h.resolveBusinessIDWithCloud(farmerID, appUserID, input.cardType, input.imageSide, input.fileName, imageURL, ossObjectKey, wxCloudURL, lastSource)
 		if imgErr == nil && businessID != "" {
 			// 命中缓存
 			if cached := h.ocrResultService.GetSuccessResult(businessID); cached != "" {
@@ -327,14 +334,18 @@ func urlHost(rawURL string) string {
 
 // resolveBusinessID 查找或创建图片记录，返回业务唯一ID
 func (h *GrainCardOcrHandler) resolveBusinessID(farmerID, appUserID uint64, cardType, imageSide, imageName, ossURL, ossObjectKey string) (string, error) {
+	return h.resolveBusinessIDWithCloud(farmerID, appUserID, cardType, imageSide, imageName, ossURL, ossObjectKey, "", image_source.OSS)
+}
+
+func (h *GrainCardOcrHandler) resolveBusinessIDWithCloud(farmerID, appUserID uint64, cardType, imageSide, imageName, ossURL, ossObjectKey, wxCloudURL, lastSource string) (string, error) {
 	if cardType == "id-card" {
-		record, err := h.farmerImageService.FindOrCreateIDCardImage(farmerID, appUserID, imageSide, imageName, ossURL, ossObjectKey)
+		record, err := h.farmerImageService.FindOrCreateIDCardImageWithCloud(farmerID, appUserID, imageSide, imageName, ossURL, ossObjectKey, wxCloudURL, lastSource)
 		if err != nil {
 			return "", err
 		}
 		return farmerImageService.IDCardBusinessID(record.Id), nil
 	}
-	record, err := h.farmerImageService.FindOrCreateBankCardImage(farmerID, appUserID, imageName, ossURL, ossObjectKey)
+	record, err := h.farmerImageService.FindOrCreateBankCardImageWithCloud(farmerID, appUserID, imageName, ossURL, ossObjectKey, wxCloudURL, lastSource)
 	if err != nil {
 		return "", err
 	}

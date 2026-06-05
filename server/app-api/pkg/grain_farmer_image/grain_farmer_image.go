@@ -3,6 +3,7 @@ package grain_farmer_image
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/image_source"
 	"net/http"
 	"net/url"
 	farmerImageService "service/farmer_image"
@@ -39,6 +40,8 @@ type saveFarmerImageRequest struct {
 	ImageName    string `json:"imageName"`
 	OssURL       string `json:"ossUrl"`
 	OssObjectKey string `json:"ossObjectKey"`
+	WXCloudURL   string `json:"wxCloudUrl"`
+	ImageURL     string `json:"imageUrl"`
 }
 
 func (h *GrainFarmerImageHandler) getFarmerImages(context *gin.Context) {
@@ -60,12 +63,21 @@ func (h *GrainFarmerImageHandler) getFarmerImages(context *gin.Context) {
 	result := &farmerImageService.FarmerImagesResult{}
 	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "id-card-front") {
 		result.IDCardFront = farmerImagePath(farmerID, "id-card-front")
+		if image_source.IsWXCloud() {
+			result.IDCardFront = h.farmerImageService.LatestFarmerImageWXCloudURL(farmerID, appUserID, "id-card-front", result.IDCardFront)
+		}
 	}
 	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "id-card-back") {
 		result.IDCardBack = farmerImagePath(farmerID, "id-card-back")
+		if image_source.IsWXCloud() {
+			result.IDCardBack = h.farmerImageService.LatestFarmerImageWXCloudURL(farmerID, appUserID, "id-card-back", result.IDCardBack)
+		}
 	}
 	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "bank-card") {
 		result.BankCard = farmerImagePath(farmerID, "bank-card")
+		if image_source.IsWXCloud() {
+			result.BankCard = h.farmerImageService.LatestFarmerImageWXCloudURL(farmerID, appUserID, "bank-card", result.BankCard)
+		}
 	}
 	commonRouter.ToJson(context, result, nil)
 }
@@ -119,6 +131,14 @@ func (h *GrainFarmerImageHandler) saveFarmerImage(context *gin.Context) {
 	if imageName == "" {
 		imageName = req.OssURL
 	}
+	wxCloudURL := strings.TrimSpace(req.WXCloudURL)
+	if wxCloudURL == "" {
+		wxCloudURL = strings.TrimSpace(req.ImageURL)
+	}
+	lastSource := image_source.OSS
+	if wxCloudURL != "" && image_source.IsWXCloud() {
+		lastSource = image_source.WXCloud
+	}
 
 	var result any
 	var err error
@@ -127,9 +147,9 @@ func (h *GrainFarmerImageHandler) saveFarmerImage(context *gin.Context) {
 		if imageSide == "" {
 			imageSide = "front"
 		}
-		result, err = h.farmerImageService.FindOrCreateIDCardImage(req.FarmerID, appUserID, imageSide, imageName, req.OssURL, req.OssObjectKey)
+		result, err = h.farmerImageService.FindOrCreateIDCardImageWithCloud(req.FarmerID, appUserID, imageSide, imageName, req.OssURL, req.OssObjectKey, wxCloudURL, lastSource)
 	} else {
-		result, err = h.farmerImageService.FindOrCreateBankCardImage(req.FarmerID, appUserID, imageName, req.OssURL, req.OssObjectKey)
+		result, err = h.farmerImageService.FindOrCreateBankCardImageWithCloud(req.FarmerID, appUserID, imageName, req.OssURL, req.OssObjectKey, wxCloudURL, lastSource)
 	}
 	commonRouter.ToJson(context, result, err)
 }

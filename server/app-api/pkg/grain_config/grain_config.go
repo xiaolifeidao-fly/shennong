@@ -3,6 +3,7 @@ package grain_config
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/image_source"
 	"net/http"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
@@ -44,7 +45,7 @@ func (h *GrainConfigHandler) getMyStationDetail(context *gin.Context) {
 		return
 	}
 	result, err := h.grainConfigService.GetStationDetail(stationID)
-	if err == nil && result != nil && result.BusinessLicenseUrl != "" {
+	if err == nil && result != nil && result.BusinessLicenseUrl != "" && !(image_source.IsWXCloud() && result.LastSource == image_source.WXCloud && result.WXCloudURL != "") {
 		result.BusinessLicenseUrl = "/grain-stations/mine/extra/business-license"
 	}
 	commonRouter.ToJson(context, result, err)
