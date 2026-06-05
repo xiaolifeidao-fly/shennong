@@ -36,7 +36,7 @@
         <text class="section-title">营业执照</text>
         <view v-if="station.businessLicenseUrl" class="license-wrap">
           <image
-            :src="station.businessLicenseUrl"
+            :src="businessLicenseImage"
             class="license-img"
             mode="widthFix"
             @click="previewLicense"
@@ -53,10 +53,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getMyGrainStationDetail } from '@/services/grainConfig'
+import { getBusinessLicenseImagePath, getMyGrainStationDetail } from '@/services/grainConfig'
 import type { GrainStationDetail } from '@/types/grain'
 
 const station = ref<GrainStationDetail | null>(null)
+const businessLicenseImage = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -86,7 +87,12 @@ async function loadDetail() {
   loading.value = true
   errorMessage.value = ''
   try {
-    station.value = await getMyGrainStationDetail()
+    const detail = await getMyGrainStationDetail()
+    station.value = detail
+    businessLicenseImage.value = ''
+    if (detail.businessLicenseUrl) {
+      businessLicenseImage.value = await getBusinessLicenseImagePath(detail.businessLicenseUrl)
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : '获取粮站信息失败'
     errorMessage.value = message
@@ -97,7 +103,7 @@ async function loadDetail() {
 }
 
 function previewLicense() {
-  const url = station.value?.businessLicenseUrl
+  const url = businessLicenseImage.value
   if (!url) return
   uni.previewImage({ urls: [url], current: url })
 }

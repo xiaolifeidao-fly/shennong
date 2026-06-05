@@ -3,10 +3,12 @@ package grain_config
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
+	"net/http"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type GrainConfigHandler struct {
@@ -26,6 +28,7 @@ func NewGrainConfigHandler() *GrainConfigHandler {
 func (h *GrainConfigHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-stations", h.listStations)
 	engine.GET("/grain-stations/mine", h.getMyStationDetail)
+	engine.GET("/grain-stations/mine/extra/business-license", h.getMyBusinessLicense)
 	engine.POST("/grain-stations", h.createStation)
 	engine.GET("/grain-purchase-types", h.listPurchaseTypes)
 	engine.POST("/grain-purchase-types", h.createPurchaseType)
@@ -41,7 +44,28 @@ func (h *GrainConfigHandler) getMyStationDetail(context *gin.Context) {
 		return
 	}
 	result, err := h.grainConfigService.GetStationDetail(stationID)
+	if err == nil && result != nil && result.BusinessLicenseUrl != "" {
+		result.BusinessLicenseUrl = "/grain-stations/mine/extra/business-license"
+	}
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainConfigHandler) getMyBusinessLicense(context *gin.Context) {
+	stationID, ok := requiredStationID(context)
+	if !ok {
+		return
+	}
+	content, err := h.grainConfigService.GetBusinessLicenseContent(stationID)
+	if err == gorm.ErrRecordNotFound {
+		context.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
+	context.Header("Cache-Control", "private, max-age=300")
+	context.Data(http.StatusOK, content.MimeType, content.Data)
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {
