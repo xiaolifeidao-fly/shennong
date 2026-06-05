@@ -103,6 +103,7 @@ export interface GrainDraftCardImage {
   ossBucket?: string
   ossObjectKey?: string
   ossUrl?: string
+  displayUrl?: string
   fileName?: string
   fileSize?: number
   mimeType?: string

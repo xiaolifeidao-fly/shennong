@@ -1,4 +1,4 @@
-import { http } from './request'
+import { http, isCloudTransport, uploadToCloudStorage } from './request'
 import { buildQuery } from './query'
 import type { PageResponse } from '@/types/api'
 import type {
@@ -8,6 +8,8 @@ import type {
   GrainFarmerPurchaseSummaryDTO,
   GrainPurchaseEntryDTO,
 } from '@/types/grain'
+
+const cloudStoragePrefix = import.meta.env.VITE_APP_CLOUD_STORAGE_PREFIX || 'grain-entry-materials'
 
 export interface GrainPurchaseEntryQuery {
   page?: number
@@ -103,16 +105,50 @@ export function createGrainEntryMaterial(data: Partial<GrainEntryMaterialDTO>) {
   return http.post<GrainEntryMaterialDTO, Partial<GrainEntryMaterialDTO>>('/grain-entry-materials', data)
 }
 
-export function uploadGrainEntryMaterial(filePath: string, data: Partial<GrainEntryMaterialDTO>) {
+export async function uploadGrainEntryMaterial(filePath: string, data: Partial<GrainEntryMaterialDTO>) {
   const formData: Record<string, string | number> = {}
   Object.entries(data).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       formData[key] = value as string | number
     }
   })
+  if (isCloudTransport()) {
+    try {
+      const fileName = filePath.split('/').pop() || `material-${Date.now()}.jpg`
+      const cloudFile = await uploadToCloudStorage(filePath, buildCloudPath(fileName))
+      return await http.post<GrainEntryMaterialDTO>('/grain-entry-materials/upload', {
+        ...formData,
+        fileName,
+        cloudFileId: cloudFile.fileID,
+        imageUrl: cloudFile.tempFileURL,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (!message.includes('不支持') && !message.includes('缺失') && !message.includes('云存储')) {
+        throw error
+      }
+    }
+  }
   return http.upload<GrainEntryMaterialDTO>('/grain-entry-materials/upload', filePath, formData)
 }
 
 export function deleteGrainEntryMaterial(id: string | number) {
   return http.delete<unknown>(`/grain-entry-materials/${id}`)
+}
+
+function buildCloudPath(fileName: string) {
+  const ext = normalizeImageExt(fileName)
+  const now = new Date()
+  const date = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('')
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  return `${cloudStoragePrefix}/${date}/${stamp}${ext}`
+}
+
+function normalizeImageExt(fileName: string) {
+  const match = fileName.toLowerCase().match(/\.(jpe?g|png|webp|bmp)$/)
+  return match ? match[0] : '.jpg'
 }

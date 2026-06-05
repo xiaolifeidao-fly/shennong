@@ -159,9 +159,9 @@ const selectedPaymentMethod = computed(() =>
   props.preset.paymentMethods.find((item) => item.id === model.value.paymentMethodId) ||
   props.preset.paymentMethods.find((item) => item.methodName === model.value.payType),
 )
-const idCardFrontUrl = computed(() => model.value.cardImages?.idCardFront?.ossUrl || '')
-const idCardBackUrl = computed(() => model.value.cardImages?.idCardBack?.ossUrl || '')
-const bankCardUrl = computed(() => model.value.cardImages?.bankCard?.ossUrl || '')
+const idCardFrontUrl = computed(() => model.value.cardImages?.idCardFront?.displayUrl || model.value.cardImages?.idCardFront?.ossUrl || '')
+const idCardBackUrl = computed(() => model.value.cardImages?.idCardBack?.displayUrl || model.value.cardImages?.idCardBack?.ossUrl || '')
+const bankCardUrl = computed(() => model.value.cardImages?.bankCard?.displayUrl || model.value.cardImages?.bankCard?.ossUrl || '')
 const paymentMethodCode = computed(() => model.value.paymentMethodCode || selectedPaymentMethod.value?.methodCode || '')
 const isBankPayment = computed(() => paymentMethodCode.value === 'Bank')
 const accountLabel = computed(() => (paymentMethodCode.value === 'Bank' ? '银行卡号' : '收款账号'))

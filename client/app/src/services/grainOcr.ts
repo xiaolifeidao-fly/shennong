@@ -4,7 +4,7 @@ import type { GrainCardOcrResult, GrainCardOcrType } from '@/types/grain'
 export type IDCardSide = 'front' | 'back'
 const cloudStoragePrefix = import.meta.env.VITE_APP_CLOUD_STORAGE_PREFIX || 'grain-card-ocr'
 
-export function recognizeGrainCard(
+export async function recognizeGrainCard(
   filePath: string,
   cardType: GrainCardOcrType,
   options: { farmerId?: string | number; imageSide?: IDCardSide } = {},
@@ -19,7 +19,15 @@ export function recognizeGrainCard(
   if (!isCloudTransport()) {
     return http.upload<GrainCardOcrResult>('/grain-card-ocr/recognize', filePath, formData)
   }
-  return recognizeCloudStorageCard(filePath, formData)
+  try {
+    return await recognizeCloudStorageCard(filePath, formData)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (!message.includes('不支持') && !message.includes('缺失') && !message.includes('云存储')) {
+      throw error
+    }
+    return http.upload<GrainCardOcrResult>('/grain-card-ocr/recognize', filePath, formData)
+  }
 }
 
 async function recognizeCloudStorageCard(filePath: string, formData: Record<string, string | number>) {

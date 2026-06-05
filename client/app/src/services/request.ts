@@ -272,7 +272,10 @@ function uploadByWechat(
 }
 
 export async function download(url: string) {
-  if (!url || /^(https?:|wxfile:|blob:)/.test(url)) {
+  if (!url || /^(wxfile:|blob:|data:)/.test(url)) {
+    return url
+  }
+  if (apiTransport !== 'cloud' && /^https?:/.test(url)) {
     return url
   }
   const targetURL = fileRequestURL(url)

@@ -325,13 +325,14 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
   }
 }
 
-function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): GrainDraftCardImage {
+async function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): Promise<GrainDraftCardImage> {
   return {
     cardType: result.cardType,
     imageSide,
     ossBucket: result.ossBucket,
     ossObjectKey: result.ossObjectKey,
     ossUrl: result.ossUrl,
+    displayUrl: await resolveDisplayImage(result.ossUrl),
     fileName: result.fileName,
     fileSize: result.fileSize,
     mimeType: result.mimeType,
@@ -743,7 +744,7 @@ export const useGrainStore = defineStore('grain', {
         idNumber: result.idNumber || draft.idNumber,
         address: result.address || draft.address,
         bankName: recognizedName || draft.bankName,
-        cardImages: applyCardImage(draft, toDraftCardImage(result, side)),
+        cardImages: applyCardImage(draft, await toDraftCardImage(result, side)),
       }
     },
     async recognizeBankCard(filePath: string, draft: GrainEntryDraft) {
@@ -752,7 +753,7 @@ export const useGrainStore = defineStore('grain', {
       return {
         bankNumber: result.bankNumber || draft.bankNumber,
         bankName: result.bankName || draft.bankName,
-        cardImages: applyCardImage(draft, toDraftCardImage(result)),
+        cardImages: applyCardImage(draft, await toDraftCardImage(result)),
       }
     },
     async saveEntry(draft: GrainEntryDraft) {
