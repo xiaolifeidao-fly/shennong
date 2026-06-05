@@ -65,8 +65,24 @@ func (h *GrainConfigHandler) getMyBusinessLicense(context *gin.Context) {
 		commonRouter.ToError(context, err.Error())
 		return
 	}
+	if content.Base64 != "" {
+		commonRouter.ToJson(context, imageBase64Response{
+			Mode:     "base64",
+			MimeType: content.MimeType,
+			Base64:   content.Base64,
+			DataURL:  "data:" + content.MimeType + ";base64," + content.Base64,
+		}, nil)
+		return
+	}
 	context.Header("Cache-Control", "private, max-age=300")
 	context.Data(http.StatusOK, content.MimeType, content.Data)
+}
+
+type imageBase64Response struct {
+	Mode     string `json:"mode"`
+	MimeType string `json:"mimeType"`
+	Base64   string `json:"base64"`
+	DataURL  string `json:"dataUrl"`
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {

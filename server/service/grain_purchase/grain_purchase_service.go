@@ -6,6 +6,7 @@ import (
 	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -38,6 +39,7 @@ type GrainEntryMaterialContent struct {
 	MimeType  string
 	FileName  string
 	StationID uint64
+	Base64    string
 }
 
 func NewGrainPurchaseService() *GrainPurchaseService {
@@ -454,15 +456,13 @@ func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMate
 		log.Printf("[grain-material-image] get oss object failed id=%d entryID=%d stationID=%d fileName=%s ossObjectKey=%s fallbackURL=%s err=%v", id, entity.EntryID, entity.StationID, entity.FileName, entity.OssObjectKey, safeURLForLog(entity.OssURL), err)
 		return nil, err
 	}
-	if image_source.IsWXCloud() && normalizeImageSource(entity.LastSource) == image_source.OSS {
-		wxCloudURL := fmt.Sprintf("/grain-entry-materials?imageId=%d", id)
-		if updateErr := s.materialRepository.UpdateCloudSource(entity.Id, wxCloudURL, image_source.WXCloud); updateErr != nil {
-			log.Printf("[grain-material-image] update wx cloud source failed id=%d wxCloudURL=%s err=%v", id, wxCloudURL, updateErr)
-		}
-	}
 	mimeType := strings.TrimSpace(entity.MimeType)
 	if !strings.HasPrefix(mimeType, "image/") {
 		mimeType = detectImageMimeType(data, entity.FileName)
+	}
+	base64Content := ""
+	if image_source.IsWXCloud() && normalizeImageSource(entity.LastSource) == image_source.OSS {
+		base64Content = base64.StdEncoding.EncodeToString(data)
 	}
 	log.Printf("[grain-material-image] get material image content success id=%d entryID=%d stationID=%d fileName=%s mimeType=%s bytes=%d", id, entity.EntryID, entity.StationID, entity.FileName, mimeType, len(data))
 	return &GrainEntryMaterialContent{
@@ -470,6 +470,7 @@ func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMate
 		MimeType:  mimeType,
 		FileName:  entity.FileName,
 		StationID: entity.StationID,
+		Base64:    base64Content,
 	}, nil
 }
 

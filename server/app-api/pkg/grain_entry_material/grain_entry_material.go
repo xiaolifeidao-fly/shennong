@@ -310,8 +310,26 @@ func (h *GrainEntryMaterialHandler) streamMaterialImage(context *gin.Context, id
 		context.Status(http.StatusNotFound)
 		return
 	}
+	if content.Base64 != "" {
+		commonRouter.ToJson(context, imageBase64Response{
+			Mode:     "base64",
+			MimeType: content.MimeType,
+			FileName: content.FileName,
+			Base64:   content.Base64,
+			DataURL:  "data:" + content.MimeType + ";base64," + content.Base64,
+		}, nil)
+		return
+	}
 	context.Header("Cache-Control", "private, max-age=300")
 	context.Data(http.StatusOK, content.MimeType, content.Data)
+}
+
+type imageBase64Response struct {
+	Mode     string `json:"mode"`
+	MimeType string `json:"mimeType"`
+	FileName string `json:"fileName"`
+	Base64   string `json:"base64"`
+	DataURL  string `json:"dataUrl"`
 }
 
 func (h *GrainEntryMaterialHandler) deleteMaterial(context *gin.Context) {

@@ -5,6 +5,7 @@ import (
 	"common/middleware/db"
 	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
+	"encoding/base64"
 	"fmt"
 	"mime"
 	"net/url"
@@ -32,6 +33,7 @@ type BusinessLicenseContent struct {
 	StationID uint64
 	Data      []byte
 	MimeType  string
+	Base64    string
 }
 
 func NewGrainConfigService() *GrainConfigService {
@@ -195,10 +197,16 @@ func (s *GrainConfigService) GetBusinessLicenseContent(stationID uint64) (*Busin
 	if err != nil {
 		return nil, err
 	}
+	mimeType := detectBusinessLicenseMimeType(data, entity.BusinessLicenseKey, entity.BusinessLicenseUrl)
+	base64Content := ""
+	if image_source.IsWXCloud() && normalizeImageSource(entity.LastSource) == image_source.OSS {
+		base64Content = base64.StdEncoding.EncodeToString(data)
+	}
 	return &BusinessLicenseContent{
 		StationID: stationID,
 		Data:      data,
-		MimeType:  detectBusinessLicenseMimeType(data, entity.BusinessLicenseKey, entity.BusinessLicenseUrl),
+		MimeType:  mimeType,
+		Base64:    base64Content,
 	}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"mime"
@@ -27,6 +28,7 @@ type FarmerImageContent struct {
 	Data     []byte
 	MimeType string
 	FileName string
+	Base64   string
 }
 
 type FarmerImageService struct {
@@ -142,12 +144,6 @@ func (s *FarmerImageService) LatestFarmerImageWXCloudURL(farmerID, appUserID uin
 	if strings.TrimSpace(record.wxCloudURL) != "" && normalizeImageSource(record.lastSource) == image_source.WXCloud {
 		return record.wxCloudURL
 	}
-	if normalizeImageSource(record.lastSource) == image_source.OSS && fallbackURL != "" {
-		if data, err := getOssObject(record.ossObjectKey, record.ossURL); err == nil && len(data) > 0 {
-			_ = record.updateCloudSource(fallbackURL, image_source.WXCloud)
-			return fallbackURL
-		}
-	}
 	return fallbackURL
 }
 
@@ -166,11 +162,16 @@ func (s *FarmerImageService) GetLatestFarmerImageContent(farmerID, appUserID uin
 		return nil, err
 	}
 	mimeType := detectImageMimeType(data, imageName)
+	base64Content := ""
+	if image_source.IsWXCloud() && normalizeImageSource(record.lastSource) == image_source.OSS {
+		base64Content = base64.StdEncoding.EncodeToString(data)
+	}
 	log.Printf("[farmer-image] get latest image content success farmerID=%d appUserID=%d imageType=%s fileName=%s mimeType=%s bytes=%d", farmerID, appUserID, imageType, imageName, mimeType, len(data))
 	return &FarmerImageContent{
 		Data:     data,
 		MimeType: mimeType,
 		FileName: imageName,
+		Base64:   base64Content,
 	}, nil
 }
 
