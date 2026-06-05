@@ -211,6 +211,9 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 		result.OssObjectKey = oss.Oss.BuildKey(objectPath)
 		result.OssURL = imageURL
 	}
+	if result != nil && image_source.IsWXCloud() && strings.TrimSpace(input.imageURL) != "" {
+		result.WXCloudURL = strings.TrimSpace(input.imageURL)
+	}
 	if err == nil && result != nil && farmerID > 0 {
 		err = h.saveFarmerCardInfo(farmerID, stationID, result)
 	}

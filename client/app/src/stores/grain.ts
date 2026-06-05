@@ -20,7 +20,6 @@ import {
   uploadGrainEntryMaterial,
 } from '@/services/grainPurchase'
 import { recognizeGrainCard, type IDCardSide } from '@/services/grainOcr'
-import { http } from '@/services/request'
 import type {
   FarmerProfile,
   FarmerStatus,
@@ -201,11 +200,10 @@ function toEntry(dto: GrainPurchaseEntryDTO): GrainEntry {
   }
 }
 
-async function toMaterialItem(dto: GrainEntryMaterialDTO): Promise<GrainEntryMaterialItem> {
-  const url = dto.imageUrl || dto.ossUrl || (dto.id ? `/grain-entry-materials?imageId=${dto.id}` : '')
+function toMaterialItem(dto: GrainEntryMaterialDTO): GrainEntryMaterialItem {
   return {
     id: Number(dto.id) || 0,
-    url: await resolveDisplayImage(url),
+    url: dto.wxCloudUrl || '',
     fileName: dto.fileName || '',
   }
 }
@@ -325,14 +323,14 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
   }
 }
 
-async function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): Promise<GrainDraftCardImage> {
+function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): GrainDraftCardImage {
   return {
     cardType: result.cardType,
     imageSide,
     ossBucket: result.ossBucket,
     ossObjectKey: result.ossObjectKey,
     ossUrl: result.ossUrl,
-    displayUrl: await resolveDisplayImage(result.ossUrl),
+    displayUrl: result.wxCloudUrl || '',
     fileName: result.fileName,
     fileSize: result.fileSize,
     mimeType: result.mimeType,
@@ -355,13 +353,6 @@ function applyCardImage(draft: GrainEntryDraft, image: GrainDraftCardImage): Gra
 
 function isLocalImagePath(image: string) {
   return /^(wxfile:|http:\/\/tmp\/|file:\/\/|\/tmp\/)/.test(image)
-}
-
-async function resolveDisplayImage(image: string) {
-  if (!image || /^(https?:|wxfile:|blob:|data:)/.test(image)) {
-    return image
-  }
-  return http.download(image)
 }
 
 function buildFarmerPayload(draft: GrainEntryDraft): Partial<GrainFarmerDTO> {
@@ -649,9 +640,9 @@ export const useGrainStore = defineStore('grain', {
         this.farmerImages = {
           ...this.farmerImages,
           [farmerId]: {
-            idCardFront: await resolveDisplayImage(result.idCardFront),
-            idCardBack: await resolveDisplayImage(result.idCardBack),
-            bankCard: await resolveDisplayImage(result.bankCard),
+            idCardFront: result.idCardFrontWxCloudUrl || '',
+            idCardBack: result.idCardBackWxCloudUrl || '',
+            bankCard: result.bankCardWxCloudUrl || '',
           },
         }
       } catch {
@@ -670,7 +661,7 @@ export const useGrainStore = defineStore('grain', {
           materialBizType: 'entry',
           materialType: 'image',
         })
-        const materialItems = await Promise.all(pageItems(materialPage).map(toMaterialItem))
+        const materialItems = pageItems(materialPage).map(toMaterialItem)
         const materialImages = materialItems.map((item) => item.url).filter(Boolean)
         this.entries = this.entries.map((item) =>
           item.id === entryId
@@ -744,7 +735,7 @@ export const useGrainStore = defineStore('grain', {
         idNumber: result.idNumber || draft.idNumber,
         address: result.address || draft.address,
         bankName: recognizedName || draft.bankName,
-        cardImages: applyCardImage(draft, await toDraftCardImage(result, side)),
+        cardImages: applyCardImage(draft, toDraftCardImage(result, side)),
       }
     },
     async recognizeBankCard(filePath: string, draft: GrainEntryDraft) {
@@ -753,7 +744,7 @@ export const useGrainStore = defineStore('grain', {
       return {
         bankNumber: result.bankNumber || draft.bankNumber,
         bankName: result.bankName || draft.bankName,
-        cardImages: applyCardImage(draft, await toDraftCardImage(result)),
+        cardImages: applyCardImage(draft, toDraftCardImage(result)),
       }
     },
     async saveEntry(draft: GrainEntryDraft) {

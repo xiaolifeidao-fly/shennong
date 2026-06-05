@@ -34,13 +34,16 @@
 
       <view class="section-card">
         <text class="section-title">营业执照</text>
-        <view v-if="station.businessLicenseUrl" class="license-wrap">
+        <view v-if="station.businessLicenseUrl && businessLicenseImage" class="license-wrap">
           <image
             :src="businessLicenseImage"
             class="license-img"
             mode="widthFix"
             @click="previewLicense"
           />
+        </view>
+        <view v-else-if="station.businessLicenseUrl" class="img-placeholder">
+          <text>营业执照加载中...</text>
         </view>
         <view v-else class="img-placeholder">
           <text>未上传营业执照</text>
@@ -53,7 +56,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getBusinessLicenseImagePath, getMyGrainStationDetail } from '@/services/grainConfig'
+import { getMyGrainStationDetail } from '@/services/grainConfig'
 import type { GrainStationDetail } from '@/types/grain'
 
 const station = ref<GrainStationDetail | null>(null)
@@ -89,10 +92,7 @@ async function loadDetail() {
   try {
     const detail = await getMyGrainStationDetail()
     station.value = detail
-    businessLicenseImage.value = ''
-    if (detail.businessLicenseUrl) {
-      businessLicenseImage.value = await getBusinessLicenseImagePath(detail.businessLicenseUrl)
-    }
+    businessLicenseImage.value = detail.wxCloudUrl || ''
   } catch (error) {
     const message = error instanceof Error ? error.message : '获取粮站信息失败'
     errorMessage.value = message

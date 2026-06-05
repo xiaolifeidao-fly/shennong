@@ -172,6 +172,8 @@ export interface GrainStationDetail {
   status: string
   remark: string
   businessLicenseUrl: string
+  lastSource?: string
+  wxCloudUrl?: string
 }
 
 export interface GrainPurchaseType {
@@ -343,6 +345,7 @@ export interface GrainEntryMaterialDTO {
   ossObjectKey: string
   ossUrl: string
   imageUrl: string
+  wxCloudUrl?: string
   fileName: string
   fileSize: number
   mimeType: string
@@ -393,6 +396,7 @@ export interface GrainCardOcrResult {
   ossBucket: string
   ossObjectKey: string
   ossUrl: string
+  wxCloudUrl?: string
   fileName: string
   fileSize: number
   mimeType: string

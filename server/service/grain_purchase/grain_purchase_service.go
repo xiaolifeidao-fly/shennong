@@ -335,9 +335,10 @@ func (s *GrainPurchaseService) ListMaterials(query grainPurchaseDTO.GrainEntryMa
 	dtos := db.ToDTOs[grainPurchaseDTO.GrainEntryMaterialDTO](entities)
 	for _, dto := range dtos {
 		if dto != nil && dto.Id > 0 {
-			dto.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", dto.Id)
-			if image_source.IsWXCloud() && normalizeImageSource(dto.LastSource) == image_source.WXCloud && strings.TrimSpace(dto.WXCloudURL) != "" {
+			if strings.TrimSpace(dto.WXCloudURL) != "" && normalizeImageSource(dto.LastSource) == image_source.WXCloud {
 				dto.ImageURL = dto.WXCloudURL
+			} else {
+				dto.ImageURL = ""
 			}
 		}
 	}

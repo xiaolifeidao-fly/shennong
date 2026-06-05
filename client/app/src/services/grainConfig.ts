@@ -26,10 +26,6 @@ export function getMyGrainStationDetail() {
   return http.get<GrainStationDetail>('/grain-stations/mine')
 }
 
-export function getBusinessLicenseImagePath(url: string) {
-  return http.download(url)
-}
-
 export function createGrainStation(data: Partial<GrainStation>) {
   return http.post<GrainStation, Partial<GrainStation>>('/grain-stations', data)
 }

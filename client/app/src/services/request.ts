@@ -299,7 +299,7 @@ export async function download(url: string) {
     return url
   }
   const base64Path = await downloadBase64Image(url)
-  if (base64Path) {
+  if (base64Path !== undefined) {
     return base64Path
   }
   const targetURL = fileRequestURL(url)
@@ -314,6 +314,18 @@ export async function download(url: string) {
     throw new Error('下载失败')
   }
   return response.tempFilePath
+}
+
+export async function downloadBase64(url: string) {
+  const payload = await request<ImageBase64Payload>(url)
+  if (payload?.mode !== 'base64') {
+    throw new Error('接口未返回base64图片')
+  }
+  const base64 = normalizeBase64(payload.base64 || payload.dataUrl || '')
+  if (!base64) {
+    throw new Error('图片base64为空')
+  }
+  return payload.dataUrl || `data:${payload.mimeType || 'image/jpeg'};base64,${base64}`
 }
 
 function downloadByWechat(url: string) {
@@ -331,15 +343,20 @@ function downloadByWechat(url: string) {
 }
 
 async function downloadBase64Image(url: string) {
+  let payload: ImageBase64Payload | undefined
   try {
-    const payload = await request<ImageBase64Payload>(url)
-    if (payload?.mode !== 'base64' || !payload.base64) {
-      return ''
-    }
-    return writeBase64Image(payload.base64, payload.mimeType, payload.fileName)
+    payload = await request<ImageBase64Payload>(url)
   } catch {
-    return ''
+    return undefined
   }
+  if (payload?.mode !== 'base64') {
+    return undefined
+  }
+  const base64 = normalizeBase64(payload.base64 || payload.dataUrl || '')
+  if (!base64) {
+    throw new Error('图片base64为空')
+  }
+  return writeBase64Image(base64, payload.mimeType, payload.fileName)
 }
 
 function writeBase64Image(base64: string, mimeType = 'image/jpeg', fileName = '') {
@@ -354,9 +371,13 @@ function writeBase64Image(base64: string, mimeType = 'image/jpeg', fileName = ''
       data: base64,
       encoding: 'base64',
       success: () => resolve(filePath),
-      fail: (error) => reject(new Error(error.errMsg || '图片写入失败')),
+      fail: (error) => reject(new Error(`图片写入失败：${error.errMsg || 'unknown error'}`)),
     })
   })
+}
+
+function normalizeBase64(value: string) {
+	return value.trim().replace(/^data:[^;]+;base64,/, '')
 }
 
 function fileExtensionFromMime(mimeType: string, fileName: string) {
@@ -385,4 +406,5 @@ export const http = {
     request<TData>(url, { ...options, method: 'DELETE' }),
   upload,
   download,
+  downloadBase64,
 }

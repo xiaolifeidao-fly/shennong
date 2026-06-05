@@ -45,8 +45,12 @@ func (h *GrainConfigHandler) getMyStationDetail(context *gin.Context) {
 		return
 	}
 	result, err := h.grainConfigService.GetStationDetail(stationID)
-	if err == nil && result != nil && result.BusinessLicenseUrl != "" && !(image_source.IsWXCloud() && result.LastSource == image_source.WXCloud && result.WXCloudURL != "") {
-		result.BusinessLicenseUrl = "/grain-stations/mine/extra/business-license"
+	if err == nil && result != nil {
+		if result.WXCloudURL != "" && result.LastSource == image_source.WXCloud {
+			result.BusinessLicenseUrl = result.WXCloudURL
+		} else {
+			result.BusinessLicenseUrl = ""
+		}
 	}
 	commonRouter.ToJson(context, result, err)
 }

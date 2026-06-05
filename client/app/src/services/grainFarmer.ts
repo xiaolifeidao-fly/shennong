@@ -29,6 +29,9 @@ export interface FarmerImagesResult {
   idCardFront: string
   idCardBack: string
   bankCard: string
+  idCardFrontWxCloudUrl?: string
+  idCardBackWxCloudUrl?: string
+  bankCardWxCloudUrl?: string
 }
 
 export function getGrainFarmerImages(farmerId: string | number) {

@@ -15,6 +15,7 @@ type RecognizeCardResult struct {
 	OssBucket    string                 `json:"ossBucket,omitempty"`
 	OssObjectKey string                 `json:"ossObjectKey,omitempty"`
 	OssURL       string                 `json:"ossUrl,omitempty"`
+	WXCloudURL   string                 `json:"wxCloudUrl,omitempty"`
 	FileName     string                 `json:"fileName"`
 	FileSize     int64                  `json:"fileSize"`
 	MimeType     string                 `json:"mimeType"`

@@ -19,9 +19,12 @@ import (
 
 // FarmerImagesResult 农户证件图片汇总
 type FarmerImagesResult struct {
-	IDCardFront string `json:"idCardFront"`
-	IDCardBack  string `json:"idCardBack"`
-	BankCard    string `json:"bankCard"`
+	IDCardFront           string `json:"idCardFront"`
+	IDCardBack            string `json:"idCardBack"`
+	BankCard              string `json:"bankCard"`
+	IDCardFrontWXCloudURL string `json:"idCardFrontWxCloudUrl,omitempty"`
+	IDCardBackWXCloudURL  string `json:"idCardBackWxCloudUrl,omitempty"`
+	BankCardWXCloudURL    string `json:"bankCardWxCloudUrl,omitempty"`
 }
 
 type FarmerImageContent struct {
