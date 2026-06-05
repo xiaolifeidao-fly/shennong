@@ -2,17 +2,26 @@ package grain_purchase
 
 import (
 	commonRouter "common/middleware/routers"
+	"common/middleware/storage/oss"
+	"common/middleware/vipper"
+	"crypto/sha256"
+	"fmt"
+	"io"
 	"log"
 	"manager-api/pkg/internal/tenantctx"
 	"net/http"
+	"path/filepath"
 	grainPurchaseService "service/grain_purchase"
 	grainPurchaseDTO "service/grain_purchase/dto"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+const maxGrainEntryMaterialUploadSize = 10 << 20
 
 type GrainPurchaseHandler struct {
 	*commonRouter.BaseHandler
@@ -37,6 +46,7 @@ func (h *GrainPurchaseHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-entry-materials", h.listMaterials)
 	engine.GET("/grain-entry-materials/:id/image", h.getMaterialImage)
 	engine.POST("/grain-entry-materials", h.createMaterial)
+	engine.POST("/grain-entry-materials/upload", h.uploadMaterial)
 	engine.DELETE("/grain-entry-materials/:id", h.deleteMaterial)
 }
 
@@ -216,6 +226,96 @@ func (h *GrainPurchaseHandler) createMaterial(context *gin.Context) {
 	commonRouter.ToJson(context, result, err)
 }
 
+func (h *GrainPurchaseHandler) uploadMaterial(context *gin.Context) {
+	file, err := context.FormFile("file")
+	if err != nil {
+		commonRouter.ToError(context, "请上传材料图片")
+		return
+	}
+	if file.Size > maxGrainEntryMaterialUploadSize {
+		commonRouter.ToError(context, "图片大小不能超过 10MB")
+		return
+	}
+	entryID, ok := requiredUint64PostForm(context, "entryId")
+	if !ok {
+		return
+	}
+	farmerID, ok := requiredUint64PostForm(context, "farmerId")
+	if !ok {
+		return
+	}
+	stationID, ok := requiredUint64PostForm(context, "stationId")
+	if !ok {
+		return
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return
+	} else if stationIDs != nil && !stationAllowed(stationID, stationIDs) {
+		commonRouter.ToError(context, "无权操作该粮站")
+		return
+	}
+
+	openFile, err := file.Open()
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	defer openFile.Close()
+	data, err := io.ReadAll(io.LimitReader(openFile, maxGrainEntryMaterialUploadSize+1))
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	if len(data) > maxGrainEntryMaterialUploadSize {
+		commonRouter.ToError(context, "图片大小不能超过 10MB")
+		return
+	}
+
+	objectPath := buildMaterialObjectPath(file.Filename, stationID, 0, entryID)
+	if err := oss.Put(objectPath, data); err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	expireDuration := time.Duration(vipper.GetInt64("oss.expireTime")) * time.Second
+	if expireDuration <= 0 {
+		expireDuration = 10 * time.Minute
+	}
+	ossURL, err := oss.GetUrl(objectPath, &expireDuration)
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+
+	req := &grainPurchaseDTO.GrainEntryMaterialDTO{
+		StationID:       stationID,
+		EntryID:         entryID,
+		FarmerID:        farmerID,
+		MaterialBizType: strings.TrimSpace(context.PostForm("materialBizType")),
+		MaterialType:    strings.TrimSpace(context.PostForm("materialType")),
+		OssURL:          ossURL,
+		FileName:        file.Filename,
+		ImageHash:       fmt.Sprintf("%x", sha256.Sum256(data)),
+		FileSize:        file.Size,
+		MimeType:        file.Header.Get("Content-Type"),
+		SortOrder:       parseIntPostForm(context, "sortOrder"),
+	}
+	if req.MaterialBizType == "" {
+		req.MaterialBizType = "entry"
+	}
+	if req.MaterialType == "" {
+		req.MaterialType = "image"
+	}
+	if oss.Oss != nil {
+		req.OssBucket = oss.Oss.BucketName
+		req.OssObjectKey = oss.Oss.BuildKey(objectPath)
+	}
+	result, err := h.service.CreateMaterial(req)
+	if result != nil && result.Id > 0 {
+		result.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", result.Id)
+	}
+	commonRouter.ToJson(context, result, err)
+}
+
 func (h *GrainPurchaseHandler) getMaterialImage(context *gin.Context) {
 	id, ok := parseID(context)
 	if !ok {
@@ -270,6 +370,45 @@ func stationAllowed(stationID uint64, stationIDs []uint64) bool {
 		}
 	}
 	return false
+}
+
+func requiredUint64PostForm(context *gin.Context, name string) (uint64, bool) {
+	value := strings.TrimSpace(context.PostForm(name))
+	id, err := strconv.ParseUint(value, 10, 64)
+	if err != nil || id == 0 {
+		commonRouter.ToError(context, name+"必须是正整数")
+		return 0, false
+	}
+	return id, true
+}
+
+func parseIntPostForm(context *gin.Context, name string) int {
+	value := strings.TrimSpace(context.PostForm(name))
+	if value == "" {
+		return 0
+	}
+	result, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return result
+}
+
+func buildMaterialObjectPath(fileName string, stationID, appUserID, entryID uint64) string {
+	ext := strings.ToLower(filepath.Ext(fileName))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	now := time.Now()
+	return fmt.Sprintf(
+		"grain-entry-material/%d/%d/%d/%s/%s%s",
+		stationID,
+		appUserID,
+		entryID,
+		now.Format("20060102"),
+		now.Format("150405000000000"),
+		ext,
+	)
 }
 
 func parseID(context *gin.Context) (uint, bool) {

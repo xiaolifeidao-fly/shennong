@@ -5,6 +5,7 @@ import (
 	commonRouter "common/middleware/routers"
 	"common/middleware/storage/oss"
 	"common/middleware/vipper"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,6 +138,7 @@ func (h *GrainEntryMaterialHandler) uploadMaterial(context *gin.Context) {
 		MaterialType:    strings.TrimSpace(context.PostForm("materialType")),
 		OssURL:          ossURL,
 		FileName:        file.Filename,
+		ImageHash:       fmt.Sprintf("%x", sha256.Sum256(data)),
 		FileSize:        file.Size,
 		MimeType:        file.Header.Get("Content-Type"),
 		SortOrder:       parseIntPostForm(context, "sortOrder"),

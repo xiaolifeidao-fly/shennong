@@ -10,16 +10,6 @@
         </view>
         <view class="info-grid">
           <view class="kv">
-            <text class="kv-label">粮站编码</text>
-            <text class="kv-value">{{ station.stationCode || '-' }}</text>
-          </view>
-          <view class="kv">
-            <text class="kv-label">所属租户</text>
-            <text class="kv-value">{{ station.tenantName || '-' }}</text>
-          </view>
-        </view>
-        <view class="info-grid">
-          <view class="kv">
             <text class="kv-label">联系人</text>
             <text class="kv-value">{{ station.contactName || '-' }}</text>
           </view>

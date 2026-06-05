@@ -12,13 +12,15 @@ require('dotenv').config();
 const prefix = process.env.APP_URL_PREFIX;
 const target = process.env.SERVER_TARGET;
 const basePath = process.env.APP_BASE_PATH || "/manager";
+const maxFileSize = 10 * 1024 * 1024;
 
 // Next.js API 路由处理函数
 
 // 添加这个配置来禁用默认的 body 解析
 export const config = {
   api: {
-    bodyParser: false
+    bodyParser: false,
+    responseLimit: '10mb',
   }
 }
 
@@ -70,7 +72,7 @@ async function request(url, req){
     const isMultiPart = contentType?.includes('multipart/form-data');
     if (isMultiPart) {
       // formidable 解析
-      const form = formidable({ multiples: true });
+      const form = formidable({ multiples: true, maxFileSize });
       const [fields, files] = await new Promise((resolve, reject) => {
         form.parse(req, (err, fields, files) => {
           if (err) reject(err);

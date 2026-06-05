@@ -79,6 +79,9 @@ type GrainPurchaseEntrySnapshot struct {
 	PayType         string     `gorm:"column:pay_type;type:varchar(100)" description:"付款方式"`
 	EntryStatus     string     `gorm:"column:entry_status;type:varchar(50)" description:"录入状态"`
 	EntryRemark     string     `gorm:"column:entry_remark;type:varchar(255)" description:"录入备注"`
+	MaterialCount   int        `gorm:"column:material_count;type:int;default:0" description:"材料数量"`
+	MaterialDigest  string     `gorm:"column:material_digest;type:char(64)" description:"材料摘要哈希"`
+	MaterialSummary string     `gorm:"column:material_summary;type:text" description:"材料摘要JSON"`
 }
 
 func (g *GrainPurchaseEntrySnapshot) TableName() string {

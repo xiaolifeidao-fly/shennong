@@ -11,7 +11,7 @@ import {
   TeamOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Progress, Space, Table, Typography, message } from "antd";
+import { Button, DatePicker, Empty, Progress, Select, Space, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
@@ -21,6 +21,7 @@ import {
   type GrainPurchaseDashboardDimensionRecord,
   type GrainPurchaseDashboardRecord,
 } from "../grain/api/grain.api";
+import { useAccessibleStations } from "../grain/hooks/useAccessibleStations";
 
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
@@ -127,9 +128,17 @@ const columns: ColumnsType<GrainPurchaseDashboardDimensionRecord> = [
 
 export default function ManagerDashboardPage() {
   const router = useRouter();
+  const { stations: accessibleStations, loading: stationsLoading } = useAccessibleStations();
+  const stationOptions = useMemo(
+    () => accessibleStations.map((station) => ({ label: station.stationName, value: station.id })),
+    [accessibleStations],
+  );
   const [range, setRange] = useState<RangeValue>([today, today]);
   const [dashboard, setDashboard] = useState<GrainPurchaseDashboardRecord | null>(null);
+  const [cropDashboard, setCropDashboard] = useState<GrainPurchaseDashboardRecord | null>(null);
+  const [cropStationId, setCropStationId] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
+  const [cropLoading, setCropLoading] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -146,10 +155,41 @@ export default function ManagerDashboardPage() {
     void loadDashboard();
   }, [loadDashboard]);
 
+  useEffect(() => {
+    if (stationsLoading) {
+      return;
+    }
+    if (accessibleStations.length === 0) {
+      setCropStationId(undefined);
+      return;
+    }
+    setCropStationId((current) =>
+      current && accessibleStations.some((station) => station.id === current) ? current : accessibleStations[0].id,
+    );
+  }, [accessibleStations, stationsLoading]);
+
+  const loadCropDashboard = useCallback(async () => {
+    if (stationsLoading || (accessibleStations.length > 0 && !cropStationId)) {
+      return;
+    }
+    setCropLoading(true);
+    try {
+      setCropDashboard(await getGrainPurchaseDashboard({ ...dateParams(range), stationId: cropStationId }));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载粮食类型统计失败");
+    } finally {
+      setCropLoading(false);
+    }
+  }, [accessibleStations.length, cropStationId, range, stationsLoading]);
+
+  useEffect(() => {
+    void loadCropDashboard();
+  }, [loadCropDashboard]);
+
   const overview = dashboard?.overview;
   const weight = formatWeight(overview?.totalQuantity ?? 0);
   const stationRows = useMemo(() => sortRows(dashboard?.byStation ?? []), [dashboard]);
-  const cropRows = useMemo(() => sortRows(dashboard?.byCrop ?? []).slice(0, 6), [dashboard]);
+  const cropRows = useMemo(() => sortRows(cropDashboard?.byCrop ?? []).slice(0, 6), [cropDashboard]);
   const currentRangeLabel = rangeLabel(range);
 
   const stats = [
@@ -256,6 +296,16 @@ export default function ManagerDashboardPage() {
               <h3>品类占比</h3>
               <Text>按粮食品类展示今日收粮金额占比。</Text>
             </div>
+            {stationOptions.length > 1 ? (
+              <Select
+                showSearch
+                value={cropStationId}
+                options={stationOptions}
+                onChange={setCropStationId}
+                optionFilterProp="label"
+                className="manager-dashboard-panel__select"
+              />
+            ) : null}
           </div>
           {cropRows.length ? (
             <div className="manager-dashboard-category-list">
@@ -264,7 +314,10 @@ export default function ManagerDashboardPage() {
               ))}
             </div>
           ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间段暂无粮食品类汇总" />
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={cropLoading ? "正在加载粮食类型统计" : "当前时间段暂无粮食品类汇总"}
+            />
           )}
         </div>
       </section>

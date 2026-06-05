@@ -60,12 +60,13 @@ type GrainPurchasePlaceDTO struct {
 }
 
 type GrainStationExtraDTO struct {
-	StationID           uint64 `json:"stationId"`
-	AccountHolderName   string `json:"accountHolderName"`
-	BankName            string `json:"bankName"`
-	BankAccountNumber   string `json:"bankAccountNumber"`
-	BusinessLicenseUrl  string `json:"businessLicenseUrl"`
-	BusinessLicenseKey  string `json:"businessLicenseKey"`
+	StationID                uint64 `json:"stationId"`
+	AccountHolderName        string `json:"accountHolderName"`
+	BankName                 string `json:"bankName"`
+	BankAccountNumber        string `json:"bankAccountNumber"`
+	BusinessLicenseUrl       string `json:"businessLicenseUrl"`
+	BusinessLicenseKey       string `json:"businessLicenseKey"`
+	BusinessLicenseUpdatedAt int64  `json:"businessLicenseUpdatedAt"`
 }
 
 type GrainStationDetailDTO struct {

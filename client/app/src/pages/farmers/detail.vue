@@ -82,24 +82,12 @@
                   :src="farmerImages.idCardFront"
                   class="cert-img"
                   mode="aspectFill"
-                  @click="previewImage(farmerImages.idCardFront, [farmerImages.idCardFront, farmerImages.idCardBack].filter(Boolean))"
+                  @click="previewImage(farmerImages.idCardFront, [farmerImages.idCardFront])"
                 />
                 <view v-else class="img-placeholder">
                   <text>暂无图片</text>
                 </view>
-              </view>
-              <view class="img-slot">
-                <text class="img-label">身份证背面</text>
-                <image
-                  v-if="farmerImages.idCardBack"
-                  :src="farmerImages.idCardBack"
-                  class="cert-img"
-                  mode="aspectFill"
-                  @click="previewImage(farmerImages.idCardBack, [farmerImages.idCardFront, farmerImages.idCardBack].filter(Boolean))"
-                />
-                <view v-else class="img-placeholder">
-                  <text>暂无图片</text>
-                </view>
+                <button class="img-action" @click="uploadFarmerCardImage('id-front')">重新OCR</button>
               </view>
               <view class="img-slot">
                 <text class="img-label">银行卡</text>
@@ -113,6 +101,7 @@
                 <view v-else class="img-placeholder">
                   <text>暂无图片</text>
                 </view>
+                <button class="img-action" @click="uploadFarmerCardImage('bank')">重新OCR</button>
               </view>
             </view>
           </view>
@@ -194,11 +183,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { useGrainStore } from '@/stores/grain'
 import { formatAmount, formatQuantity, getEntryPrice } from '@/utils/grain'
-import type { FarmerProfile } from '@/types/grain'
+import type { FarmerProfile, GrainEntryDraft } from '@/types/grain'
 import type { FarmerImagesResult } from '@/services/grainFarmer'
 
 const grainStore = useGrainStore()
@@ -211,7 +200,7 @@ const allEntries = computed(() => grainStore.farmerEntriesSorted)
 const pagedEntries = computed(() => allEntries.value)
 const hasMore = computed(() => grainStore.farmerEntriesHasMore)
 
-const editing = reactive({ value: false })
+const editing = ref(false)
 const editForm = reactive<FarmerProfile>({
   id: '',
   stationId: 0,
@@ -279,6 +268,77 @@ function loadMore() {
 
 function previewImage(current: string, urls: string[]) {
   uni.previewImage({ current, urls })
+}
+
+function buildImageDraft(profile: FarmerProfile): GrainEntryDraft {
+  return {
+    farmerId: profile.id,
+    farmerName: profile.name,
+    idNumber: profile.idNumber,
+    phone: profile.phone,
+    address: profile.address,
+    bankNumber: profile.bankNumber,
+    bankName: profile.bankName,
+    purchaseTypeId: 0,
+    crop: '',
+    quantity: 0,
+    unit: '公斤',
+    amount: 0,
+    buyTime: '',
+    payTime: '',
+    placeId: 0,
+    place: '',
+    locationName: '',
+    locationAddress: '',
+    longitude: '',
+    latitude: '',
+    province: '',
+    city: '',
+    district: '',
+    paymentMethodId: 0,
+    paymentMethodCode: '',
+    payType: '',
+    materialImages: [],
+    cardImages: {},
+  }
+}
+
+function uploadFarmerCardImage(type: 'id-front' | 'bank') {
+  if (!farmer.value) return
+  const farmerId = farmer.value.id
+  uni.chooseImage({
+    count: 1,
+    success: async (res) => {
+      const filePath = res.tempFilePaths[0]
+      if (!filePath || !farmer.value) return
+      try {
+        const draft = buildImageDraft(farmer.value)
+        if (type === 'bank') {
+          const result = await grainStore.recognizeBankCard(filePath, draft)
+          await grainStore.saveFarmerCardImages(farmer.value.id, result.cardImages)
+          await grainStore.updateFarmer(farmer.value.id, {
+            ...farmer.value,
+            bankNumber: result.bankNumber,
+            bankName: result.bankName,
+          })
+        } else {
+          const result = await grainStore.recognizeIdCard(filePath, draft, 'front')
+          await grainStore.saveFarmerCardImages(farmer.value.id, result.cardImages)
+          await grainStore.updateFarmer(farmer.value.id, {
+            ...farmer.value,
+            name: result.farmerName,
+            idNumber: result.idNumber,
+            address: result.address,
+          })
+        }
+        await grainStore.loadFarmers(true)
+        await grainStore.loadFarmerImages(farmerId)
+        uni.showToast({ title: '图片已更新', icon: 'success' })
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : 'OCR上传失败', icon: 'none' })
+      }
+    },
+  })
 }
 </script>
 
@@ -389,7 +449,7 @@ function previewImage(current: string, urls: string[]) {
 
 .img-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16rpx;
 }
 
@@ -423,6 +483,17 @@ function previewImage(current: string, urls: string[]) {
   justify-content: center;
   color: #9aaa96;
   font-size: 22rpx;
+}
+
+.img-action {
+  width: 100%;
+  min-height: 58rpx;
+  border: 1rpx solid #d8e5d6;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #145535;
+  font-size: 22rpx;
+  line-height: 58rpx;
 }
 
 .entry-btn {

@@ -124,6 +124,11 @@ func (r *AppUserRepository) ListUsersByQuery(query appUserDTO.AppUserQueryDTO, p
 		u.ban_count, u.open_uid, u.union_id, u.wx_session_key,
 		u.wx_nickname, u.wx_avatar, u.wx_gender, u.wx_country, u.wx_province,
 		u.wx_city, u.wx_language, u.wx_last_login_time,
+		COALESCE(u.id_number, '') AS id_number,
+		COALESCE(u.id_card_front_url, '') AS id_card_front_url,
+		COALESCE(u.id_card_front_key, '') AS id_card_front_key,
+		COALESCE(u.id_card_back_url, '') AS id_card_back_url,
+		COALESCE(u.id_card_back_key, '') AS id_card_back_key,
 		COALESCE(gs.id, 0) AS station_id,
 		COALESCE(gs.station_name, '') AS station_name
 	FROM app_user u
@@ -182,6 +187,14 @@ func buildAppUserListWhere(query appUserDTO.AppUserQueryDTO) (string, []interfac
 	if value := strings.TrimSpace(query.UnionID); value != "" {
 		clauses = append(clauses, "u.union_id = ?")
 		values = append(values, value)
+	}
+	if query.StationID > 0 {
+		clauses = append(clauses, `EXISTS (
+			SELECT 1 FROM grain_station_user su3
+			WHERE su3.active = 1 AND su3.status = 'active'
+			  AND su3.app_user_id = u.id
+			  AND su3.station_id = ?)`)
+		values = append(values, query.StationID)
 	}
 	if query.ScopedStationIDs != nil {
 		if len(query.ScopedStationIDs) == 0 {

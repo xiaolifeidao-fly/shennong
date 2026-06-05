@@ -45,7 +45,15 @@
 
     <view class="field">
       <text class="label">收购时间</text>
-      <input v-model="model.buyTime" class="input" />
+      <view class="datetime-row">
+        <picker mode="date" :value="datePart(model.buyTime) || todayDate" @change="setDateTimePart('buyTime', 'date', $event)">
+          <view class="datetime-value">{{ datePart(model.buyTime) || '请选择日期' }}</view>
+        </picker>
+        <picker mode="time" :value="timePart(model.buyTime) || '00:00'" @change="setDateTimePart('buyTime', 'time', $event)">
+          <view class="datetime-value">{{ timePart(model.buyTime) || '请选择时间' }}</view>
+        </picker>
+        <button v-if="model.buyTime" class="clear-time-btn" @click="clearDateTime('buyTime')">清空</button>
+      </view>
     </view>
 
     <view class="field">
@@ -60,11 +68,15 @@
 
     <view class="field">
       <text class="label">支付时间</text>
-      <input
-        v-model="model.payTime"
-        class="input"
-        placeholder="可暂不填写，后期可修改（YYYY-MM-DD HH:mm）"
-      />
+      <view class="datetime-row">
+        <picker mode="date" :value="datePart(model.payTime) || todayDate" @change="setDateTimePart('payTime', 'date', $event)">
+          <view class="datetime-value">{{ datePart(model.payTime) || '请选择日期' }}</view>
+        </picker>
+        <picker mode="time" :value="timePart(model.payTime) || '00:00'" @change="setDateTimePart('payTime', 'time', $event)">
+          <view class="datetime-value">{{ timePart(model.payTime) || '请选择时间' }}</view>
+        </picker>
+        <button v-if="model.payTime" class="clear-time-btn" @click="clearDateTime('payTime')">清空</button>
+      </view>
     </view>
 
     <view class="field">
@@ -121,6 +133,7 @@ const priceText = computed(() => {
 const cropNames = computed(() => props.preset.purchaseTypes.length ? props.preset.purchaseTypes.map((item) => item.typeName) : props.preset.crops)
 const cropKeyword = ref('')
 const showCropResults = ref(false)
+const todayDate = new Date().toISOString().slice(0, 10)
 const filteredCropOptions = computed(() => {
   const key = cropKeyword.value.trim()
   if (!showCropResults.value && model.value.crop) {
@@ -176,6 +189,26 @@ function handlePlaceInput() {
   model.value.province = option?.province || ''
   model.value.city = option?.city || ''
   model.value.district = option?.district || ''
+}
+
+function datePart(value?: string) {
+  return String(value || '').slice(0, 10)
+}
+
+function timePart(value?: string) {
+  const match = String(value || '').match(/(\d{2}:\d{2})/)
+  return match?.[1] || ''
+}
+
+function setDateTimePart(field: 'buyTime' | 'payTime', part: 'date' | 'time', event: { detail: { value: string } }) {
+  const value = event.detail.value
+  const nextDate = part === 'date' ? value : datePart(model.value[field]) || todayDate
+  const nextTime = part === 'time' ? value : timePart(model.value[field]) || '00:00'
+  model.value[field] = `${nextDate} ${nextTime}`
+}
+
+function clearDateTime(field: 'buyTime' | 'payTime') {
+  model.value[field] = ''
 }
 
 function chooseMaterials() {
@@ -235,6 +268,36 @@ function previewMaterial(index: number) {
   display: grid;
   grid-template-columns: 1fr 184rpx;
   gap: 16rpx;
+}
+
+.datetime-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180rpx auto;
+  gap: 12rpx;
+  align-items: center;
+}
+
+.datetime-value {
+  height: 88rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 18rpx;
+  background: #fbfcfa;
+  color: #172018;
+  font-size: 26rpx;
+  line-height: 88rpx;
+}
+
+.clear-time-btn {
+  min-width: 104rpx;
+  height: 88rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 18rpx;
+  background: #ffffff;
+  color: #6d776c;
+  font-size: 24rpx;
+  line-height: 88rpx;
 }
 
 .unit-value {

@@ -29,7 +29,7 @@ func (r *GrainPurchaseEntryRepository) CountByQuery(query grainPurchaseDTO.Grain
 func (r *GrainPurchaseEntryRepository) ListByQuery(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, pageIndex, pageSize int) ([]*GrainPurchaseEntry, error) {
 	dbQuery := applyEntryQuery(r.entryListBaseQuery(), query)
 	var entities []*GrainPurchaseEntry
-	err := dbQuery.Select("e.*").Order("e.buy_time DESC, e.id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Scan(&entities).Error
+	err := dbQuery.Select("e.*").Order("e.id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Scan(&entities).Error
 	return entities, err
 }
 
@@ -37,7 +37,7 @@ func (r *GrainPurchaseEntryRepository) ListDTOByQuery(query grainPurchaseDTO.Gra
 	dbQuery := applyEntryQuery(r.entryListBaseQuery(), query)
 	var dtos []*grainPurchaseDTO.GrainPurchaseEntryDTO
 	err := dbQuery.Select("e.*, gs.station_name AS station_name").
-		Order("e.buy_time DESC, e.id DESC").
+		Order("e.id DESC").
 		Offset((pageIndex - 1) * pageSize).
 		Limit(pageSize).
 		Scan(&dtos).Error
@@ -275,6 +275,17 @@ func (r *GrainEntryMaterialRepository) ListByQuery(query grainPurchaseDTO.GrainE
 	return entities, err
 }
 
+func (r *GrainEntryMaterialRepository) ListActiveByEntryID(entryID uint64) ([]*GrainEntryMaterial, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entities []*GrainEntryMaterial
+	err := r.Db.Where("entry_id = ? AND active = ?", entryID, 1).
+		Order("sort_order ASC, id ASC").
+		Find(&entities).Error
+	return entities, err
+}
+
 func (r *GrainEntryMaterialRepository) FindByUnique(entryID uint64, imageHash string) (*GrainEntryMaterial, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -287,18 +298,32 @@ func (r *GrainEntryMaterialRepository) FindByUnique(entryID uint64, imageHash st
 	return &entity, nil
 }
 
-func (r *GrainEntryMaterialRepository) FindOrCreate(entity *GrainEntryMaterial) (*GrainEntryMaterial, error) {
+func (r *GrainEntryMaterialRepository) FindOrCreate(entity *GrainEntryMaterial) (*GrainEntryMaterial, bool, error) {
 	if r.Db == nil {
-		return nil, fmt.Errorf("database is not initialized")
+		return nil, false, fmt.Errorf("database is not initialized")
 	}
 	existing, err := r.FindByUnique(entity.EntryID, entity.ImageHash)
 	if err == nil {
-		return existing, nil
+		return existing, false, nil
 	}
 	if err2 := r.Db.Create(entity).Error; err2 != nil {
-		return nil, err2
+		return nil, false, err2
 	}
-	return entity, nil
+	return entity, true, nil
+}
+
+func (r *GrainEntryMaterialRepository) DeletePhysicalByID(id uint) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	result := r.Db.Delete(&GrainEntryMaterial{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) *gorm.DB {

@@ -38,8 +38,15 @@ export interface GrainEntry {
   district: string
   paymentMethodId: number
   payType: string
+  materialItems: GrainEntryMaterialItem[]
   materialImages: string[]
   editLogs: GrainEntryEditLog[]
+}
+
+export interface GrainEntryMaterialItem {
+  id: number
+  url: string
+  fileName: string
 }
 
 export interface GrainEntryEditLog {
@@ -241,6 +248,7 @@ export interface GrainPurchaseEntryDTO {
   status: string
   version: number
   remark: string
+  materialCount?: number
 }
 
 export interface GrainEntrySnapshotDTO {
@@ -281,6 +289,9 @@ export interface GrainEntrySnapshotDTO {
   payType: string
   entryStatus: string
   entryRemark: string
+  materialCount: number
+  materialDigest: string
+  materialSummary: string
 }
 
 export interface GrainFarmerPurchaseSummaryDTO {

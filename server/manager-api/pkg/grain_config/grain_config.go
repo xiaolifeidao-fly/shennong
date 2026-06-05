@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"manager-api/pkg/internal/tenantctx"
+	"net/http"
+	"path/filepath"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ func (h *GrainConfigHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-stations/:id/extra", h.getStationExtra)
 	engine.PUT("/grain-stations/:id/extra", h.saveStationExtra)
 	engine.POST("/grain-stations/:id/extra/business-license", h.uploadBusinessLicense)
+	engine.GET("/grain-stations/:id/extra/business-license", h.getBusinessLicense)
 	engine.GET("/grain-purchase-types", h.listPurchaseTypes)
 	engine.POST("/grain-purchase-types", h.createPurchaseType)
 	engine.PUT("/grain-purchase-types/:id", h.updatePurchaseType)
@@ -113,12 +115,29 @@ func (h *GrainConfigHandler) uploadBusinessLicense(context *gin.Context) {
 			ossURL = url
 		}
 	}
-	req := &grainConfigDTO.GrainStationExtraDTO{
-		BusinessLicenseUrl: ossURL,
-		BusinessLicenseKey: ossObjectKey,
+	result, err := h.service.SaveBusinessLicense(uint64(id), ossURL, ossObjectKey)
+	if result != nil {
+		result.BusinessLicenseUpdatedAt = now.UnixMilli()
 	}
-	result, err := h.service.SaveStationExtra(uint64(id), req)
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainConfigHandler) getBusinessLicense(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	content, err := h.service.GetBusinessLicenseContent(uint64(id))
+	if err == gorm.ErrRecordNotFound {
+		context.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
+	context.Header("Cache-Control", "private, max-age=300")
+	context.Data(http.StatusOK, content.MimeType, content.Data)
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {

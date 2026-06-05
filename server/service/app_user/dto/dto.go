@@ -123,6 +123,7 @@ type AppUserQueryDTO struct {
 	SecretKey        string   `form:"secretKey"`
 	OpenUID          string   `form:"openUid"`
 	UnionID          string   `form:"unionId"`
+	StationID        uint64   `form:"stationId"`
 	ScopedStationIDs []uint64 `form:"-"`
 }
 

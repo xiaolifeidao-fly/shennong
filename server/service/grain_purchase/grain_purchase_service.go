@@ -5,6 +5,7 @@ import (
 	"common/middleware/db"
 	"common/middleware/storage/oss"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"log"
 	"mime"
@@ -137,8 +138,12 @@ func (s *GrainPurchaseService) updateEntryForAppUser(id uint, req *grainPurchase
 		copier.Copy(entity, req)
 		preserveEntryBaseEntityFields(&entity.BaseEntity, previousBase)
 		entity.Id = int(id)
-		entity.Version++
 		normalizeEntry(entity)
+		if entryBusinessEqual(&previous, entity) {
+			result = entity
+			return nil
+		}
+		entity.Version++
 		result, err = txService.entryRepository.SaveOrUpdate(entity)
 		if err != nil {
 			return err
@@ -347,7 +352,16 @@ func (s *GrainPurchaseService) CreateMaterial(req *grainPurchaseDTO.GrainEntryMa
 	if strings.TrimSpace(entity.ImageHash) == "" {
 		entity.ImageHash = hashImageName(entity.FileName)
 	}
-	result, err := s.materialRepository.FindOrCreate(entity)
+	var result *grainPurchaseRepository.GrainEntryMaterial
+	err := s.withTransaction(func(txService *GrainPurchaseService) error {
+		var created bool
+		var err error
+		result, created, err = txService.materialRepository.FindOrCreate(entity)
+		if err != nil || !created {
+			return err
+		}
+		return txService.createMaterialChangeSnapshot(result.EntryID, "material_create")
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -395,16 +409,20 @@ func (s *GrainPurchaseService) enrichEntryFarmerProfiles(entries []*grainPurchas
 }
 
 func (s *GrainPurchaseService) DeleteMaterial(id uint) error {
-	entity, err := s.materialRepository.FindById(id)
-	if err != nil {
-		return err
-	}
-	if entity.Active == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	entity.Active = 0
-	_, err = s.materialRepository.SaveOrUpdate(entity)
-	return err
+	return s.withTransaction(func(txService *GrainPurchaseService) error {
+		entity, err := txService.materialRepository.FindById(id)
+		if err != nil {
+			return err
+		}
+		if entity.Active == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		entryID := entity.EntryID
+		if err = txService.materialRepository.DeletePhysicalByID(id); err != nil {
+			return err
+		}
+		return txService.createMaterialChangeSnapshot(entryID, "material_delete")
+	})
 }
 
 func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMaterialContent, error) {
@@ -542,6 +560,10 @@ func (s *GrainPurchaseService) withDB(tx *gorm.DB) *GrainPurchaseService {
 
 func (s *GrainPurchaseService) createEntrySnapshot(entry *grainPurchaseRepository.GrainPurchaseEntry, action string, operatorAppUserID uint64, operatorName string) error {
 	now := time.Now()
+	materialCount, materialDigest, materialSummary, err := s.entryMaterialSnapshot(entry.Id)
+	if err != nil {
+		return err
+	}
 	snapshot := &grainPurchaseRepository.GrainPurchaseEntrySnapshot{
 		EntryID:           uint64(entry.Id),
 		SnapshotVersion:   entry.Version,
@@ -573,6 +595,9 @@ func (s *GrainPurchaseService) createEntrySnapshot(entry *grainPurchaseRepositor
 		PayType:           entry.PayType,
 		EntryStatus:       entry.Status,
 		EntryRemark:       entry.Remark,
+		MaterialCount:     materialCount,
+		MaterialDigest:    materialDigest,
+		MaterialSummary:   materialSummary,
 	}
 	if farmer, err := s.farmerRepository.FindById(uint(entry.FarmerID)); err == nil && farmer.Active == 1 {
 		snapshot.FarmerName = farmer.Name
@@ -582,8 +607,66 @@ func (s *GrainPurchaseService) createEntrySnapshot(entry *grainPurchaseRepositor
 		snapshot.FarmerBankNumber = farmer.BankNumber
 		snapshot.FarmerBankName = farmer.BankName
 	}
-	_, err := s.snapshotRepository.Create(snapshot)
+	_, err = s.snapshotRepository.Create(snapshot)
 	return err
+}
+
+func (s *GrainPurchaseService) createMaterialChangeSnapshot(entryID uint64, action string) error {
+	entry, err := s.entryRepository.FindById(uint(entryID))
+	if err != nil {
+		return err
+	}
+	if entry.Active == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	entry.Version++
+	if _, err = s.entryRepository.SaveOrUpdate(entry); err != nil {
+		return err
+	}
+	return s.createEntrySnapshot(entry, action, entry.AppUserID, "")
+}
+
+type entryMaterialSnapshotItem struct {
+	ID              int    `json:"id"`
+	MaterialBizType string `json:"materialBizType"`
+	MaterialType    string `json:"materialType"`
+	FileName        string `json:"fileName"`
+	ImageHash       string `json:"imageHash"`
+	SortOrder       int    `json:"sortOrder"`
+}
+
+type entryMaterialSnapshotSummary struct {
+	Count int                         `json:"count"`
+	Items []entryMaterialSnapshotItem `json:"items"`
+}
+
+func (s *GrainPurchaseService) entryMaterialSnapshot(entryID int) (int, string, string, error) {
+	materials, err := s.materialRepository.ListActiveByEntryID(uint64(entryID))
+	if err != nil {
+		return 0, "", "", err
+	}
+	summary := entryMaterialSnapshotSummary{Count: len(materials), Items: make([]entryMaterialSnapshotItem, 0, len(materials))}
+	hash := sha256.New()
+	for _, material := range materials {
+		if material == nil {
+			continue
+		}
+		item := entryMaterialSnapshotItem{
+			ID:              material.Id,
+			MaterialBizType: strings.TrimSpace(material.MaterialBizType),
+			MaterialType:    strings.TrimSpace(material.MaterialType),
+			FileName:        strings.TrimSpace(material.FileName),
+			ImageHash:       strings.TrimSpace(material.ImageHash),
+			SortOrder:       material.SortOrder,
+		}
+		summary.Items = append(summary.Items, item)
+		fmt.Fprintf(hash, "%d|%s|%s|%s|%s|%d\n", item.ID, item.MaterialBizType, item.MaterialType, item.FileName, item.ImageHash, item.SortOrder)
+	}
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return 0, "", "", err
+	}
+	return summary.Count, fmt.Sprintf("%x", hash.Sum(nil)), string(data), nil
 }
 
 func (s *GrainPurchaseService) applyEntryToSummary(entry *grainPurchaseRepository.GrainPurchaseEntry, sign int) error {
@@ -823,6 +906,44 @@ func normalizeEntry(entity *grainPurchaseRepository.GrainPurchaseEntry) {
 	if entity.Version <= 0 {
 		entity.Version = 1
 	}
+}
+
+func entryBusinessEqual(left, right *grainPurchaseRepository.GrainPurchaseEntry) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return left.StationID == right.StationID &&
+		left.AppUserID == right.AppUserID &&
+		left.FarmerID == right.FarmerID &&
+		left.PurchaseTypeID == right.PurchaseTypeID &&
+		left.Crop == right.Crop &&
+		left.Quantity == right.Quantity &&
+		left.Unit == right.Unit &&
+		left.DisplayUnit == right.DisplayUnit &&
+		left.Amount == right.Amount &&
+		left.UnitPrice == right.UnitPrice &&
+		timesEqual(left.BuyTime, right.BuyTime) &&
+		timesEqual(left.PayTime, right.PayTime) &&
+		left.PlaceID == right.PlaceID &&
+		left.Place == right.Place &&
+		left.LocationName == right.LocationName &&
+		left.LocationAddress == right.LocationAddress &&
+		left.Longitude == right.Longitude &&
+		left.Latitude == right.Latitude &&
+		left.Province == right.Province &&
+		left.City == right.City &&
+		left.District == right.District &&
+		left.PaymentMethodID == right.PaymentMethodID &&
+		left.PayType == right.PayType &&
+		left.Status == right.Status &&
+		left.Remark == right.Remark
+}
+
+func timesEqual(left, right *time.Time) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return left.Equal(*right)
 }
 
 func preserveEntryBaseEntityFields(base *db.BaseEntity, previous db.BaseEntity) {

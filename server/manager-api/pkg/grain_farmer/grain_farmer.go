@@ -168,6 +168,9 @@ func (h *GrainFarmerHandler) ensureFarmerAccess(context *gin.Context, id uint) b
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
 		return false
 	} else if stationIDs != nil {
+		if farmer.StationID == 0 {
+			return true
+		}
 		for _, stationID := range stationIDs {
 			if farmer.StationID == stationID {
 				return true

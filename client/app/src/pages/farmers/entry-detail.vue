@@ -89,7 +89,15 @@
           </view>
           <view class="field">
             <text class="label">收购时间</text>
-            <input v-model="editForm.buyTime" class="input" placeholder="YYYY-MM-DD HH:mm" />
+            <view class="datetime-row">
+              <picker mode="date" :value="datePart(editForm.buyTime) || todayDate" @change="setDateTimePart('buyTime', 'date', $event)">
+                <view class="datetime-value">{{ datePart(editForm.buyTime) || '请选择日期' }}</view>
+              </picker>
+              <picker mode="time" :value="timePart(editForm.buyTime) || '00:00'" @change="setDateTimePart('buyTime', 'time', $event)">
+                <view class="datetime-value">{{ timePart(editForm.buyTime) || '请选择时间' }}</view>
+              </picker>
+              <button v-if="editForm.buyTime" class="clear-time-btn" @click="clearDateTime('buyTime')">清空</button>
+            </view>
           </view>
           <view class="field">
             <text class="label">收购地点</text>
@@ -101,7 +109,15 @@
           </view>
           <view class="field">
             <text class="label">支付时间</text>
-            <input v-model="editForm.payTime" class="input" placeholder="YYYY-MM-DD HH:mm（可不填）" />
+            <view class="datetime-row">
+              <picker mode="date" :value="datePart(editForm.payTime) || todayDate" @change="setDateTimePart('payTime', 'date', $event)">
+                <view class="datetime-value">{{ datePart(editForm.payTime) || '请选择日期' }}</view>
+              </picker>
+              <picker mode="time" :value="timePart(editForm.payTime) || '00:00'" @change="setDateTimePart('payTime', 'time', $event)">
+                <view class="datetime-value">{{ timePart(editForm.payTime) || '请选择时间' }}</view>
+              </picker>
+              <button v-if="editForm.payTime" class="clear-time-btn" @click="clearDateTime('payTime')">清空</button>
+            </view>
           </view>
 
           <view class="field">
@@ -180,6 +196,7 @@ const farmer = computed(() =>
 
 const editing = ref(false)
 const saving = ref(false)
+const todayDate = new Date().toISOString().slice(0, 10)
 
 const editForm = reactive<Partial<GrainEntryDraft>>({
   crop: '',
@@ -220,6 +237,10 @@ async function ensureEntryLoaded(entryId: string) {
   if (entryId && !grainStore.selectedEntry) {
     grainStore.selectEntry(entryId)
   }
+  const targetEntryId = entryId || grainStore.selectedEntryId
+  if (targetEntryId) {
+    await grainStore.loadEntryMaterials(targetEntryId)
+  }
 }
 
 function startEdit() {
@@ -255,6 +276,26 @@ function removeMaterial(index: number) {
   const list = [...(editForm.materialImages || [])]
   list.splice(index, 1)
   editForm.materialImages = list
+}
+
+function datePart(value?: string) {
+  return String(value || '').slice(0, 10)
+}
+
+function timePart(value?: string) {
+  const match = String(value || '').match(/(\d{2}:\d{2})/)
+  return match?.[1] || ''
+}
+
+function setDateTimePart(field: 'buyTime' | 'payTime', part: 'date' | 'time', event: { detail: { value: string } }) {
+  const value = event.detail.value
+  const nextDate = part === 'date' ? value : datePart(editForm[field]) || todayDate
+  const nextTime = part === 'time' ? value : timePart(editForm[field]) || '00:00'
+  editForm[field] = `${nextDate} ${nextTime}`
+}
+
+function clearDateTime(field: 'buyTime' | 'payTime') {
+  editForm[field] = ''
 }
 
 async function saveEntry() {
@@ -471,6 +512,36 @@ function continueEntry() {
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
+}
+
+.datetime-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180rpx auto;
+  gap: 12rpx;
+  align-items: center;
+}
+
+.datetime-value {
+  height: 88rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 16rpx;
+  background: #fbfcfa;
+  color: #172018;
+  font-size: 26rpx;
+  line-height: 88rpx;
+}
+
+.clear-time-btn {
+  min-width: 104rpx;
+  height: 88rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 16rpx;
+  background: #ffffff;
+  color: #6d776c;
+  font-size: 24rpx;
+  line-height: 88rpx;
 }
 
 .btn-row {

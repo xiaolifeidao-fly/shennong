@@ -10,6 +10,8 @@ import { createGrainFarmer, getGrainFarmerImages, listGrainFarmers, saveGrainFar
 import type { FarmerImagesResult } from '@/services/grainFarmer'
 import {
   createGrainEntryMaterial,
+  deleteGrainEntryMaterial,
+  listGrainEntryMaterials,
   listGrainFarmerDailySummaries,
   createGrainPurchaseEntry,
   listGrainFarmerPurchaseSummaries,
@@ -28,6 +30,8 @@ import type {
   GrainDraftCardImages,
   GrainEntry,
   GrainEntryDraft,
+  GrainEntryMaterialDTO,
+  GrainEntryMaterialItem,
   GrainFarmerDailySummaryDTO,
   GrainFarmerPurchaseSummary,
   GrainFarmerPurchaseSummaryDTO,
@@ -135,12 +139,10 @@ function getPaymentInfoStatusText(hasPaymentAccount: boolean) {
 }
 
 function toServerTime(value: string) {
-  if (!value) {
-    return new Date().toISOString()
-  }
+  if (!value || !value.trim()) return undefined
   const normalized = value.includes('T') ? value : value.replace(' ', 'T')
   const date = new Date(normalized)
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
 function toOptionalServerTime(value: string) {
@@ -193,8 +195,18 @@ function toEntry(dto: GrainPurchaseEntryDTO): GrainEntry {
     district: dto.district || '',
     paymentMethodId: Number(dto.paymentMethodId) || 0,
     payType: dto.payType || '',
+    materialItems: [],
     materialImages: [],
     editLogs: [],
+  }
+}
+
+async function toMaterialItem(dto: GrainEntryMaterialDTO): Promise<GrainEntryMaterialItem> {
+  const url = dto.imageUrl || dto.ossUrl || (dto.id ? `/grain-entry-materials?imageId=${dto.id}` : '')
+  return {
+    id: Number(dto.id) || 0,
+    url: await resolveDisplayImage(url),
+    fileName: dto.fileName || '',
   }
 }
 
@@ -311,13 +323,6 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
     materialImages: [...(entry.materialImages || [])],
     cardImages: {},
   }
-}
-
-function applyMaterialImage(draft: GrainEntryDraft, ossUrl: string): string[] {
-  if (!ossUrl || draft.materialImages.includes(ossUrl)) {
-    return [...draft.materialImages]
-  }
-  return [...draft.materialImages, ossUrl]
 }
 
 function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): GrainDraftCardImage {
@@ -654,6 +659,31 @@ export const useGrainStore = defineStore('grain', {
         this.farmerImagesLoading = false
       }
     },
+    async loadEntryMaterials(entryId: string) {
+      if (!entryId) return
+      try {
+        const materialPage = await listGrainEntryMaterials({
+          pageIndex: 1,
+          pageSize: 50,
+          entryId: Number(entryId),
+          materialBizType: 'entry',
+          materialType: 'image',
+        })
+        const materialItems = await Promise.all(pageItems(materialPage).map(toMaterialItem))
+        const materialImages = materialItems.map((item) => item.url).filter(Boolean)
+        this.entries = this.entries.map((item) =>
+          item.id === entryId
+            ? {
+                ...item,
+                materialItems,
+                materialImages,
+              }
+            : item,
+        )
+      } catch {
+        // 材料图片加载失败不影响明细查看
+      }
+    },
     selectEntry(entryId: string) {
       this.selectedEntryId = entryId
     },
@@ -713,7 +743,6 @@ export const useGrainStore = defineStore('grain', {
         idNumber: result.idNumber || draft.idNumber,
         address: result.address || draft.address,
         bankName: recognizedName || draft.bankName,
-        materialImages: applyMaterialImage(draft, result.ossUrl),
         cardImages: applyCardImage(draft, toDraftCardImage(result, side)),
       }
     },
@@ -723,7 +752,6 @@ export const useGrainStore = defineStore('grain', {
       return {
         bankNumber: result.bankNumber || draft.bankNumber,
         bankName: result.bankName || draft.bankName,
-        materialImages: applyMaterialImage(draft, result.ossUrl),
         cardImages: applyCardImage(draft, toDraftCardImage(result)),
       }
     },
@@ -739,11 +767,12 @@ export const useGrainStore = defineStore('grain', {
 
       await this.saveFarmerCardImages(farmerId, draft.cardImages)
       const entry = await createGrainPurchaseEntry(buildEntryPayload(draft, farmerId))
-      await this.saveEntryMaterials(entry, draft.materialImages)
+      await this.syncEntryMaterials(entry, draft.materialImages)
       this.selectedFarmerId = String(farmerId)
       await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true), this.loadSummaries(true, String(farmerId)), this.loadEntries(true, String(farmerId))])
       const savedEntry = toEntry(entry)
       this.entries = [savedEntry, ...this.entries.filter((item) => item.id !== savedEntry.id)]
+      await this.loadEntryMaterials(savedEntry.id)
       return savedEntry
     },
     async updateEntry(entryId: string, draft: GrainEntryDraft) {
@@ -754,16 +783,25 @@ export const useGrainStore = defineStore('grain', {
 
       await updateGrainFarmer(farmerId, buildFarmerPayload(draft))
       await this.saveFarmerCardImages(farmerId, draft.cardImages)
+      const previousMaterials = this.entries.find((item) => item.id === entryId)?.materialItems || []
       const entry = await updateGrainPurchaseEntry(entryId, buildEntryPayload(draft, farmerId))
-      await this.saveEntryMaterials(entry, draft.materialImages)
+      await this.syncEntryMaterials(entry, draft.materialImages, previousMaterials)
       this.selectedFarmerId = String(farmerId)
       await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true), this.loadSummaries(true, String(farmerId)), this.loadEntries(true, String(farmerId))])
       const savedEntry = toEntry(entry)
       this.entries = [savedEntry, ...this.entries.filter((item) => item.id !== savedEntry.id)]
+      await this.loadEntryMaterials(savedEntry.id)
       return savedEntry
     },
-    async saveEntryMaterials(entry: GrainPurchaseEntryDTO, images: string[]) {
-      const tasks = images
+    async syncEntryMaterials(entry: GrainPurchaseEntryDTO, images: string[], existingMaterials: GrainEntryMaterialItem[] = []) {
+      const nextImages = images.filter(Boolean)
+      const keptUrls = new Set(nextImages)
+      const deleteTasks = existingMaterials
+        .filter((item) => item.id && !keptUrls.has(item.url))
+        .map((item) => deleteGrainEntryMaterial(item.id))
+      const existingUrls = new Set(existingMaterials.map((item) => item.url))
+      const createTasks = nextImages
+        .filter((image) => isLocalImagePath(image) || !existingUrls.has(image))
         .filter(Boolean)
         .map((image, index) => {
           const payload = {
@@ -784,7 +822,7 @@ export const useGrainStore = defineStore('grain', {
             ossUrl: image,
           })
         })
-      await Promise.all(tasks)
+      await Promise.all([...deleteTasks, ...createTasks])
     },
     async saveFarmerCardImages(farmerId: string | number, cardImages?: GrainDraftCardImages) {
       const images = [cardImages?.idCardFront, cardImages?.idCardBack, cardImages?.bankCard].filter(

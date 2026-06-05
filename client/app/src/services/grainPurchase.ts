@@ -112,3 +112,7 @@ export function uploadGrainEntryMaterial(filePath: string, data: Partial<GrainEn
   })
   return http.upload<GrainEntryMaterialDTO>('/grain-entry-materials/upload', filePath, formData)
 }
+
+export function deleteGrainEntryMaterial(id: string | number) {
+  return http.delete<unknown>(`/grain-entry-materials/${id}`)
+}

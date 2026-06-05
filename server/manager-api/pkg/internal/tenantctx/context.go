@@ -71,7 +71,7 @@ func ScopedStationIDs(c *gin.Context) ([]uint64, bool) {
 	return stationIDs, true
 }
 
-// userHasSuperAdmin checks whether the user has a role with code "super_admin".
+// userHasSuperAdmin checks whether the user has an admin role (super_admin or admin).
 func userHasSuperAdmin(userID uint64) (bool, error) {
 	roleRepo := db.GetRepository[permissionRepository.RoleRepository]()
 	if roleRepo.Db == nil {
@@ -81,7 +81,7 @@ func userHasSuperAdmin(userID uint64) (bool, error) {
 	err := roleRepo.Db.Raw(`
 		SELECT COUNT(1) FROM user_role ur
 		JOIN role r ON r.id = ur.role_id AND r.active = 1
-		WHERE ur.active = 1 AND ur.user_id = ? AND r.code = 'super_admin'
+		WHERE ur.active = 1 AND ur.user_id = ? AND r.code IN ('super_admin', 'admin')
 	`, userID).Scan(&count).Error
 	return count > 0, err
 }

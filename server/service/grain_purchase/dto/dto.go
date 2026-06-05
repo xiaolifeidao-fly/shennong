@@ -80,6 +80,9 @@ type GrainPurchaseEntrySnapshotDTO struct {
 	PayType           string     `json:"payType"`
 	EntryStatus       string     `json:"entryStatus"`
 	EntryRemark       string     `json:"entryRemark"`
+	MaterialCount     int        `json:"materialCount"`
+	MaterialDigest    string     `json:"materialDigest"`
+	MaterialSummary   string     `json:"materialSummary"`
 }
 
 type GrainFarmerPurchaseSummaryDTO struct {

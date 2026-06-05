@@ -1427,6 +1427,11 @@ select {
   margin-bottom: 18px;
 }
 
+.manager-dashboard-panel__select {
+  min-width: 180px;
+  margin-left: auto;
+}
+
 .manager-dashboard-panel__icon {
   width: 42px;
   height: 42px;
@@ -1683,6 +1688,15 @@ select {
 
   .manager-dashboard-panel--wide {
     grid-column: span 1;
+  }
+
+  .manager-dashboard-panel__header {
+    flex-wrap: wrap;
+  }
+
+  .manager-dashboard-panel__select {
+    width: 100%;
+    margin-left: 0;
   }
 
   .manager-dashboard-hero {

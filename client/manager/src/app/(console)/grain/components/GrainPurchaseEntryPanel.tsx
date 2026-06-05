@@ -41,6 +41,7 @@ import {
   Upload,
   message,
 } from "antd";
+import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 import type { RcFile } from "antd/es/upload";
 import type { ColumnsType } from "antd/es/table";
@@ -53,7 +54,7 @@ import {
   grainPaymentMethodApi,
   grainPurchaseEntryApi,
   grainPurchaseEntrySnapshotApi,
-  grainPurchaseTypeApi,
+  listAllGrainPurchaseTypes,
   recognizeGrainCard,
   voidGrainPurchaseEntry,
   type GrainCardOcrResult,
@@ -63,7 +64,6 @@ import {
   type GrainEntryMaterialRecord,
   type GrainPurchaseEntryRecord,
   type GrainPurchaseEntrySnapshotRecord,
-  type GrainPurchaseTypeRecord,
 } from "../api/grain.api";
 import { useAccessibleStations } from "../hooks/useAccessibleStations";
 import { SensitiveValue } from "./SensitiveValue";
@@ -89,6 +89,7 @@ type EntryFormValues = {
   locationAddress?: string;
   paymentMethodId?: number;
   payType?: string;
+  payTime?: Dayjs;
   status?: string;
   remark?: string;
 };
@@ -150,6 +151,10 @@ function actionMeta(action: string) {
       return { label: "创建", color: "green" };
     case "update":
       return { label: "修改", color: "blue" };
+    case "material_create":
+      return { label: "新增材料", color: "purple" };
+    case "material_delete":
+      return { label: "删除材料", color: "orange" };
     case "void":
       return { label: "作废", color: "red" };
     case "delete":
@@ -161,6 +166,24 @@ function actionMeta(action: string) {
 
 function snapshotStatusTag(value: unknown) {
   return statusTag(value);
+}
+
+function renderMaterialSummary(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "-";
+  }
+  try {
+    const parsed = JSON.parse(raw) as { count?: number; items?: Array<{ fileName?: string; materialType?: string }> };
+    const count = Number(parsed.count ?? parsed.items?.length ?? 0);
+    const names = (parsed.items || [])
+      .map((item, index) => item.fileName || item.materialType || `材料${index + 1}`)
+      .filter(Boolean)
+      .slice(0, 3);
+    return names.length > 0 ? `${count} 张：${names.join("、")}${count > names.length ? "等" : ""}` : `${count} 张`;
+  } catch {
+    return raw;
+  }
 }
 
 function isBankPaymentMethod(method?: { label?: unknown; methodCode?: unknown }, payType?: string) {
@@ -193,9 +216,11 @@ export function GrainPurchaseEntryPanel() {
   const [editingRecord, setEditingRecord] = useState<GrainPurchaseEntryRecord | null>(null);
   const [appUserOptions, setAppUserOptions] = useState<CrudOption[]>([]);
   const [purchaseTypeOptions, setPurchaseTypeOptions] = useState<CrudOption[]>([]);
+  const [purchaseTypeLoading, setPurchaseTypeLoading] = useState(false);
   const [paymentMethodOptions, setPaymentMethodOptions] = useState<PaymentMethodOption[]>([]);
   const [farmerImages, setFarmerImages] = useState<GrainFarmerImagesRecord | null>(null);
   const [entryMaterials, setEntryMaterials] = useState<GrainEntryMaterialRecord[]>([]);
+  const [materialUploading, setMaterialUploading] = useState(false);
   const [ocrTarget, setOcrTarget] = useState<OcrTarget | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -236,21 +261,40 @@ export function GrainPurchaseEntryPanel() {
   useEffect(() => {
     Promise.all([
       fetchAppUsers({ pageIndex: 1, pageSize: 200, status: "active" }),
-      grainPurchaseTypeApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
       grainPaymentMethodApi.list({ pageIndex: 1, pageSize: 200, status: "active" }),
     ])
-      .then(([appUsers, purchaseTypes, paymentMethods]) => {
+      .then(([appUsers, paymentMethods]) => {
         setAppUserOptions(
           appUsers.data.map((user) => ({ label: user.name || user.username || `业务员 ${user.id}`, value: user.id })),
         );
-        setAllPurchaseTypes(purchaseTypes.data);
-        setPurchaseTypeOptions(purchaseTypes.data.map((type) => ({ label: type.typeName, value: type.id })));
         setPaymentMethodOptions(
           paymentMethods.data.map((method) => ({ label: method.methodName, value: method.id, methodCode: method.methodCode })),
         );
       })
       .catch((error) => message.error(error instanceof Error ? error.message : "加载收粮选项失败"));
   }, []);
+
+  const loadPurchaseTypes = useCallback(async (stationId?: number) => {
+    setPurchaseTypeLoading(true);
+    try {
+      const purchaseTypes = await listAllGrainPurchaseTypes({
+        status: "active",
+        stationId,
+      });
+      const nextOptions = purchaseTypes.map((type) => ({ label: type.typeName, value: type.id }));
+      const optionIds = new Set(nextOptions.map((option) => Number(option.value)));
+      setPurchaseTypeOptions(nextOptions);
+      setFilterPurchaseTypeIds((prev) => prev.filter((id) => optionIds.has(id)));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载收粮类型失败");
+    } finally {
+      setPurchaseTypeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPurchaseTypes(filterStationId);
+  }, [filterStationId, loadPurchaseTypes]);
 
   useEffect(() => {
     const quantity = typeof watchedQuantity === "number" ? watchedQuantity : 0;
@@ -259,15 +303,6 @@ export function GrainPurchaseEntryPanel() {
       form.setFieldValue("unitPrice", Number((amount / quantity).toFixed(4)));
     }
   }, [form, watchedAmount, watchedQuantity]);
-
-  const [allPurchaseTypes, setAllPurchaseTypes] = useState<GrainPurchaseTypeRecord[]>([]);
-
-  const filteredPurchaseTypeOptions = useMemo(() => {
-    const source = filterStationId !== undefined
-      ? allPurchaseTypes.filter((t) => t.stationId === filterStationId)
-      : allPurchaseTypes;
-    return source.map((t) => ({ label: t.typeName, value: t.id }));
-  }, [allPurchaseTypes, filterStationId]);
 
   const stats = useMemo(
     () => [
@@ -309,7 +344,12 @@ export function GrainPurchaseEntryPanel() {
     try {
       const result = await fetchAppUsers({ pageIndex: 1, pageSize: 50, search: keyword.trim(), status: "active" });
       setFilterAppUserOptions(
-        result.data.map((u) => ({ label: u.name || u.username || `业务员 ${u.id}`, value: u.id })),
+        result.data.map((u) => {
+          const name = u.name || "";
+          const username = u.username || "";
+          const label = name && username ? `${name}（${username}）` : name || username || `业务员 ${u.id}`;
+          return { label, value: u.id };
+        }),
       );
     } catch {
       // ignore
@@ -363,9 +403,11 @@ export function GrainPurchaseEntryPanel() {
       { key: "amount", label: "金额", render: (value) => `￥${normalizeMoney(Number(value))}` },
       { key: "unitPrice", label: "单价", render: (value) => `￥${normalizeMoney(Number(value))}` },
       { key: "locationAddress", label: "收购地址" },
-      { key: "payType", label: "付款方式" },
+      { key: "payType", label: "收款方式" },
       { key: "entryStatus", label: "状态", render: snapshotStatusTag },
       { key: "entryRemark", label: "备注" },
+      { key: "materialCount", label: "材料数量" },
+      { key: "materialSummary", label: "材料摘要", render: renderMaterialSummary },
     ];
     return fields
       .filter((field) => {
@@ -436,6 +478,43 @@ export function GrainPurchaseEntryPanel() {
     }
   };
 
+  const handleMaterialUpload = async (file: File) => {
+    if (!editingRecord) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    if (!allowedTypes.includes(file.type) && !file.type.startsWith("image/")) {
+      message.error("仅支持上传图片文件");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      message.error("图片大小不能超过 10MB");
+      return;
+    }
+    setMaterialUploading(true);
+    try {
+      await grainEntryMaterialApi.upload(file, {
+        entryId: editingRecord.id,
+        farmerId: editingRecord.farmerId,
+        stationId: editingRecord.stationId,
+      });
+      await loadEntryMaterials(editingRecord.id);
+      message.success("上传成功");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "上传失败");
+    } finally {
+      setMaterialUploading(false);
+    }
+  };
+
+  const handleMaterialDelete = async (id: number) => {
+    try {
+      await grainEntryMaterialApi.delete(id);
+      setEntryMaterials((prev) => prev.filter((m) => m.id !== id));
+      message.success("已删除");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "删除失败");
+    }
+  };
+
   const openEdit = (record: GrainPurchaseEntryRecord) => {
     setEditingRecord(record);
     form.resetFields();
@@ -458,6 +537,7 @@ export function GrainPurchaseEntryPanel() {
       locationAddress: record.locationAddress,
       paymentMethodId: record.paymentMethodId,
       payType: record.payType,
+      payTime: record.payTime ? dayjs(record.payTime) : undefined,
       status: record.status || "submitted",
       remark: record.remark,
     });
@@ -568,6 +648,7 @@ export function GrainPurchaseEntryPanel() {
         locationAddress: values.locationAddress,
         paymentMethodId: values.paymentMethodId,
         payType: values.payType,
+        payTime: values.payTime?.toISOString(),
         status: values.status,
         remark: values.remark,
       }) as GrainPayload;
@@ -612,7 +693,10 @@ export function GrainPurchaseEntryPanel() {
     { title: "金额", dataIndex: "amount", width: 120, render: (value) => normalizeMoney(Number(value)) },
     { title: "单价", dataIndex: "unitPrice", width: 120 },
     { title: "收购地址", dataIndex: "locationAddress", width: 220, render: renderValue },
-    { title: "付款方式", dataIndex: "payType", width: 130 },
+    { title: "收款方式", dataIndex: "payType", width: 130 },
+    { title: "收款时间", dataIndex: "payTime", width: 170, render: formatTime },
+    { title: "创建时间", dataIndex: "createdTime", width: 170, render: formatTime },
+    { title: "更新时间", dataIndex: "updatedTime", width: 170, render: formatTime },
     { title: "状态", dataIndex: "status", width: 110, render: statusTag },
     {
       title: "操作",
@@ -678,7 +762,8 @@ export function GrainPurchaseEntryPanel() {
   ];
 
   const imageCards = [
-    { label: "身份证正面", value: farmerImages?.idCardFront },
+    { label: "身份证人像面", value: farmerImages?.idCardFront },
+    { label: "身份证国徽面", value: farmerImages?.idCardBack },
     { label: "银行卡", value: farmerImages?.bankCard },
   ];
   const formSections = [
@@ -689,7 +774,7 @@ export function GrainPurchaseEntryPanel() {
       title: "粮食与农户身份信息",
       description: "维护粮食收购信息、粮户身份与联系方式，可通过身份证识别快速回填。",
     },
-    { key: "payment", index: "03", title: "收款与付款信息", description: "按收款方式录入对应账户信息，并补充付款状态和业务备注。" },
+    { key: "payment", index: "03", title: "收款信息", description: "按收款方式录入对应账户信息，并补充收款时间和业务备注。" },
   ];
 
   return (
@@ -706,66 +791,84 @@ export function GrainPurchaseEntryPanel() {
       </section>
 
       <section className="manager-data-card">
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
+            <Space wrap size={12}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="粮站"
+                value={filterStationId}
+                onChange={(value: number | undefined) => {
+                  setFilterStationId(value);
+                  setFilterPurchaseTypeIds([]);
+                }}
+                options={stationOptions}
+                style={{ minWidth: 200 }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="收粮类型（可多选）"
+                value={filterPurchaseTypeIds}
+                onChange={setFilterPurchaseTypeIds}
+                options={purchaseTypeOptions}
+                loading={purchaseTypeLoading}
+                style={{ minWidth: 200 }}
+              />
+              <DatePicker.RangePicker
+                value={filterDateRange}
+                onChange={(dates) => setFilterDateRange(dates as [Dayjs, Dayjs] | null)}
+                format="YYYY-MM-DD"
+                style={{ width: 260 }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                filterOption={false}
+                placeholder="业务员（搜索姓名/用户名）"
+                value={filterAppUserIds}
+                onChange={setFilterAppUserIds}
+                onSearch={(keyword) => void searchAppUsers(keyword)}
+                options={filterAppUserOptions}
+                loading={appUserSearching}
+                notFoundContent={appUserSearching ? "搜索中..." : "输入姓名或用户名搜索"}
+                style={{ minWidth: 200 }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                filterOption={false}
+                placeholder="农户（搜索姓名）"
+                value={filterFarmerIds}
+                onChange={setFilterFarmerIds}
+                onSearch={(keyword) => void searchFarmers(keyword)}
+                options={filterFarmerOptions}
+                loading={farmerSearching}
+                notFoundContent={farmerSearching ? "搜索中..." : "输入姓名搜索"}
+                style={{ minWidth: 180 }}
+              />
+            </Space>
+            <Space wrap>
+              <Tag style={{ color: "var(--manager-text-soft)", background: "var(--manager-green-soft)", border: "none" }}>
+                共 {total} 条
+              </Tag>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreate}
+                style={{ color: "#ffffff", border: "none", background: "linear-gradient(135deg, #145535 0%, #237a4b 100%)" }}
+              >
+                新增收粮明细
+              </Button>
+            </Space>
+          </div>
           <Space wrap size={12}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="粮站"
-              value={filterStationId}
-              onChange={(value: number | undefined) => {
-                setFilterStationId(value);
-                setFilterPurchaseTypeIds([]);
-              }}
-              options={stationOptions}
-              style={{ minWidth: 200 }}
-            />
-            <Select
-              mode="multiple"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="收粮类型（可多选）"
-              value={filterPurchaseTypeIds}
-              onChange={setFilterPurchaseTypeIds}
-              options={filteredPurchaseTypeOptions}
-              style={{ minWidth: 200 }}
-            />
-            <DatePicker.RangePicker
-              value={filterDateRange}
-              onChange={(dates) => setFilterDateRange(dates as [Dayjs, Dayjs] | null)}
-              format="YYYY-MM-DD"
-              style={{ width: 260 }}
-            />
-            <Select
-              mode="multiple"
-              allowClear
-              showSearch
-              filterOption={false}
-              placeholder="业务员（搜索姓名）"
-              value={filterAppUserIds}
-              onChange={setFilterAppUserIds}
-              onSearch={(keyword) => void searchAppUsers(keyword)}
-              options={filterAppUserOptions}
-              loading={appUserSearching}
-              notFoundContent={appUserSearching ? "搜索中..." : "输入姓名搜索"}
-              style={{ minWidth: 180 }}
-            />
-            <Select
-              mode="multiple"
-              allowClear
-              showSearch
-              filterOption={false}
-              placeholder="农户（搜索姓名）"
-              value={filterFarmerIds}
-              onChange={setFilterFarmerIds}
-              onSearch={(keyword) => void searchFarmers(keyword)}
-              options={filterFarmerOptions}
-              loading={farmerSearching}
-              notFoundContent={farmerSearching ? "搜索中..." : "输入姓名搜索"}
-              style={{ minWidth: 180 }}
-            />
             <InputNumber
               placeholder="最低金额"
               min={0}
@@ -805,19 +908,6 @@ export function GrainPurchaseEntryPanel() {
               重置
             </Button>
           </Space>
-          <Space wrap>
-            <Tag style={{ color: "var(--manager-text-soft)", background: "var(--manager-green-soft)", border: "none" }}>
-              共 {total} 条
-            </Tag>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreate}
-              style={{ color: "#ffffff", border: "none", background: "linear-gradient(135deg, #145535 0%, #237a4b 100%)" }}
-            >
-              新增收粮明细
-            </Button>
-          </Space>
         </div>
       </section>
 
@@ -827,7 +917,7 @@ export function GrainPurchaseEntryPanel() {
           loading={loading}
           dataSource={records}
           columns={columns}
-          scroll={{ x: 2380 }}
+          scroll={{ x: 2720 }}
           pagination={{
             current: query.pageIndex,
             pageSize: query.pageSize,
@@ -960,6 +1050,7 @@ export function GrainPurchaseEntryPanel() {
                       allowClear
                       showSearch
                       optionFilterProp="label"
+                      loading={purchaseTypeLoading}
                       onChange={(_, option) => {
                         const selected = Array.isArray(option) ? option[0] : option;
                         if (selected?.label) {
@@ -1006,10 +1097,10 @@ export function GrainPurchaseEntryPanel() {
                   ) : null}
                 </div>
                 <div className="manager-form-grid">
-                  <Form.Item name="paymentMethodId" label="付款方式">
+                  <Form.Item name="paymentMethodId" label="收款方式">
                     <Select
                       options={paymentMethodOptions}
-                      placeholder="请选择付款方式"
+                      placeholder="请选择收款方式"
                       allowClear
                       showSearch
                       optionFilterProp="label"
@@ -1021,8 +1112,11 @@ export function GrainPurchaseEntryPanel() {
                       }}
                     />
                   </Form.Item>
-                  <Form.Item name="payType" label="付款方式名称">
-                    <Input placeholder="请输入付款方式" />
+                  <Form.Item name="payType" label="收款方式名称">
+                    <Input placeholder="请输入收款方式" />
+                  </Form.Item>
+                  <Form.Item name="payTime" label="收款时间">
+                    <DatePicker showTime format="YYYY-MM-DD HH:mm:ss" placeholder="请选择收款时间" style={{ width: "100%" }} />
                   </Form.Item>
                   {hasPaymentMethod ? (
                     <>
@@ -1062,7 +1156,7 @@ export function GrainPurchaseEntryPanel() {
               <section className="manager-form-section">
                 <Space align="center" style={{ marginBottom: 12 }}>
                   <FileImageOutlined style={{ color: "#237a4b" }} />
-                  <Text strong>历史照片</Text>
+                  <Text strong>农户照片</Text>
                 </Space>
                 {imageCards.some((item) => item.value) ? (
                   <div style={{ display: "grid", gap: 12 }}>
@@ -1080,7 +1174,7 @@ export function GrainPurchaseEntryPanel() {
                     )}
                   </div>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史照片" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无农户照片" />
                 )}
               </section>
 
@@ -1088,16 +1182,54 @@ export function GrainPurchaseEntryPanel() {
                 <Space align="center" style={{ marginBottom: 12 }}>
                   <CameraOutlined style={{ color: "#237a4b" }} />
                   <Text strong>收粮材料</Text>
+                  {editingRecord && (
+                    <Upload
+                      accept="image/*"
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        void handleMaterialUpload(file as File);
+                        return false;
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        loading={materialUploading}
+                      >
+                        上传材料
+                      </Button>
+                    </Upload>
+                  )}
                 </Space>
                 {entryMaterials.length > 0 ? (
                   <div style={{ display: "grid", gap: 12 }}>
                     {entryMaterials.map((item) => (
-                      <div key={item.id}>
+                      <div key={item.id} style={{ position: "relative" }}>
                         <Image
                           src={item.imageUrl}
                           alt={item.fileName || "收粮材料"}
                           style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }}
                         />
+                        <Popconfirm
+                          title="确认删除该材料图片？"
+                          onConfirm={() => void handleMaterialDelete(item.id)}
+                          okText="删除"
+                          okButtonProps={{ danger: true }}
+                          cancelText="取消"
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            style={{
+                              position: "absolute",
+                              top: 4,
+                              right: 4,
+                              opacity: 0.85,
+                            }}
+                          />
+                        </Popconfirm>
                       </div>
                     ))}
                   </div>
@@ -1218,9 +1350,12 @@ export function GrainPurchaseEntryPanel() {
                   <Descriptions.Item label="收购地址" span={2}>
                     {renderValue(selectedSnapshot.locationAddress)}
                   </Descriptions.Item>
-                  <Descriptions.Item label="付款方式">{renderValue(selectedSnapshot.payType)}</Descriptions.Item>
+                  <Descriptions.Item label="收款方式">{renderValue(selectedSnapshot.payType)}</Descriptions.Item>
+                  <Descriptions.Item label="收款时间">{formatTime(selectedSnapshot.payTime)}</Descriptions.Item>
                   <Descriptions.Item label="状态">{snapshotStatusTag(selectedSnapshot.entryStatus)}</Descriptions.Item>
                   <Descriptions.Item label="备注">{renderValue(selectedSnapshot.entryRemark)}</Descriptions.Item>
+                  <Descriptions.Item label="材料数量">{renderValue(selectedSnapshot.materialCount)}</Descriptions.Item>
+                  <Descriptions.Item label="材料摘要">{renderMaterialSummary(selectedSnapshot.materialSummary)}</Descriptions.Item>
                 </Descriptions>
               </>
             ) : (

@@ -122,6 +122,7 @@ function DimensionSection({
   onModeChange,
   accent,
   emptyText,
+  actions,
 }: {
   title: string;
   subtitle: string;
@@ -131,6 +132,7 @@ function DimensionSection({
   onModeChange: (value: DimensionMode) => void;
   accent: string;
   emptyText: string;
+  actions?: ReactNode;
 }) {
   const columns: ColumnsType<GrainPurchaseDashboardDimensionRecord> = [
     {
@@ -182,14 +184,17 @@ function DimensionSection({
             <Text>{subtitle}</Text>
           </span>
         </Space>
-        <Segmented
-          value={mode}
-          onChange={(value) => onModeChange(value as DimensionMode)}
-          options={[
-            { label: <Tooltip title="图表"><BarChartOutlined /></Tooltip>, value: "chart" },
-            { label: <Tooltip title="表格"><TableOutlined /></Tooltip>, value: "table" },
-          ]}
-        />
+        <Space wrap>
+          {actions}
+          <Segmented
+            value={mode}
+            onChange={(value) => onModeChange(value as DimensionMode)}
+            options={[
+              { label: <Tooltip title="图表"><BarChartOutlined /></Tooltip>, value: "chart" },
+              { label: <Tooltip title="表格"><TableOutlined /></Tooltip>, value: "table" },
+            ]}
+          />
+        </Space>
       </div>
       {mode === "chart" ? (
         <DimensionVisual rows={rows} accent={accent} emptyText={emptyText} />
@@ -208,11 +213,16 @@ function DimensionSection({
 }
 
 export function GrainPurchaseDashboardPanel() {
-  const { stations: accessibleStations } = useAccessibleStations();
-  const stationOptions: CrudOption[] = accessibleStations.map((s) => ({ label: s.stationName, value: s.id }));
+  const { stations: accessibleStations, loading: stationsLoading } = useAccessibleStations();
+  const stationOptions: CrudOption[] = useMemo(
+    () => accessibleStations.map((s) => ({ label: s.stationName, value: s.id })),
+    [accessibleStations],
+  );
   const [range, setRange] = useState<RangeValue>([today, today]);
   const [stationId, setStationId] = useState<number | undefined>();
+  const [cropStationId, setCropStationId] = useState<number | undefined>();
   const [dashboard, setDashboard] = useState<GrainPurchaseDashboardRecord | null>(null);
+  const [cropDashboard, setCropDashboard] = useState<GrainPurchaseDashboardRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [stationMode, setStationMode] = useState<DimensionMode>("chart");
   const [cropMode, setCropMode] = useState<DimensionMode>("chart");
@@ -232,6 +242,35 @@ export function GrainPurchaseDashboardPanel() {
   useEffect(() => {
     void loadDashboard();
   }, [range, stationId]);
+
+  useEffect(() => {
+    if (stationsLoading) {
+      return;
+    }
+    if (accessibleStations.length === 0) {
+      setCropStationId(undefined);
+      return;
+    }
+    setCropStationId((current) =>
+      current && accessibleStations.some((station) => station.id === current) ? current : accessibleStations[0].id,
+    );
+  }, [accessibleStations, stationsLoading]);
+
+  const loadCropDashboard = async () => {
+    if (stationsLoading || (accessibleStations.length > 0 && !cropStationId)) {
+      return;
+    }
+    try {
+      const data = await getGrainPurchaseDashboard({ ...dateParams(range), stationId: cropStationId });
+      setCropDashboard(data);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载粮食类型统计失败");
+    }
+  };
+
+  useEffect(() => {
+    void loadCropDashboard();
+  }, [range, cropStationId, stationsLoading, accessibleStations.length]);
 
   const overview = dashboard?.overview;
   const scopeLabel = useMemo(() => {
@@ -336,11 +375,23 @@ export function GrainPurchaseDashboardPanel() {
           title="按照粮食类型维度展示"
           subtitle="观察不同粮食类型的重量、金额与金额占比"
           icon={<DatabaseOutlined />}
-          rows={dashboard?.byCrop ?? []}
+          rows={cropDashboard?.byCrop ?? []}
           mode={cropMode}
           onModeChange={setCropMode}
           accent="#b98222"
           emptyText="当前条件下暂无粮食类型汇总"
+          actions={
+            stationOptions.length > 1 ? (
+              <Select
+                showSearch
+                value={cropStationId}
+                options={stationOptions}
+                onChange={setCropStationId}
+                optionFilterProp="label"
+                style={{ minWidth: 180 }}
+              />
+            ) : null
+          }
         />
       </div>
 

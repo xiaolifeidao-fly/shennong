@@ -60,6 +60,7 @@ export class GrainPurchaseEntryRecord {
   amount = 0;
   unitPrice = 0;
   buyTime?: string;
+  payTime?: string;
   placeId = 0;
   place = "";
   locationAddress = "";
@@ -97,6 +98,7 @@ export class GrainPurchaseEntrySnapshotRecord {
   amount = 0;
   unitPrice = 0;
   buyTime?: string;
+  payTime?: string;
   placeId = 0;
   place = "";
   locationName = "";
@@ -110,6 +112,9 @@ export class GrainPurchaseEntrySnapshotRecord {
   payType = "";
   entryStatus = "";
   entryRemark = "";
+  materialCount = 0;
+  materialDigest = "";
+  materialSummary = "";
   createdTime?: string;
   updatedTime?: string;
   [key: string]: unknown;
@@ -242,6 +247,7 @@ export class GrainStationExtraRecord {
   bankAccountNumber = "";
   businessLicenseUrl = "";
   businessLicenseKey = "";
+  businessLicenseUpdatedAt = 0;
 }
 
 export type GrainPayload = Record<string, unknown>;
@@ -288,29 +294,64 @@ export const grainEntryMaterialApi = {
       })),
     };
   },
+  upload: async (file: File, params: { entryId: number; farmerId: number; stationId: number }) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("entryId", String(params.entryId));
+    formData.append("farmerId", String(params.farmerId));
+    formData.append("stationId", String(params.stationId));
+    const response = await instance.post<ApiResponse<GrainEntryMaterialRecord>>(
+      "/file/grain-entry-materials/upload",
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return unwrapApiResponse(response.data);
+  },
+  delete: async (id: number) => {
+    const response = await instance.delete<ApiResponse<void>>(`/grain-entry-materials/${id}`);
+    return unwrapApiResponse(response.data);
+  },
 };
 export const grainPurchaseTypeApi = crudApi(GrainPurchaseTypeRecord, "/grain-purchase-types");
 export const grainPaymentMethodApi = crudApi(GrainPaymentMethodRecord, "/grain-payment-methods");
 export const grainPurchasePlaceApi = crudApi(GrainPurchasePlaceRecord, "/grain-purchase-places");
 
+export async function listAllGrainPurchaseTypes(query: CrudListQuery = {}) {
+  const pageSize = 200;
+  const records: GrainPurchaseTypeRecord[] = [];
+  let pageIndex = 1;
+  let total = 0;
+
+  do {
+    const page = await grainPurchaseTypeApi.list({ ...query, pageIndex, pageSize });
+    records.push(...page.data);
+    total = page.total;
+    pageIndex += 1;
+  } while (records.length < total);
+
+  return records;
+}
+
 export async function getStationExtra(stationId: number) {
-  return getData(GrainStationExtraRecord, `/grain-stations/${stationId}/extra`);
+  const data = await getData(GrainStationExtraRecord, `/grain-stations/${stationId}/extra`);
+  return normalizeStationExtra(data);
 }
 
 export async function saveStationExtra(stationId: number, payload: Partial<GrainStationExtraRecord>) {
   const response = await instance.put<ApiResponse<GrainStationExtraRecord>>(`/grain-stations/${stationId}/extra`, payload);
-  return unwrapApiResponse(response.data);
+  return normalizeStationExtra(unwrapApiResponse(response.data));
 }
 
 export async function uploadBusinessLicense(stationId: number, file: File) {
   const formData = new FormData();
   formData.append("file", file);
+  // 走 /file/ 代理路由（bodyParser: false + 10mb 限制），转发时自动去掉 /file 前缀
   const response = await instance.post<ApiResponse<GrainStationExtraRecord>>(
-    `/grain-stations/${stationId}/extra/business-license`,
+    `/file/grain-stations/${stationId}/extra/business-license`,
     formData,
     { headers: { "Content-Type": "multipart/form-data" } },
   );
-  return unwrapApiResponse(response.data);
+  return normalizeStationExtra(unwrapApiResponse(response.data));
 }
 
 export async function voidGrainPurchaseEntry(id: number) {
@@ -353,6 +394,24 @@ function imageApiUrl(path: string) {
   }
   const query = params.toString();
   return withBasePath(`/api${rawPath.startsWith("/") ? rawPath : `/${rawPath}`}${query ? `?${query}` : ""}`);
+}
+
+function normalizeStationExtra(extra: GrainStationExtraRecord) {
+  return {
+    ...extra,
+    businessLicenseUrl: imageApiUrl(withBusinessLicenseTimestamp(extra.businessLicenseUrl, extra.businessLicenseUpdatedAt)),
+  };
+}
+
+function withBusinessLicenseTimestamp(path: string, timestamp: number) {
+  if (!path || !timestamp || /^https?:\/\//i.test(path) || path.startsWith("data:") || path.startsWith("blob:")) {
+    return path;
+  }
+  const [rawPath, rawQuery = ""] = path.split("?");
+  const params = new URLSearchParams(rawQuery);
+  params.set("t", String(timestamp));
+  const query = params.toString();
+  return `${rawPath}${query ? `?${query}` : ""}`;
 }
 
 export async function recognizeGrainCard(

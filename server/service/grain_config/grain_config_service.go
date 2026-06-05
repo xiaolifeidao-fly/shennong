@@ -3,7 +3,11 @@ package grain_config
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"common/middleware/storage/oss"
 	"fmt"
+	"mime"
+	"net/url"
+	"path/filepath"
 	grainConfigDTO "service/grain_config/dto"
 	grainConfigRepository "service/grain_config/repository"
 	tenantRepository "service/tenant/repository"
@@ -21,6 +25,12 @@ type GrainConfigService struct {
 	purchaseTypeRepository  *grainConfigRepository.GrainPurchaseTypeRepository
 	paymentMethodRepository *grainConfigRepository.GrainPaymentMethodRepository
 	purchasePlaceRepository *grainConfigRepository.GrainPurchasePlaceRepository
+}
+
+type BusinessLicenseContent struct {
+	StationID uint64
+	Data      []byte
+	MimeType  string
 }
 
 func NewGrainConfigService() *GrainConfigService {
@@ -87,7 +97,7 @@ func (s *GrainConfigService) GetStationDetail(stationID uint64) (*grainConfigDTO
 	}
 	extra, err := s.stationExtraRepository.FindByStationID(stationID)
 	if err == nil && extra != nil {
-		detail.BusinessLicenseUrl = extra.BusinessLicenseUrl
+		detail.BusinessLicenseUrl = businessLicensePath(stationID, extra.BusinessLicenseKey, extra.BusinessLicenseUrl, extra.UpdatedTime)
 	} else if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
@@ -110,12 +120,13 @@ func (s *GrainConfigService) GetStationExtra(stationID uint64) (*grainConfigDTO.
 		return nil, err
 	}
 	return &grainConfigDTO.GrainStationExtraDTO{
-		StationID:          entity.StationID,
-		AccountHolderName:  entity.AccountHolderName,
-		BankName:           entity.BankName,
-		BankAccountNumber:  entity.BankAccountNumber,
-		BusinessLicenseUrl: entity.BusinessLicenseUrl,
-		BusinessLicenseKey: entity.BusinessLicenseKey,
+		StationID:                entity.StationID,
+		AccountHolderName:        entity.AccountHolderName,
+		BankName:                 entity.BankName,
+		BankAccountNumber:        entity.BankAccountNumber,
+		BusinessLicenseUrl:       businessLicensePath(entity.StationID, entity.BusinessLicenseKey, entity.BusinessLicenseUrl, entity.UpdatedTime),
+		BusinessLicenseKey:       entity.BusinessLicenseKey,
+		BusinessLicenseUpdatedAt: businessLicenseUpdatedAt(entity.UpdatedTime),
 	}, nil
 }
 
@@ -133,12 +144,49 @@ func (s *GrainConfigService) SaveStationExtra(stationID uint64, req *grainConfig
 		return nil, err
 	}
 	return &grainConfigDTO.GrainStationExtraDTO{
-		StationID:          result.StationID,
-		AccountHolderName:  result.AccountHolderName,
-		BankName:           result.BankName,
-		BankAccountNumber:  result.BankAccountNumber,
-		BusinessLicenseUrl: result.BusinessLicenseUrl,
-		BusinessLicenseKey: result.BusinessLicenseKey,
+		StationID:                result.StationID,
+		AccountHolderName:        result.AccountHolderName,
+		BankName:                 result.BankName,
+		BankAccountNumber:        result.BankAccountNumber,
+		BusinessLicenseUrl:       businessLicensePath(result.StationID, result.BusinessLicenseKey, result.BusinessLicenseUrl, result.UpdatedTime),
+		BusinessLicenseKey:       result.BusinessLicenseKey,
+		BusinessLicenseUpdatedAt: businessLicenseUpdatedAt(result.UpdatedTime),
+	}, nil
+}
+
+func (s *GrainConfigService) SaveBusinessLicense(stationID uint64, businessLicenseURL, businessLicenseKey string) (*grainConfigDTO.GrainStationExtraDTO, error) {
+	req := &grainConfigDTO.GrainStationExtraDTO{
+		StationID:          stationID,
+		BusinessLicenseUrl: strings.TrimSpace(businessLicenseURL),
+		BusinessLicenseKey: strings.TrimSpace(businessLicenseKey),
+	}
+	existing, err := s.stationExtraRepository.FindByStationID(stationID)
+	if err == nil && existing != nil {
+		req.AccountHolderName = existing.AccountHolderName
+		req.BankName = existing.BankName
+		req.BankAccountNumber = existing.BankAccountNumber
+	} else if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	return s.SaveStationExtra(stationID, req)
+}
+
+func (s *GrainConfigService) GetBusinessLicenseContent(stationID uint64) (*BusinessLicenseContent, error) {
+	entity, err := s.stationExtraRepository.FindByStationID(stationID)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	data, err := getOssObject(entity.BusinessLicenseKey, entity.BusinessLicenseUrl)
+	if err != nil {
+		return nil, err
+	}
+	return &BusinessLicenseContent{
+		StationID: stationID,
+		Data:      data,
+		MimeType:  detectBusinessLicenseMimeType(data, entity.BusinessLicenseKey, entity.BusinessLicenseUrl),
 	}, nil
 }
 
@@ -468,4 +516,62 @@ func trimPaymentMethod(entity *grainConfigRepository.GrainPaymentMethod) {
 
 func generatePaymentMethodCode() string {
 	return fmt.Sprintf("PM%d", time.Now().UnixNano())
+}
+
+func businessLicensePath(stationID uint64, ossObjectKey, fallbackURL string, updatedTime time.Time) string {
+	if strings.TrimSpace(ossObjectKey) == "" && strings.TrimSpace(fallbackURL) == "" {
+		return ""
+	}
+	return fmt.Sprintf("/grain-stations/%d/extra/business-license", stationID)
+}
+
+func businessLicenseUpdatedAt(updatedTime time.Time) int64 {
+	if updatedTime.IsZero() {
+		return 0
+	}
+	return updatedTime.UnixMilli()
+}
+
+func getOssObject(ossObjectKey, fallbackURL string) ([]byte, error) {
+	key := strings.TrimSpace(ossObjectKey)
+	if key == "" {
+		key = parseOssKeyFromURL(fallbackURL)
+	}
+	if key == "" {
+		return nil, fmt.Errorf("oss object key is empty")
+	}
+	if data, err := oss.GetByKey(key); err == nil {
+		return data, nil
+	}
+	return oss.Get(key)
+}
+
+func parseOssKeyFromURL(rawURL string) string {
+	parsedURL, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsedURL.Path == "" {
+		return ""
+	}
+	return strings.TrimLeft(parsedURL.Path, "/")
+}
+
+func detectBusinessLicenseMimeType(data []byte, objectKey, fallbackURL string) string {
+	name := strings.TrimSpace(objectKey)
+	if name == "" {
+		name = parseOssKeyFromURL(fallbackURL)
+	}
+	if ext := strings.ToLower(filepath.Ext(name)); ext != "" {
+		if mimeType := mime.TypeByExtension(ext); mimeType != "" {
+			return mimeType
+		}
+	}
+	if len(data) >= 4 && data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46 {
+		return "application/pdf"
+	}
+	if len(data) >= 3 && data[0] == 0xff && data[1] == 0xd8 && data[2] == 0xff {
+		return "image/jpeg"
+	}
+	if len(data) >= 8 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4e && data[3] == 0x47 {
+		return "image/png"
+	}
+	return "application/octet-stream"
 }

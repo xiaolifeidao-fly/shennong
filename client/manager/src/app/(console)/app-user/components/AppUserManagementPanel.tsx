@@ -247,7 +247,16 @@ export function AppUserManagementPanel() {
         createText="新增业务员"
         searchPlaceholder="用户名"
         searchParam="search"
-        extraFilters={[{ param: "name", placeholder: "业务员姓名" }]}
+        extraFilters={[
+          { param: "name", placeholder: "业务员姓名" },
+          {
+            param: "stationId",
+            placeholder: "粮站",
+            type: "select",
+            options: stationOptions,
+            width: 220,
+          },
+        ]}
         fields={fields}
         columns={columns}
         statusField="status"

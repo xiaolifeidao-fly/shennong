@@ -55,6 +55,19 @@
     <view class="field">
       <textarea v-model="model.address" class="textarea" placeholder="身份证住址" />
     </view>
+    <view v-if="idCardFrontUrl || idCardBackUrl" class="field">
+      <text class="label">身份证照片</text>
+      <view class="card-image-row">
+        <view v-if="idCardFrontUrl" class="card-image-cell">
+          <image class="card-image" :src="idCardFrontUrl" mode="aspectFill" @click="previewCardImage(idCardFrontUrl)" />
+          <text class="card-image-label">身份证正面</text>
+        </view>
+        <view v-if="idCardBackUrl" class="card-image-cell">
+          <image class="card-image" :src="idCardBackUrl" mode="aspectFill" @click="previewCardImage(idCardBackUrl)" />
+          <text class="card-image-label">身份证背面</text>
+        </view>
+      </view>
+    </view>
 
     <view class="field">
       <text class="label">付款方式</text>
@@ -76,6 +89,15 @@
     <view class="field">
       <text class="label">{{ accountLabel }}</text>
       <input v-model="model.bankNumber" class="input" :placeholder="accountPlaceholder" />
+    </view>
+    <view v-if="bankCardUrl" class="field">
+      <text class="label">银行卡照片</text>
+      <view class="card-image-row single">
+        <view class="card-image-cell">
+          <image class="card-image" :src="bankCardUrl" mode="aspectFill" @click="previewCardImage(bankCardUrl)" />
+          <text class="card-image-label">银行卡</text>
+        </view>
+      </view>
     </view>
     <view class="field last">
       <text class="label required">农户电话</text>
@@ -137,6 +159,9 @@ const selectedPaymentMethod = computed(() =>
   props.preset.paymentMethods.find((item) => item.id === model.value.paymentMethodId) ||
   props.preset.paymentMethods.find((item) => item.methodName === model.value.payType),
 )
+const idCardFrontUrl = computed(() => model.value.cardImages?.idCardFront?.ossUrl || '')
+const idCardBackUrl = computed(() => model.value.cardImages?.idCardBack?.ossUrl || '')
+const bankCardUrl = computed(() => model.value.cardImages?.bankCard?.ossUrl || '')
 const paymentMethodCode = computed(() => model.value.paymentMethodCode || selectedPaymentMethod.value?.methodCode || '')
 const isBankPayment = computed(() => paymentMethodCode.value === 'Bank')
 const accountLabel = computed(() => (paymentMethodCode.value === 'Bank' ? '银行卡号' : '收款账号'))
@@ -184,6 +209,11 @@ function handlePhoneInput(event: unknown) {
   const digits = raw.replace(/\D/g, '').slice(0, 11)
   model.value.phone = digits
 }
+
+function previewCardImage(current: string) {
+  const urls = [idCardFrontUrl.value, idCardBackUrl.value, bankCardUrl.value].filter(Boolean)
+  uni.previewImage({ current, urls })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -203,6 +233,44 @@ function handlePhoneInput(event: unknown) {
   color: #35513b;
   font-size: 24rpx;
   line-height: 1.5;
+}
+
+.card-image-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.card-image-row.single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 320rpx;
+}
+
+.card-image-cell {
+  position: relative;
+  overflow: hidden;
+  min-height: 176rpx;
+  border: 1rpx solid #e2e8dd;
+  border-radius: 18rpx;
+  background: #f7faf5;
+}
+
+.card-image {
+  display: block;
+  width: 100%;
+  height: 176rpx;
+}
+
+.card-image-label {
+  position: absolute;
+  left: 12rpx;
+  bottom: 12rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(23, 32, 24, 0.72);
+  color: #ffffff;
+  font-size: 22rpx;
+  line-height: 1.2;
 }
 
 .icon {
