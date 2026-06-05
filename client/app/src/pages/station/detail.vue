@@ -32,23 +32,6 @@
         </view>
       </view>
 
-      <view class="section-card">
-        <text class="section-title">营业执照</text>
-        <view v-if="station.businessLicenseUrl && businessLicenseImage" class="license-wrap">
-          <image
-            :src="businessLicenseImage"
-            class="license-img"
-            mode="widthFix"
-            @click="previewLicense"
-          />
-        </view>
-        <view v-else-if="station.businessLicenseUrl" class="img-placeholder">
-          <text>营业执照加载中...</text>
-        </view>
-        <view v-else class="img-placeholder">
-          <text>未上传营业执照</text>
-        </view>
-      </view>
     </template>
   </view>
 </template>
@@ -60,7 +43,6 @@ import { getMyGrainStationDetail } from '@/services/grainConfig'
 import type { GrainStationDetail } from '@/types/grain'
 
 const station = ref<GrainStationDetail | null>(null)
-const businessLicenseImage = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -92,7 +74,6 @@ async function loadDetail() {
   try {
     const detail = await getMyGrainStationDetail()
     station.value = detail
-    businessLicenseImage.value = detail.wxCloudUrl || ''
   } catch (error) {
     const message = error instanceof Error ? error.message : '获取粮站信息失败'
     errorMessage.value = message
@@ -102,11 +83,6 @@ async function loadDetail() {
   }
 }
 
-function previewLicense() {
-  const url = businessLicenseImage.value
-  if (!url) return
-  uni.previewImage({ urls: [url], current: url })
-}
 </script>
 
 <style lang="scss" scoped>
@@ -191,25 +167,4 @@ function previewLicense() {
   word-break: break-all;
 }
 
-.license-wrap {
-  width: 100%;
-  border-radius: 16rpx;
-  overflow: hidden;
-  background: #f5f7f3;
-}
-
-.license-img {
-  width: 100%;
-}
-
-.img-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 240rpx;
-  border-radius: 16rpx;
-  background: #f5f7f3;
-  color: #9ca3af;
-  font-size: 26rpx;
-}
 </style>
