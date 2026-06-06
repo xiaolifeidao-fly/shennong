@@ -39,12 +39,8 @@
             :loading="wechatSubmitting"
             @getphonenumber="handleWechatPhoneLogin"
           >
-            微信手机号一键登录
+            手机号快捷登录
           </button>
-        </view>
-
-        <view class="login-tip">
-          <text>首次使用建议通过微信手机号登录，后续可在“我的”中完善资料。</text>
         </view>
       </view>
     </view>

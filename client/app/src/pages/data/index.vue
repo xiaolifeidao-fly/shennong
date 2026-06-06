@@ -13,7 +13,7 @@
 
     <!-- 时间段选择 -->
     <view class="section-gap">
-      <PeriodTab v-model="period" @update:model-value="onPeriodChange" />
+      <PeriodTab v-model="period" />
     </view>
 
     <!-- 自定义日期选择器 -->
@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import PeriodTab from './components/PeriodTab.vue'
 import DataMetricGrid from './components/DataMetricGrid.vue'
@@ -148,11 +148,11 @@ async function load() {
   }
 }
 
-function onPeriodChange(val: PeriodValue) {
+watch(period, (val) => {
   if (val !== 'custom') {
     void load()
   }
-}
+})
 
 function pickDate(target: 'start' | 'end') {
   pickerTarget.value = target

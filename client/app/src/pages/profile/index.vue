@@ -17,7 +17,7 @@
       </button>
 
       <view class="field">
-        <text class="label">微信昵称</text>
+        <text class="label">昵称</text>
         <input v-model="form.wxNickname" class="input" type="nickname" placeholder="点击选择或输入昵称" />
       </view>
 
