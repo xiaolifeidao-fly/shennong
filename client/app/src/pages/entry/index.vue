@@ -17,8 +17,10 @@
       <FarmerIdentityForm
         v-model="draft"
         :farmers="grainStore.farmers"
+        :farmer-searching="grainStore.farmersLoading"
         :preset="grainStore.preset"
         @farmer-change="handleFarmerChange"
+        @farmer-search="handleFarmerSearch"
         @scan-id-front="applyIdScan"
         @scan-bank="applyBankScan"
       />
@@ -49,7 +51,7 @@ const hasInitializedDraft = ref(false)
 const saving = ref(false)
 
 onShow(async () => {
-  await Promise.all([grainStore.loadPreset(), grainStore.loadFarmers()])
+  await Promise.all([grainStore.loadPreset(), grainStore.loadFarmers(false, 20)])
   if (!hasInitializedDraft.value) {
     draft.value = grainStore.createEntryDraft()
     hasInitializedDraft.value = true
@@ -66,6 +68,10 @@ watch(
 function handleFarmerChange(farmerId: string) {
   grainStore.selectFarmer(farmerId)
   draft.value = grainStore.createEntryDraft(farmerId)
+}
+
+async function handleFarmerSearch(keyword: string) {
+  await grainStore.searchFarmers(keyword)
 }
 
 function confirmClearForm() {

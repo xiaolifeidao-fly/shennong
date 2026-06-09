@@ -23,20 +23,23 @@
         <text>{{ selectedFarmerText }}</text>
       </view>
       <scroll-view v-if="showFarmerResults" class="farmer-results" scroll-y>
-        <button
-          v-for="farmer in filteredFarmers"
-          :key="farmer.id"
-          class="farmer-option"
-          :class="{ active: farmer.id === model.farmerId }"
-          @click="selectFarmer(farmer.id)"
-        >
-          <view>
-            <text class="farmer-name">{{ farmer.name }}</text>
-            <text class="farmer-meta">{{ farmerMeta(farmer) }}</text>
-          </view>
-          <text class="farmer-status">{{ farmer.statusText || '已建档' }}</text>
-        </button>
-        <view v-if="!filteredFarmers.length" class="empty-result">没有匹配农户，可点“新农户”建档</view>
+        <view v-if="farmerSearching" class="empty-result">正在搜索农户...</view>
+        <template v-else>
+          <button
+            v-for="farmer in filteredFarmers"
+            :key="farmer.id"
+            class="farmer-option"
+            :class="{ active: farmer.id === model.farmerId }"
+            @click="selectFarmer(farmer.id)"
+          >
+            <view>
+              <text class="farmer-name">{{ farmer.name }}</text>
+              <text class="farmer-meta">{{ farmerMeta(farmer) }}</text>
+            </view>
+            <text class="farmer-status">{{ farmer.statusText || '已建档' }}</text>
+          </button>
+        </template>
+        <view v-if="!farmerSearching && !filteredFarmers.length" class="empty-result">没有匹配农户，可点“新农户”建档</view>
       </scroll-view>
     </view>
 
@@ -124,12 +127,14 @@ import { maskIdNumber, maskPhone } from '@/utils/privacy'
 const props = defineProps<{
   modelValue: GrainEntryDraft
   farmers: FarmerProfile[]
+  farmerSearching?: boolean
   preset: GrainPreset
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: GrainEntryDraft]
   'farmer-change': [farmerId: string]
+  'farmer-search': [keyword: string]
   'scan-id-front': []
   'scan-bank': []
 }>()
@@ -153,7 +158,7 @@ const filteredFarmers = computed(() => {
   const key = farmerKeyword.value.trim()
   const source = key
     ? props.farmers.filter((farmer) =>
-        [farmer.name, farmer.phone, farmer.idNumber, farmer.address].some((value) => value?.includes(key)),
+        [farmer.name, farmer.phone, farmer.idNumber, farmer.address, farmer.bankName, farmer.bankNumber, farmer.statusText].some((value) => value?.includes(key)),
       )
     : props.farmers
   return source.slice(0, 8)
@@ -205,6 +210,7 @@ function handleFarmerInput() {
 
 function handleFarmerSearch() {
   showFarmerResults.value = true
+  emit('farmer-search', farmerKeyword.value)
 }
 
 function farmerMeta(farmer: FarmerProfile) {

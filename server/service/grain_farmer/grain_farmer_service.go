@@ -289,7 +289,7 @@ func filterFarmerListRows(rows []*grainFarmerRepository.GrainFarmerListRow, quer
 		if row == nil {
 			continue
 		}
-		if search != "" && !FarmerProfileMatchesKeyword(row.Name, row.IDNumber, row.Phone, search) {
+		if search != "" && !farmerListRowMatchesKeyword(row, search) {
 			continue
 		}
 		if name != "" && !FarmerNameMatches(row.Name, name) {
@@ -298,4 +298,16 @@ func filterFarmerListRows(rows []*grainFarmerRepository.GrainFarmerListRow, quer
 		filtered = append(filtered, row)
 	}
 	return filtered
+}
+
+func farmerListRowMatchesKeyword(row *grainFarmerRepository.GrainFarmerListRow, keyword string) bool {
+	if FarmerProfileMatchesKeyword(row.Name, row.IDNumber, row.Phone, keyword) {
+		return true
+	}
+	keyword = strings.TrimSpace(keyword)
+	return strings.Contains(row.Address, keyword) ||
+		strings.Contains(row.BankNumber, keyword) ||
+		strings.Contains(row.BankName, keyword) ||
+		strings.Contains(row.StatusText, keyword) ||
+		strings.Contains(row.Remark, keyword)
 }

@@ -502,14 +502,14 @@ export const useGrainStore = defineStore('grain', {
         this.presetLoading = false
       }
     },
-    async loadFarmers(force = false) {
+    async loadFarmers(force = false, pageSize = 200) {
       if (this.farmersLoading || (this.farmersLoaded && !force)) {
         return
       }
       this.farmersLoading = true
       try {
         await this.ensureUserAndStation()
-        const farmerPage = await listGrainFarmers({ pageIndex: 1, pageSize: 200 })
+        const farmerPage = await listGrainFarmers({ pageIndex: 1, pageSize })
         this.farmers = pageItems(farmerPage).map(toFarmerProfile)
         if (this.selectedFarmerId !== 'new' && !this.farmers.some((item) => item.id === this.selectedFarmerId)) {
           this.selectedFarmerId = this.farmers[0]?.id || 'new'
@@ -517,6 +517,29 @@ export const useGrainStore = defineStore('grain', {
         this.farmersLoaded = true
       } catch (error) {
         uni.showToast({ title: error instanceof Error ? error.message : '农户加载失败', icon: 'none' })
+      } finally {
+        this.farmersLoading = false
+      }
+    },
+    async searchFarmers(search: string) {
+      const keyword = search.trim()
+      if (!keyword) {
+        await this.loadFarmers()
+        return this.farmers.slice(0, 8)
+      }
+
+      this.farmersLoading = true
+      try {
+        await this.ensureUserAndStation()
+        const farmerPage = await listGrainFarmers({ pageIndex: 1, pageSize: 20, search: keyword })
+        const nextFarmers = pageItems(farmerPage).map(toFarmerProfile)
+        const farmerMap = new Map(this.farmers.map((farmer) => [farmer.id, farmer]))
+        nextFarmers.forEach((farmer) => farmerMap.set(farmer.id, farmer))
+        this.farmers = Array.from(farmerMap.values())
+        return nextFarmers
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '农户搜索失败', icon: 'none' })
+        return []
       } finally {
         this.farmersLoading = false
       }

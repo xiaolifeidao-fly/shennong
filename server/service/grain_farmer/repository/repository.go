@@ -137,8 +137,8 @@ func applyFarmerQuery(dbQuery *gorm.DB, query grainFarmerDTO.GrainFarmerQueryDTO
 
 func farmerSensitiveSearchClauses(tableAlias, rawValue, idDigest, idLast4Digest, nameDigest, namePrefixCode string) ([]string, []interface{}) {
 	value := strings.TrimSpace(rawValue)
-	clauses := make([]string, 0, 5)
-	values := make([]interface{}, 0, 5)
+	clauses := make([]string, 0, 9)
+	values := make([]interface{}, 0, 9)
 	if value == "" {
 		return clauses, values
 	}
@@ -160,6 +160,11 @@ func farmerSensitiveSearchClauses(tableAlias, rawValue, idDigest, idLast4Digest,
 	}
 	clauses = append(clauses, columnName(tableAlias, "phone")+" = ?")
 	values = append(values, value)
+	likeValue := "%" + value + "%"
+	for _, column := range []string{"address", "bank_number", "bank_name", "status_text", "remark"} {
+		clauses = append(clauses, columnName(tableAlias, column)+" LIKE ?")
+		values = append(values, likeValue)
+	}
 	return clauses, values
 }
 
