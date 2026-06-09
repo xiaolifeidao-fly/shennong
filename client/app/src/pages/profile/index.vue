@@ -2,7 +2,7 @@
   <view class="page profile-page">
     <view class="header">
       <text class="title">个人信息</text>
-      <text class="subtitle">可修改昵称、头像、姓名和手机号。</text>
+      <text class="subtitle">可修改昵称、头像、身份证姓名、身份证号和手机号。</text>
     </view>
 
     <view class="card profile-card">
@@ -22,8 +22,13 @@
       </view>
 
       <view class="field">
-        <text class="label">姓名</text>
-        <input v-model="form.name" class="input" placeholder="业务员姓名" />
+        <text class="label">身份证姓名</text>
+        <input v-model="form.name" class="input" placeholder="请输入身份证姓名" />
+      </view>
+
+      <view class="field">
+        <text class="label">身份证号</text>
+        <input v-model="form.idNumber" class="input" maxlength="18" placeholder="请输入身份证号码" />
       </view>
 
       <view class="field">
@@ -72,6 +77,7 @@ const userStore = useUserStore()
 const submitting = ref(false)
 const form = reactive({
   name: '',
+  idNumber: '',
   wxNickname: '',
   wxAvatar: '',
   phone: '',
@@ -80,6 +86,7 @@ const form = reactive({
 onShow(() => {
   const profile = userStore.profile
   form.name = profile?.name || ''
+  form.idNumber = profile?.idNumber || ''
   form.wxNickname = profile?.wxNickname || ''
   form.wxAvatar = profile?.wxAvatar || ''
   form.phone = profile?.phone || ''
@@ -112,18 +119,27 @@ async function handleGetPhoneNumber(event: GetPhoneNumberEvent) {
 }
 
 async function saveProfile() {
-  if (!form.wxNickname && !form.name) {
-    uni.showToast({ title: '请填写昵称或姓名', icon: 'none' })
+  const name = form.name.trim()
+  const idNumber = form.idNumber.trim().toUpperCase()
+  const wxNickname = form.wxNickname.trim()
+
+  if (!wxNickname && !name) {
+    uni.showToast({ title: '请填写昵称或身份证姓名', icon: 'none' })
+    return
+  }
+  if (idNumber && !isValidIDNumber(idNumber)) {
+    uni.showToast({ title: '请输入正确的身份证号码', icon: 'none' })
     return
   }
 
   submitting.value = true
   try {
-    const name = form.name || form.wxNickname
+    const displayName = name || wxNickname
     await userStore.updateProfile({
-      name,
+      name: displayName,
+      idNumber,
       phone: form.phone,
-      wxNickname: form.wxNickname || name,
+      wxNickname: wxNickname || displayName,
       wxAvatar: form.wxAvatar,
     })
     uni.showToast({ title: '资料已保存', icon: 'success' })
@@ -140,6 +156,10 @@ async function saveProfile() {
 
 function goMine() {
   uni.switchTab({ url: '/pages/mine/index' })
+}
+
+function isValidIDNumber(value: string) {
+  return /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])([0-2]\d|3[01])\d{3}[\dX]$/.test(value)
 }
 </script>
 

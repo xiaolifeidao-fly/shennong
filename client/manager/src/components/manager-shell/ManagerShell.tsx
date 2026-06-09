@@ -20,6 +20,7 @@ import {
 import {
   Avatar,
   Button,
+  Drawer,
   Dropdown,
   Form,
   Grid,
@@ -232,7 +233,9 @@ export function ManagerShell({ children }: ManagerShellProps) {
   const screens = useBreakpoint();
   const activePath = withoutBasePath(pathname ?? "/manager-dashboard");
   const [openKeys, setOpenKeys] = useState<string[]>([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [messageApi, contextHolder] = message.useMessage();
   const [profileForm] = Form.useForm<ProfileFormValues>();
   const [passwordForm] = Form.useForm<PasswordFormValues>();
@@ -404,96 +407,199 @@ export function ManagerShell({ children }: ManagerShellProps) {
     Object.entries(fallbackPageTitleMap).find(([path]) => activePath.startsWith(path))?.[1] ||
     "管理工作台";
 
+  // mounted 后才用真实断点，避免 SSR 时 screens 为空导致判断错误
+  const isMobile = mounted && !screens.md;
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    if (typeof key === "string" && permittedUrls.has(key)) {
+      router.push(key);
+      if (isMobile) {
+        setCollapsed(true);
+      }
+    }
+  };
+
+  // 账号下拉菜单（PC 和移动端共用）
+  const accountDropdownItems = [
+    { key: "profile", icon: <UserOutlined />, label: "个人信息" },
+    { key: "password", icon: <LockOutlined />, label: "修改密码" },
+    { type: "divider" as const },
+    { key: "logout", icon: <LogoutOutlined />, label: "退出登录" },
+  ];
+
+  const handleAccountMenu = ({ key }: { key: string }) => {
+    if (key === "profile") openProfileModal();
+    if (key === "password") openPasswordModal();
+    if (key === "logout") handleLogout();
+  };
+
   return (
     <div className="manager-app-frame">
       {contextHolder}
-      <div className={`manager-shell-surface ${collapsed ? "manager-shell-surface-collapsed" : ""}`}>
-        <Layout
-          style={{
-            minHeight: "100vh",
-            background: "transparent",
+
+      {/* ===== 移动端：导航 Drawer ===== */}
+      {isMobile && (
+        <Drawer
+          open={!collapsed}
+          onClose={() => setCollapsed(true)}
+          placement="left"
+          width={272}
+          styles={{
+            header: { display: "none" },
+            body: { padding: 0, background: "#10251a" },
+            wrapper: { boxShadow: "4px 0 24px rgba(0,0,0,0.28)" },
           }}
+          style={{ background: "#10251a" }}
         >
-          <Sider
-            width={248}
-            collapsedWidth={screens.md ? 82 : 0}
-            collapsible
-            collapsed={collapsed}
-            trigger={null}
+          <div
+            className="manager-sidebar-card"
             style={{
-              background: "transparent",
+              height: "100%",
+              padding: "20px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
             }}
           >
-            <div
-              className="manager-sidebar-card manager-stagger-1"
-              style={{
-                height: "100%",
-                padding: "20px 14px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 14,
-              }}
-            >
-              <div className="manager-sidebar-brand">
-                <Space align="center" size={12}>
-                  <div className="manager-product-logo" aria-hidden="true">
-                    <span />
-                    <i />
-                  </div>
-                  <div className="manager-wordmark manager-collapse-hidden">
-                    <strong style={{ color: "#fff" }}>收粮管理端</strong>
-                    <span style={{ color: "rgba(255,255,255,0.66)" }}>Shennong Admin</span>
-                  </div>
-                </Space>
-                <Tag bordered={false} className="manager-sidebar-env manager-collapse-hidden">
-                  运营后台
-                </Tag>
-              </div>
+            {/* 品牌 + 关闭 */}
+            <div className="manager-sidebar-brand">
+              <Space align="center" size={12}>
+                <div className="manager-product-logo" aria-hidden="true">
+                  <span />
+                  <i />
+                </div>
+                <div className="manager-wordmark">
+                  <strong style={{ color: "#fff" }}>收粮管理端</strong>
+                  <span style={{ color: "rgba(255,255,255,0.66)" }}>Shennong Admin</span>
+                </div>
+              </Space>
+              <Button
+                type="text"
+                icon={<MenuFoldOutlined />}
+                className="manager-sidebar-close-btn"
+                onClick={() => setCollapsed(true)}
+              />
+            </div>
 
-              {menuLoading ? (
-                <div className="manager-menu-loading" aria-label="菜单加载中" aria-busy="true">
-                  {menuLoadingRows.map((row, index) => (
-                    <div
-                      className="manager-menu-loading-row"
-                      key={row.key}
-                      style={{ animationDelay: `${index * 70}ms` }}
-                    >
-                      <span />
-                      <i style={{ width: row.width }} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Menu
-                  className="manager-shell-menu"
-                  mode="inline"
-                  selectedKeys={[selectedKey]}
-                  openKeys={openKeys}
-                  onOpenChange={(keys) => setOpenKeys(keys as string[])}
-                  items={menuItems}
-                  onClick={({ key }) => {
-                    if (typeof key === "string" && permittedUrls.has(key)) {
-                      router.push(key);
-                    }
-                  }}
-                  style={{
-                    fontSize: 15,
-                    marginTop: 2,
-                  }}
-                />
-              )}
-              <div className="manager-sidebar-foot">
-                <div className="manager-sidebar-status-icon">
-                  <SettingOutlined />
-                </div>
-                <div className="manager-collapse-hidden">
-                  <span>当前模块</span>
-                  <strong>{currentModule}</strong>
-                  <Tag bordered={false}>角色权限</Tag>
-                </div>
+            {/* 菜单 */}
+            {menuLoading ? (
+              <div className="manager-menu-loading" aria-label="菜单加载中" aria-busy="true">
+                {menuLoadingRows.map((row, index) => (
+                  <div
+                    className="manager-menu-loading-row"
+                    key={row.key}
+                    style={{ animationDelay: `${index * 70}ms` }}
+                  >
+                    <span />
+                    <i style={{ width: row.width }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Menu
+                className="manager-shell-menu"
+                mode="inline"
+                selectedKeys={[selectedKey]}
+                openKeys={openKeys}
+                onOpenChange={(keys) => setOpenKeys(keys as string[])}
+                items={menuItems}
+                onClick={handleMenuClick}
+                style={{ fontSize: 15, marginTop: 2 }}
+              />
+            )}
+
+            {/* 底部状态 */}
+            <div className="manager-sidebar-foot">
+              <div className="manager-sidebar-status-icon">
+                <SettingOutlined />
+              </div>
+              <div>
+                <span>当前模块</span>
+                <strong>{currentModule}</strong>
               </div>
             </div>
-          </Sider>
+          </div>
+        </Drawer>
+      )}
+
+      <div className={`manager-shell-surface ${collapsed ? "manager-shell-surface-collapsed" : ""}`}>
+        <Layout style={{ minHeight: "100vh", background: "transparent" }}>
+
+          {/* ===== PC 端 Sider ===== */}
+          {!isMobile && (
+            <Sider
+              width={248}
+              collapsedWidth={82}
+              collapsible
+              collapsed={collapsed}
+              trigger={null}
+              style={{ background: "transparent" }}
+            >
+              <div
+                className="manager-sidebar-card manager-stagger-1"
+                style={{
+                  height: "100%",
+                  padding: "20px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                }}
+              >
+                <div className="manager-sidebar-brand">
+                  <Space align="center" size={12}>
+                    <div className="manager-product-logo" aria-hidden="true">
+                      <span />
+                      <i />
+                    </div>
+                    <div className="manager-wordmark manager-collapse-hidden">
+                      <strong style={{ color: "#fff" }}>收粮管理端</strong>
+                      <span style={{ color: "rgba(255,255,255,0.66)" }}>Shennong Admin</span>
+                    </div>
+                  </Space>
+                  <Tag bordered={false} className="manager-sidebar-env manager-collapse-hidden">
+                    运营后台
+                  </Tag>
+                </div>
+
+                {menuLoading ? (
+                  <div className="manager-menu-loading" aria-label="菜单加载中" aria-busy="true">
+                    {menuLoadingRows.map((row, index) => (
+                      <div
+                        className="manager-menu-loading-row"
+                        key={row.key}
+                        style={{ animationDelay: `${index * 70}ms` }}
+                      >
+                        <span />
+                        <i style={{ width: row.width }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Menu
+                    className="manager-shell-menu"
+                    mode="inline"
+                    selectedKeys={[selectedKey]}
+                    openKeys={openKeys}
+                    onOpenChange={(keys) => setOpenKeys(keys as string[])}
+                    items={menuItems}
+                    onClick={handleMenuClick}
+                    style={{ fontSize: 15, marginTop: 2 }}
+                  />
+                )}
+
+                <div className="manager-sidebar-foot">
+                  <div className="manager-sidebar-status-icon">
+                    <SettingOutlined />
+                  </div>
+                  <div className="manager-collapse-hidden">
+                    <span>当前模块</span>
+                    <strong>{currentModule}</strong>
+                    <Tag bordered={false}>角色权限</Tag>
+                  </div>
+                </div>
+              </div>
+            </Sider>
+          )}
 
           <Layout style={{ background: "transparent" }}>
             <Header
@@ -509,126 +615,137 @@ export function ManagerShell({ children }: ManagerShellProps) {
                 className="manager-shell-card"
                 style={{
                   borderRadius: 0,
-                  padding: "0 28px 0 30px",
-                  minHeight: 76,
+                  padding: isMobile ? "0 14px" : "0 28px 0 30px",
+                  minHeight: isMobile ? 56 : 76,
                   display: "grid",
                   gridTemplateColumns: "minmax(0, 1fr) auto",
-                  gap: 20,
+                  gap: isMobile ? 10 : 20,
                   alignItems: "center",
                 }}
               >
-                <div className="manager-header-main">
-                  <Space size={10} align="center" style={{ marginBottom: 8 }}>
-                    <Button
-                      type="text"
-                      icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                      className="manager-nav-toggle"
-                      onClick={() => setCollapsed((value) => !value)}
-                    />
-                    <CompassOutlined style={{ color: "var(--manager-primary)" }} />
-                    <Text style={{ color: "var(--manager-text-soft)", fontWeight: 700 }}>
-                      {pageTitle}
-                    </Text>
-                  </Space>
-                  <Space size={10} wrap style={{ width: "100%" }}>
-                    {quickActions.map((action) => {
-                      const isActive = activePath === action.key;
-
-                      return (
-                        <Button
-                          key={action.key}
-                          type={isActive ? "primary" : "default"}
-                          icon={action.icon}
-                          className={isActive ? "manager-soft-button" : undefined}
-                          onClick={() => router.push(action.key)}
-                          style={{
-                            height: 38,
-                            paddingInline: 14,
-                            borderRadius: 8,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {action.label}
-                        </Button>
-                      );
-                    })}
-                  </Space>
-                </div>
-
-                <Space size={12} wrap className="manager-header-account">
-                  <Dropdown
-                    trigger={["click"]}
-                    menu={{
-                      items: [
-                        {
-                          key: "profile",
-                          icon: <UserOutlined />,
-                          label: "个人信息",
-                        },
-                        {
-                          key: "password",
-                          icon: <LockOutlined />,
-                          label: "修改密码",
-                        },
-                        {
-                          type: "divider",
-                        },
-                        {
-                          key: "logout",
-                          icon: <LogoutOutlined />,
-                          label: "退出登录",
-                        },
-                      ],
-                      onClick: ({ key }) => {
-                        if (key === "profile") {
-                          openProfileModal();
-                        }
-                        if (key === "password") {
-                          openPasswordModal();
-                        }
-                        if (key === "logout") {
-                          handleLogout();
-                        }
-                      },
-                    }}
-                  >
-                    <Button
-                      type="text"
-                      style={{
-                        height: 56,
-                        padding: "6px 12px 6px 8px",
-                        borderRadius: 8,
-                        border: "1px solid var(--manager-border)",
-                        background: "#ffffff",
-                      }}
-                    >
-                      <Space size={12}>
+                {isMobile ? (
+                  /* 移动端 Header：汉堡 + 页面标题 + 账号头像 */
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                      <Button
+                        type="text"
+                        icon={<MenuUnfoldOutlined />}
+                        className="manager-nav-toggle"
+                        onClick={() => setCollapsed(false)}
+                      />
+                      <Text
+                        style={{
+                          color: "var(--manager-text-soft)",
+                          fontWeight: 700,
+                          fontSize: 15,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {pageTitle}
+                      </Text>
+                    </div>
+                    <Dropdown trigger={["click"]} menu={{ items: accountDropdownItems, onClick: handleAccountMenu }}>
+                      <Button
+                        type="text"
+                        style={{
+                          height: 40,
+                          padding: "4px 8px",
+                          borderRadius: 8,
+                          border: "1px solid var(--manager-border)",
+                          background: "#ffffff",
+                        }}
+                      >
                         <Avatar
                           style={{
-                            width: 38,
-                            height: 38,
+                            width: 30,
+                            height: 30,
                             background: "linear-gradient(135deg, var(--manager-primary), #4f8f5f)",
                             color: "#fff",
                             fontWeight: 700,
+                            fontSize: 13,
                           }}
                         >
                           {avatarText}
                         </Avatar>
-                        <div style={{ textAlign: "left", lineHeight: 1.25 }}>
-                          <div style={{ fontWeight: 700, color: "var(--manager-text)" }}>
-                            {displayName}
-                          </div>
-                          <Text style={{ color: "var(--manager-text-soft)" }}>{roleText}</Text>
-                        </div>
-                        <DownOutlined style={{ color: "var(--manager-text-soft)", fontSize: 12 }} />
+                      </Button>
+                    </Dropdown>
+                  </>
+                ) : (
+                  /* PC 端 Header：原有布局 */
+                  <>
+                    <div className="manager-header-main">
+                      <Space size={10} align="center" style={{ marginBottom: 8 }}>
+                        <Button
+                          type="text"
+                          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                          className="manager-nav-toggle"
+                          onClick={() => setCollapsed((v) => !v)}
+                        />
+                        <CompassOutlined style={{ color: "var(--manager-primary)" }} />
+                        <Text style={{ color: "var(--manager-text-soft)", fontWeight: 700 }}>
+                          {pageTitle}
+                        </Text>
                       </Space>
-                    </Button>
-                  </Dropdown>
-                </Space>
+                      <Space size={10} wrap className="manager-quick-actions" style={{ width: "100%" }}>
+                        {quickActions.map((action) => {
+                          const isActive = activePath === action.key;
+                          return (
+                            <Button
+                              key={action.key}
+                              type={isActive ? "primary" : "default"}
+                              icon={action.icon}
+                              className={`manager-quick-action-btn${isActive ? " manager-soft-button" : ""}`}
+                              onClick={() => router.push(action.key)}
+                              style={{ height: 38, paddingInline: 14, borderRadius: 8, fontWeight: 700 }}
+                            >
+                              <span className="manager-quick-action-label">{action.label}</span>
+                            </Button>
+                          );
+                        })}
+                      </Space>
+                    </div>
+
+                    <Space size={12} wrap className="manager-header-account">
+                      <Dropdown trigger={["click"]} menu={{ items: accountDropdownItems, onClick: handleAccountMenu }}>
+                        <Button
+                          type="text"
+                          style={{
+                            height: 56,
+                            padding: "6px 12px 6px 8px",
+                            borderRadius: 8,
+                            border: "1px solid var(--manager-border)",
+                            background: "#ffffff",
+                          }}
+                        >
+                          <Space size={12}>
+                            <Avatar
+                              style={{
+                                width: 38,
+                                height: 38,
+                                background: "linear-gradient(135deg, var(--manager-primary), #4f8f5f)",
+                                color: "#fff",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {avatarText}
+                            </Avatar>
+                            <div style={{ textAlign: "left", lineHeight: 1.25 }}>
+                              <div style={{ fontWeight: 700, color: "var(--manager-text)" }}>{displayName}</div>
+                              <Text style={{ color: "var(--manager-text-soft)" }}>{roleText}</Text>
+                            </div>
+                            <DownOutlined style={{ color: "var(--manager-text-soft)", fontSize: 12 }} />
+                          </Space>
+                        </Button>
+                      </Dropdown>
+                    </Space>
+                  </>
+                )}
               </div>
             </Header>
 
-            <Content style={{ padding: "22px 28px 40px" }}>
+            <Content style={{ padding: isMobile ? "14px" : "22px 28px 40px" }}>
               <div className="manager-stagger-3">{children}</div>
             </Content>
           </Layout>

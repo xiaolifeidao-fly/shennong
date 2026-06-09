@@ -59,12 +59,18 @@ func buildFarmerListWhere(query grainFarmerDTO.GrainFarmerQueryDTO) (string, []i
 		values = append(values, query.AppUserID)
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
-		clauses = append(clauses, "(f.id_number_digest = ? OR f.phone = ?)")
-		values = append(values, query.SearchIDNumberDigest, value)
+		searchClauses, searchValues := farmerSensitiveSearchClauses("f", query.Search, query.SearchIDNumberDigest, query.SearchIDNumberLast4Digest, query.SearchNameDigest, query.SearchNamePrefixCode)
+		if len(searchClauses) > 0 {
+			clauses = append(clauses, "("+strings.Join(searchClauses, " OR ")+")")
+			values = append(values, searchValues...)
+		}
 	}
 	if value := strings.TrimSpace(query.Name); value != "" {
-		clauses = append(clauses, "f.name_search LIKE ?")
-		values = append(values, "%"+value+"%")
+		nameClauses, nameValues := farmerNameSearchClauses("f", query.NameDigest, query.NamePrefixCode)
+		if len(nameClauses) > 0 {
+			clauses = append(clauses, "("+strings.Join(nameClauses, " OR ")+")")
+			values = append(values, nameValues...)
+		}
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		clauses = append(clauses, "f.status = ?")
@@ -112,13 +118,68 @@ func applyFarmerQuery(dbQuery *gorm.DB, query grainFarmerDTO.GrainFarmerQueryDTO
 		dbQuery = dbQuery.Where("app_user_id = ?", query.AppUserID)
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
-		dbQuery = dbQuery.Where("(id_number_digest = ? OR phone = ?)", query.SearchIDNumberDigest, value)
+		searchClauses, values := farmerSensitiveSearchClauses("", query.Search, query.SearchIDNumberDigest, query.SearchIDNumberLast4Digest, query.SearchNameDigest, query.SearchNamePrefixCode)
+		if len(searchClauses) > 0 {
+			dbQuery = dbQuery.Where("("+strings.Join(searchClauses, " OR ")+")", values...)
+		}
 	}
 	if value := strings.TrimSpace(query.Name); value != "" {
-		dbQuery = dbQuery.Where("name_search LIKE ?", "%"+value+"%")
+		nameClauses, values := farmerNameSearchClauses("", query.NameDigest, query.NamePrefixCode)
+		if len(nameClauses) > 0 {
+			dbQuery = dbQuery.Where("("+strings.Join(nameClauses, " OR ")+")", values...)
+		}
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		dbQuery = dbQuery.Where("status = ?", value)
 	}
 	return dbQuery
+}
+
+func farmerSensitiveSearchClauses(tableAlias, rawValue, idDigest, idLast4Digest, nameDigest, namePrefixCode string) ([]string, []interface{}) {
+	value := strings.TrimSpace(rawValue)
+	clauses := make([]string, 0, 5)
+	values := make([]interface{}, 0, 5)
+	if value == "" {
+		return clauses, values
+	}
+	if idDigest != "" {
+		clauses = append(clauses, columnName(tableAlias, "id_number_digest")+" = ?")
+		values = append(values, idDigest)
+	}
+	if idLast4Digest != "" && len(value) == 4 {
+		clauses = append(clauses, columnName(tableAlias, "id_number_last4_digest")+" = ?")
+		values = append(values, idLast4Digest)
+	}
+	if nameDigest != "" {
+		clauses = append(clauses, columnName(tableAlias, "name_digest")+" = ?")
+		values = append(values, nameDigest)
+	}
+	if namePrefixCode != "" {
+		clauses = append(clauses, columnName(tableAlias, "name_search")+" LIKE ?")
+		values = append(values, namePrefixCode+"%")
+	}
+	clauses = append(clauses, columnName(tableAlias, "phone")+" = ?")
+	values = append(values, value)
+	return clauses, values
+}
+
+func farmerNameSearchClauses(tableAlias, nameDigest, namePrefixCode string) ([]string, []interface{}) {
+	clauses := make([]string, 0, 2)
+	values := make([]interface{}, 0, 2)
+	if nameDigest != "" {
+		clauses = append(clauses, columnName(tableAlias, "name_digest")+" = ?")
+		values = append(values, nameDigest)
+	}
+	if namePrefixCode != "" {
+		clauses = append(clauses, columnName(tableAlias, "name_search")+" LIKE ?")
+		values = append(values, namePrefixCode+"%")
+	}
+	return clauses, values
+}
+
+func columnName(tableAlias, column string) string {
+	if tableAlias == "" {
+		return column
+	}
+	return tableAlias + "." + column
 }

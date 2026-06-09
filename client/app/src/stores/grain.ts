@@ -6,7 +6,7 @@ import {
   listGrainPurchaseTypes,
   listGrainStations,
 } from '@/services/grainConfig'
-import { createGrainFarmer, getGrainFarmerImages, listGrainFarmers, saveGrainFarmerImage, updateGrainFarmer } from '@/services/grainFarmer'
+import { createGrainFarmer, deleteGrainFarmer, getGrainFarmerImages, listGrainFarmers, saveGrainFarmerImage, updateGrainFarmer } from '@/services/grainFarmer'
 import type { FarmerImagesResult } from '@/services/grainFarmer'
 import {
   createGrainEntryMaterial,
@@ -18,6 +18,7 @@ import {
   listGrainPurchaseEntries,
   updateGrainPurchaseEntry,
   uploadGrainEntryMaterial,
+  voidGrainPurchaseEntry,
 } from '@/services/grainPurchase'
 import { recognizeGrainCard, type IDCardSide } from '@/services/grainOcr'
 import type {
@@ -837,6 +838,33 @@ export const useGrainStore = defineStore('grain', {
       if (index >= 0) {
         this.farmers[index] = toFarmerProfile(result)
       }
+    },
+    async deleteFarmer(farmerId: string) {
+      await deleteGrainFarmer(farmerId)
+      this.farmers = this.farmers.filter((farmer) => farmer.id !== farmerId)
+      this.dailyFarmerSummaries = this.dailyFarmerSummaries.filter((farmer) => farmer.id !== farmerId)
+      this.summaries = this.summaries.filter((summary) => summary.farmerId !== farmerId)
+      this.entries = this.entries.filter((entry) => entry.farmerId !== farmerId)
+      const { [farmerId]: _removedImages, ...nextImages } = this.farmerImages
+      this.farmerImages = nextImages
+      if (this.selectedFarmerId === farmerId) {
+        this.selectedFarmerId = this.farmers[0]?.id || 'new'
+      }
+      await Promise.all([this.loadFarmers(true), this.loadTodayFarmerSummaries(true)])
+    },
+    async voidEntry(entryId: string) {
+      const entry = this.entries.find((item) => item.id === entryId)
+      await voidGrainPurchaseEntry(entryId)
+      this.entries = this.entries.filter((item) => item.id !== entryId)
+      if (this.selectedEntryId === entryId) {
+        this.selectedEntryId = ''
+      }
+      await Promise.all([
+        this.loadFarmers(true),
+        this.loadTodayFarmerSummaries(true),
+        entry?.farmerId ? this.loadSummaries(true, entry.farmerId) : Promise.resolve(),
+        entry?.farmerId ? this.loadFarmerEntriesPaged(true, entry.farmerId) : Promise.resolve(),
+      ])
     },
     updatePreset(preset: GrainPreset) {
       this.preset = preset

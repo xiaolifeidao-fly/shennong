@@ -29,6 +29,7 @@ func (h *GrainFarmerHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-farmers", h.listFarmers)
 	engine.POST("/grain-farmers", h.createFarmer)
 	engine.PUT("/grain-farmers/:id", h.updateFarmer)
+	engine.DELETE("/grain-farmers/:id", h.deleteFarmer)
 }
 
 func (h *GrainFarmerHandler) listFarmers(context *gin.Context) {
@@ -86,6 +87,24 @@ func (h *GrainFarmerHandler) updateFarmer(context *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainFarmerHandler) deleteFarmer(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	appUserID, _ := appCtx.CurrentAppUserID(context)
+	stationID, ok := requiredStationID(context)
+	if !ok {
+		return
+	}
+	err := h.grainFarmerService.DeleteFarmerInStationForAppUser(id, stationID, appUserID)
+	if err == gorm.ErrRecordNotFound {
+		commonRouter.ToError(context, "grain farmer not found")
+		return
+	}
+	commonRouter.ToJson(context, gin.H{"deleted": true}, err)
 }
 
 func parseID(context *gin.Context) (uint, bool) {

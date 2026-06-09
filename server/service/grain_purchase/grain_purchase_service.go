@@ -71,6 +71,7 @@ func (s *GrainPurchaseService) EnsureTable() error {
 
 func (s *GrainPurchaseService) ListEntries(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) (*baseDTO.PageDTO[grainPurchaseDTO.GrainPurchaseEntryDTO], error) {
 	pageIndex, pageSize := normalizePage(query.Page, query.PageIndex, query.PageSize)
+	prepareEntryFarmerSearchIndexes(&query)
 	total, err := s.entryRepository.CountByQuery(query)
 	if err != nil {
 		return nil, err
@@ -82,6 +83,7 @@ func (s *GrainPurchaseService) ListEntries(query grainPurchaseDTO.GrainPurchaseE
 	if err := s.enrichEntryFarmerProfiles(dtos); err != nil {
 		return nil, err
 	}
+	dtos = filterEntryDTOs(dtos, query.Search)
 	return baseDTO.BuildPage(int(total), dtos), nil
 }
 
@@ -257,6 +259,7 @@ func (s *GrainPurchaseService) ListFarmerPurchaseSummaries(query grainPurchaseDT
 func (s *GrainPurchaseService) ListDailyFarmerSummaries(query grainPurchaseDTO.GrainFarmerDailySummaryQueryDTO) (*baseDTO.PageDTO[grainPurchaseDTO.GrainFarmerDailySummaryDTO], error) {
 	pageIndex, pageSize := normalizePage(query.Page, query.PageIndex, query.PageSize)
 	applyTodayDefault(&query.StartDate, &query.EndDate)
+	prepareDailyFarmerSearchIndexes(&query)
 	total, err := s.summaryRepository.CountDailyFarmerSummaries(query)
 	if err != nil {
 		return nil, err
@@ -268,7 +271,70 @@ func (s *GrainPurchaseService) ListDailyFarmerSummaries(query grainPurchaseDTO.G
 	if err := decryptDailySummaryFarmerFields(summaries); err != nil {
 		return nil, err
 	}
+	summaries = filterDailySummaryDTOs(summaries, query.Search)
 	return baseDTO.BuildPage(int(total), summaries), nil
+}
+
+func prepareEntryFarmerSearchIndexes(query *grainPurchaseDTO.GrainPurchaseEntryQueryDTO) {
+	if query == nil {
+		return
+	}
+	index := grainFarmerService.BuildFarmerSearchIndex(query.Search)
+	query.SearchIDNumberDigest = index.IDNumberDigest
+	query.SearchIDNumberLast4Digest = index.IDNumberLast4Digest
+	query.SearchNameDigest = index.NameDigest
+	query.SearchNamePrefixCode = index.NamePrefixCode
+}
+
+func prepareDailyFarmerSearchIndexes(query *grainPurchaseDTO.GrainFarmerDailySummaryQueryDTO) {
+	if query == nil {
+		return
+	}
+	index := grainFarmerService.BuildFarmerSearchIndex(query.Search)
+	query.SearchIDNumberDigest = index.IDNumberDigest
+	query.SearchIDNumberLast4Digest = index.IDNumberLast4Digest
+	query.SearchNameDigest = index.NameDigest
+	query.SearchNamePrefixCode = index.NamePrefixCode
+}
+
+func filterEntryDTOs(entries []*grainPurchaseDTO.GrainPurchaseEntryDTO, search string) []*grainPurchaseDTO.GrainPurchaseEntryDTO {
+	search = strings.TrimSpace(search)
+	if search == "" {
+		return entries
+	}
+	filtered := make([]*grainPurchaseDTO.GrainPurchaseEntryDTO, 0, len(entries))
+	for _, entry := range entries {
+		if entry == nil {
+			continue
+		}
+		if grainFarmerService.FarmerProfileMatchesKeyword(entry.FarmerName, entry.FarmerIDNumber, entry.FarmerPhone, search) ||
+			strings.Contains(entry.Crop, search) ||
+			strings.Contains(entry.Place, search) ||
+			strings.Contains(entry.PayType, search) ||
+			strings.Contains(entry.LocationAddress, search) {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
+}
+
+func filterDailySummaryDTOs(summaries []*grainPurchaseDTO.GrainFarmerDailySummaryDTO, search string) []*grainPurchaseDTO.GrainFarmerDailySummaryDTO {
+	search = strings.TrimSpace(search)
+	if search == "" {
+		return summaries
+	}
+	filtered := make([]*grainPurchaseDTO.GrainFarmerDailySummaryDTO, 0, len(summaries))
+	for _, summary := range summaries {
+		if summary == nil {
+			continue
+		}
+		if grainFarmerService.FarmerProfileMatchesKeyword(summary.FarmerName, summary.FarmerIDNumber, summary.FarmerPhone, search) ||
+			strings.Contains(summary.FarmerAddress, search) ||
+			strings.Contains(summary.MainCrop, search) {
+			filtered = append(filtered, summary)
+		}
+	}
+	return filtered
 }
 
 func (s *GrainPurchaseService) GetDashboard(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (*grainPurchaseDTO.GrainPurchaseDashboardDTO, error) {

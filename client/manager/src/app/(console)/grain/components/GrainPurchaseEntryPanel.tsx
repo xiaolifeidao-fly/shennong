@@ -844,13 +844,13 @@ export function GrainPurchaseEntryPanel() {
                 allowClear
                 showSearch
                 filterOption={false}
-                placeholder="农户（搜索姓名）"
+                placeholder="农户（姓名前缀/身份证后4位/手机号）"
                 value={filterFarmerIds}
                 onChange={setFilterFarmerIds}
                 onSearch={(keyword) => void searchFarmers(keyword)}
                 options={filterFarmerOptions}
                 loading={farmerSearching}
-                notFoundContent={farmerSearching ? "搜索中..." : "输入姓名搜索"}
+                notFoundContent={farmerSearching ? "搜索中..." : "输入姓名前缀、身份证或手机号搜索"}
                 style={{ minWidth: 180 }}
               />
             </Space>

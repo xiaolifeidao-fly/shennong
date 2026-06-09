@@ -647,7 +647,7 @@ export function GrainPurchaseEntryPanel() {
             <Input
               className="manager-filter-input"
               prefix={<SearchOutlined style={{ color: "var(--manager-text-faint)" }} />}
-              placeholder="收购类型/付款方式/地址"
+              placeholder="农户姓名前缀/身份证后4位/手机号/收购类型"
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
               onPressEnter={() => void loadRecords(filterQuery())}

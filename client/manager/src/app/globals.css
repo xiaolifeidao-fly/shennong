@@ -2447,6 +2447,20 @@ body {
   padding: 8px;
 }
 
+.manager-sidebar-close-btn.ant-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.manager-sidebar-close-btn.ant-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .manager-nav-toggle.ant-btn {
   width: 34px;
   height: 34px;
@@ -2656,6 +2670,7 @@ body {
     top: 0;
     height: 100vh;
     z-index: 12;
+    flex-shrink: 0;
   }
 
   .manager-sidebar-card {
@@ -2667,51 +2682,74 @@ body {
   }
 }
 
+
+/* Mobile Drawer 内的 sidebar-card 撑满 */
+.ant-drawer-body .manager-sidebar-card {
+  min-height: 100%;
+}
+
+/* Mobile sidebar overlay */
+.manager-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  background: rgba(0, 0, 0, 0.46);
+  backdrop-filter: blur(2px);
+}
+
 @media (max-width: 768px) {
-  .manager-shell-surface-collapsed {
-    --manager-sidebar-bg-width: 0px;
+  /* 移动端绿色背景始终为 0，sidebar 是浮层不占布局空间 */
+  .manager-shell-surface {
+    --manager-sidebar-bg-width: 0px !important;
   }
 
   .manager-shell-surface .ant-layout {
     min-width: 0;
   }
 
+  /* Remove sider from layout flow entirely on mobile */
   .manager-shell-surface .ant-layout-sider {
-    position: fixed !important;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    flex: 0 0 0 !important;
+    overflow: visible !important;
   }
 
-  .manager-shell-surface .ant-layout-sider-collapsed {
-    pointer-events: none;
-  }
-
-  .manager-shell-surface .ant-layout-sider-collapsed .manager-sidebar-card {
-    transform: translateX(-100%);
-  }
-
-  .manager-sidebar-card {
-    width: 248px;
-    transition: transform 180ms ease;
-  }
-
+  /* Header */
   .manager-shell-card {
-    grid-template-columns: minmax(0, 1fr) !important;
-    gap: 14px !important;
-    padding: 14px 16px !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 10px !important;
+    padding: 12px 14px !important;
+    min-height: 60px !important;
+  }
+
+  .manager-header-main {
+    overflow: hidden;
+  }
+
+  /* Quick actions: icon-only on mobile */
+  .manager-quick-action-label {
+    display: none;
+  }
+
+  .manager-quick-action-btn.ant-btn {
+    width: 36px;
+    height: 36px !important;
+    padding: 0 !important;
+  }
+
+  /* Compact page title row */
+  .manager-header-main .ant-space:first-child {
+    margin-bottom: 4px !important;
   }
 
   .manager-header-account {
-    justify-content: flex-start;
-  }
-
-  .manager-header-account > div:last-child {
-    max-width: 100%;
+    justify-content: flex-end;
   }
 
   .manager-shell-surface main.ant-layout-content {
-    padding: 16px !important;
+    padding: 14px !important;
   }
 
   .manager-dashboard-metric-grid,
@@ -2725,5 +2763,15 @@ body {
 
   .manager-dashboard-hero__title.ant-typography {
     font-size: 24px;
+  }
+
+  /* Modal full-width on mobile */
+  .ant-modal {
+    max-width: calc(100vw - 24px) !important;
+    margin: 12px auto !important;
+  }
+
+  .ant-modal-content {
+    padding: 20px 16px !important;
   }
 }

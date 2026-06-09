@@ -19,14 +19,19 @@ type GrainFarmerDTO struct {
 }
 
 type GrainFarmerQueryDTO struct {
-	Page                 int      `form:"page"`
-	PageIndex            int      `form:"pageIndex"`
-	PageSize             int      `form:"pageSize"`
-	StationID            uint64   `form:"stationId"`
-	StationIDs           []uint64 `form:"-"`
-	AppUserID            uint64   `form:"appUserId"`
-	Search               string   `form:"search"`
-	Name                 string   `form:"name"`
-	SearchIDNumberDigest string   `form:"-"`
-	Status               string   `form:"status"`
+	Page                      int      `form:"page"`
+	PageIndex                 int      `form:"pageIndex"`
+	PageSize                  int      `form:"pageSize"`
+	StationID                 uint64   `form:"stationId"`
+	StationIDs                []uint64 `form:"-"`
+	AppUserID                 uint64   `form:"appUserId"`
+	Search                    string   `form:"search"`
+	Name                      string   `form:"name"`
+	SearchIDNumberDigest      string   `form:"-"`
+	SearchIDNumberLast4Digest string   `form:"-"`
+	SearchNameDigest          string   `form:"-"`
+	SearchNamePrefixCode      string   `form:"-"`
+	NameDigest                string   `form:"-"`
+	NamePrefixCode            string   `form:"-"`
+	Status                    string   `form:"status"`
 }

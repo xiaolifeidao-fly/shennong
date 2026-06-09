@@ -28,9 +28,7 @@ func (s *GrainFarmerService) EnsureTable() error {
 
 func (s *GrainFarmerService) ListFarmers(query grainFarmerDTO.GrainFarmerQueryDTO) (*baseDTO.PageDTO[grainFarmerDTO.GrainFarmerDTO], error) {
 	pageIndex, pageSize := normalizePage(query.Page, query.PageIndex, query.PageSize)
-	if strings.TrimSpace(query.Search) != "" && farmerCryptoKey() != "" {
-		query.SearchIDNumberDigest = dbFieldDigest(query.Search)
-	}
+	PrepareFarmerQueryIndexes(&query)
 	total, err := s.farmerRepository.CountByQuery(query)
 	if err != nil {
 		return nil, err
@@ -42,6 +40,7 @@ func (s *GrainFarmerService) ListFarmers(query grainFarmerDTO.GrainFarmerQueryDT
 	if err := decryptFarmerListRows(entities); err != nil {
 		return nil, err
 	}
+	entities = filterFarmerListRows(entities, query)
 	return baseDTO.BuildPage(int(total), db.ToDTOs[grainFarmerDTO.GrainFarmerDTO](entities)), nil
 }
 
@@ -202,11 +201,19 @@ func (s *GrainFarmerService) updateFarmer(id uint, req *grainFarmerDTO.GrainFarm
 }
 
 func (s *GrainFarmerService) DeleteFarmer(id uint) error {
+	return s.deleteFarmer(id, 0, 0)
+}
+
+func (s *GrainFarmerService) DeleteFarmerInStationForAppUser(id uint, stationID, appUserID uint64) error {
+	return s.deleteFarmer(id, stationID, appUserID)
+}
+
+func (s *GrainFarmerService) deleteFarmer(id uint, stationID, appUserID uint64) error {
 	entity, err := s.farmerRepository.FindById(id)
 	if err != nil {
 		return err
 	}
-	if entity.Active == 0 {
+	if entity.Active == 0 || (stationID > 0 && entity.StationID != stationID) || (appUserID > 0 && entity.AppUserID != appUserID) {
 		return gorm.ErrRecordNotFound
 	}
 	entity.Active = 0
@@ -271,10 +278,24 @@ func assignNonEmpty(target *string, value string) bool {
 	return true
 }
 
-func dbFieldDigest(value string) string {
-	digest, err := farmerIDNumberDigest(value)
-	if err != nil {
-		return ""
+func filterFarmerListRows(rows []*grainFarmerRepository.GrainFarmerListRow, query grainFarmerDTO.GrainFarmerQueryDTO) []*grainFarmerRepository.GrainFarmerListRow {
+	search := strings.TrimSpace(query.Search)
+	name := strings.TrimSpace(query.Name)
+	if search == "" && name == "" {
+		return rows
 	}
-	return digest
+	filtered := make([]*grainFarmerRepository.GrainFarmerListRow, 0, len(rows))
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		if search != "" && !FarmerProfileMatchesKeyword(row.Name, row.IDNumber, row.Phone, search) {
+			continue
+		}
+		if name != "" && !FarmerNameMatches(row.Name, name) {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+	return filtered
 }

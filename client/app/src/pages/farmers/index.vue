@@ -16,6 +16,7 @@
         :farmer="farmer"
         compact
         @select="showFarmer"
+        @delete="confirmDeleteFarmer"
       />
     </view>
 
@@ -35,11 +36,9 @@ const keyword = ref('')
 const activeFilter = ref('今天')
 
 const filteredFarmers = computed(() => {
-  const key = keyword.value.trim()
   return grainStore.farmerSummaries.filter((farmer) => {
     const matchFilter = activeFilter.value !== '资料待补' || farmer.status === 'missing-bank'
-    const matchKeyword = !key || [farmer.name, farmer.idNumber, farmer.phone].some((value) => value.includes(key))
-    return matchFilter && matchKeyword
+    return matchFilter
   })
 })
 
@@ -80,6 +79,25 @@ function showFarmer(farmerId: string) {
 function goNewEntry() {
   grainStore.selectFarmer('new')
   uni.switchTab({ url: '/pages/entry/index' })
+}
+
+function confirmDeleteFarmer(farmerId: string) {
+  const farmer = grainStore.farmerSummaries.find((item) => item.id === farmerId)
+  uni.showModal({
+    title: '删除农户',
+    content: `确认删除${farmer?.name ? `「${farmer.name}」` : '该农户'}的信息？删除后农户汇总中将不再显示。`,
+    confirmText: '删除',
+    confirmColor: '#c2412d',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await grainStore.deleteFarmer(farmerId)
+        uni.showToast({ title: '已删除农户', icon: 'success' })
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
+      }
+    },
+  })
 }
 </script>
 

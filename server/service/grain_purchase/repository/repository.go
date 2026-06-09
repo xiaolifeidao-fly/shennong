@@ -47,6 +47,7 @@ func (r *GrainPurchaseEntryRepository) ListDTOByQuery(query grainPurchaseDTO.Gra
 func (r *GrainPurchaseEntryRepository) entryListBaseQuery() *gorm.DB {
 	return r.Db.Table("grain_purchase_entry AS e").
 		Joins("LEFT JOIN grain_station AS gs ON gs.id = e.station_id").
+		Joins("LEFT JOIN grain_farmer AS f ON f.id = e.farmer_id AND f.active = ?", 1).
 		Where("e.active = ?", 1)
 }
 
@@ -360,7 +361,12 @@ func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntry
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
 		likeValue := "%" + value + "%"
-		dbQuery = dbQuery.Where("(e.crop LIKE ? OR e.place LIKE ? OR e.pay_type LIKE ? OR e.location_address LIKE ?)", likeValue, likeValue, likeValue, likeValue)
+		farmerClauses, farmerValues := entryFarmerSearchClauses(query.Search, query.SearchIDNumberDigest, query.SearchIDNumberLast4Digest, query.SearchNameDigest, query.SearchNamePrefixCode)
+		clauses := []string{"e.crop LIKE ?", "e.place LIKE ?", "e.pay_type LIKE ?", "e.location_address LIKE ?"}
+		values := []interface{}{likeValue, likeValue, likeValue, likeValue}
+		clauses = append(clauses, farmerClauses...)
+		values = append(values, farmerValues...)
+		dbQuery = dbQuery.Where("("+strings.Join(clauses, " OR ")+")", values...)
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		dbQuery = dbQuery.Where("e.status = ?", value)
@@ -444,9 +450,42 @@ func applyDailySummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainFarmer
 	}
 	if value := strings.TrimSpace(query.Search); value != "" {
 		likeValue := "%" + value + "%"
-		dbQuery = dbQuery.Where("(f.name LIKE ? OR f.id_number = ? OR f.phone LIKE ? OR f.address LIKE ? OR s.crop LIKE ? OR s.pay_type LIKE ?)", likeValue, value, likeValue, likeValue, likeValue, likeValue)
+		farmerClauses, farmerValues := entryFarmerSearchClauses(query.Search, query.SearchIDNumberDigest, query.SearchIDNumberLast4Digest, query.SearchNameDigest, query.SearchNamePrefixCode)
+		clauses := []string{"f.phone LIKE ?", "f.address LIKE ?", "s.crop LIKE ?", "s.pay_type LIKE ?"}
+		values := []interface{}{likeValue, likeValue, likeValue, likeValue}
+		clauses = append(clauses, farmerClauses...)
+		values = append(values, farmerValues...)
+		dbQuery = dbQuery.Where("("+strings.Join(clauses, " OR ")+")", values...)
 	}
 	return dbQuery
+}
+
+func entryFarmerSearchClauses(rawValue, idDigest, idLast4Digest, nameDigest, namePrefixCode string) ([]string, []interface{}) {
+	value := strings.TrimSpace(rawValue)
+	clauses := make([]string, 0, 5)
+	values := make([]interface{}, 0, 5)
+	if value == "" {
+		return clauses, values
+	}
+	if idDigest != "" {
+		clauses = append(clauses, "f.id_number_digest = ?")
+		values = append(values, idDigest)
+	}
+	if idLast4Digest != "" && len(value) == 4 {
+		clauses = append(clauses, "f.id_number_last4_digest = ?")
+		values = append(values, idLast4Digest)
+	}
+	if nameDigest != "" {
+		clauses = append(clauses, "f.name_digest = ?")
+		values = append(values, nameDigest)
+	}
+	if namePrefixCode != "" {
+		clauses = append(clauses, "f.name_search LIKE ?")
+		values = append(values, namePrefixCode+"%")
+	}
+	clauses = append(clauses, "f.phone = ?")
+	values = append(values, value)
+	return clauses, values
 }
 
 func (r *GrainFarmerPurchaseSummaryRepository) DashboardNewFarmerCount(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (int, error) {

@@ -26,12 +26,10 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-  createAccount,
   fetchRoleOptions,
   fetchTenantOptions,
   fetchUserRoles,
   setUserRoles,
-  updateAccount,
   type RoleOption,
   type TenantOption,
   type UserPayload,
@@ -88,7 +86,7 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
       .catch((error) => message.error(error instanceof Error ? error.message : "加载角色失败"));
   }, []);
 
-  const activeCount = users.filter((item) => resolveUserStatus(item) === "normal").length;
+  const activeCount = users.filter((item) => resolveUserStatus(item) === "active").length;
 
   const heroStats = useMemo(
     () => [
@@ -235,22 +233,14 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
   };
 
   const handleToggleFreeze = (record: UserRecord) => {
-    const currentStatus = resolveUserStatus(record);
-    const nextStatus = currentStatus === "frozen" ? "normal" : "frozen";
+    const frozen = isFrozenUser(record);
+    const nextStatus = frozen ? "active" : "inactive";
     Modal.confirm({
-      title: nextStatus === "frozen" ? "冻结账户" : "解冻账户",
+      title: frozen ? "解冻用户" : "冻结用户",
+      content: frozen ? "解冻后用户状态将恢复为启用。" : "冻结后用户状态将变为不可用。",
       onOk: async () => {
-        if (record.accountId) {
-          await updateAccount(record.accountId, { accountStatus: nextStatus });
-        } else {
-          await createAccount({
-            userId: record.id,
-            accountStatus: nextStatus,
-            balanceAmount: resolveBalance(record).toFixed(2),
-          });
-        }
-        await refresh();
-        message.success(nextStatus === "frozen" ? "已冻结" : "已解冻");
+        await patchUser(record.id, { status: nextStatus });
+        message.success(frozen ? "已解冻" : "已冻结");
       },
     });
   };
@@ -333,7 +323,7 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
       width: 240,
       fixed: "right",
       render: (_, record) => {
-        const frozen = resolveUserStatus(record) === "frozen";
+        const frozen = isFrozenUser(record);
 
         return (
           <Space size={4} wrap>
@@ -436,8 +426,8 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
               onChange={(value) => void refresh({ pageIndex: 1, status: value ?? "" })}
               style={{ width: 160 }}
               options={[
-                { label: "激活", value: "ACTIVE" },
-                { label: "冻结", value: "EXPIRE" },
+                { label: "启用", value: "active" },
+                { label: "不可用", value: "inactive" },
               ]}
             />
             <Button
@@ -508,15 +498,12 @@ export function UserManagementDemo({ mode: _mode = "maintenance" }: UserManageme
   );
 }
 
-function resolveBalance(record: UserRecord) {
-  if (typeof record.tineBalance === "number") {
-    return record.tineBalance;
-  }
-  return Number(record.balanceAmount || 0);
+function resolveUserStatus(record: UserRecord) {
+  return record.status || "active";
 }
 
-function resolveUserStatus(record: UserRecord) {
-  return record.accountStatus || record.status || "normal";
+function isFrozenUser(record: UserRecord) {
+  return ["inactive", "locked", "frozen", "disabled"].includes(resolveUserStatus(record));
 }
 
 function resolveDisplayStatus(record: UserRecord) {
@@ -534,10 +521,11 @@ function formatStatus(value: string) {
     case "EXPIRE":
     case "frozen":
     case "locked":
-    case "inactive":
-    case "disabled":
     case "deleted":
       return "冻结";
+    case "inactive":
+    case "disabled":
+      return "不可用";
     default:
       return value ? `未知(${value})` : "-";
   }

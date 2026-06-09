@@ -6,6 +6,7 @@ import (
 	"fmt"
 	grainFarmerDTO "service/grain_farmer/dto"
 	grainFarmerRepository "service/grain_farmer/repository"
+	"strconv"
 	"strings"
 )
 
@@ -42,7 +43,9 @@ func prepareFarmerForSave(entity *grainFarmerRepository.GrainFarmer) error {
 		}
 	}
 	entity.IDNumberDigest = utils.DigestField(plainIDNumber, key, farmerFieldScope("id_number"))
-	entity.NameSearch = strings.TrimSpace(entity.Name)
+	entity.IDNumberLast4Digest = farmerIDNumberLast4DigestWithKey(plainIDNumber, key)
+	entity.NameDigest = utils.DigestField(entity.Name, key, farmerFieldScope("name"))
+	entity.NameSearch = farmerNamePrefixCodeWithKey(entity.Name, key)
 	if entity.Name, err = utils.EncryptField(entity.Name, key, farmerFieldScope("name")); err != nil {
 		return err
 	}
@@ -201,6 +204,103 @@ func farmerIDNumberDigest(value string) (string, error) {
 		return "", err
 	}
 	return utils.DigestField(value, key, farmerFieldScope("id_number")), nil
+}
+
+type FarmerSearchIndex struct {
+	IDNumberDigest      string
+	IDNumberLast4Digest string
+	NameDigest          string
+	NamePrefixCode      string
+}
+
+func PrepareFarmerQueryIndexes(query *grainFarmerDTO.GrainFarmerQueryDTO) {
+	if query == nil || farmerCryptoKey() == "" {
+		return
+	}
+	if index := BuildFarmerSearchIndex(query.Search); index != (FarmerSearchIndex{}) {
+		query.SearchIDNumberDigest = index.IDNumberDigest
+		query.SearchIDNumberLast4Digest = index.IDNumberLast4Digest
+		query.SearchNameDigest = index.NameDigest
+		query.SearchNamePrefixCode = index.NamePrefixCode
+	}
+	if index := BuildFarmerSearchIndex(query.Name); index != (FarmerSearchIndex{}) {
+		query.NameDigest = index.NameDigest
+		query.NamePrefixCode = index.NamePrefixCode
+	}
+}
+
+func BuildFarmerSearchIndex(value string) FarmerSearchIndex {
+	key := farmerCryptoKey()
+	value = strings.TrimSpace(value)
+	if key == "" || value == "" {
+		return FarmerSearchIndex{}
+	}
+	return FarmerSearchIndex{
+		IDNumberDigest:      utils.DigestField(value, key, farmerFieldScope("id_number")),
+		IDNumberLast4Digest: farmerIDNumberLast4DigestWithKey(value, key),
+		NameDigest:          utils.DigestField(value, key, farmerFieldScope("name")),
+		NamePrefixCode:      farmerNamePrefixCodeWithKey(value, key),
+	}
+}
+
+func farmerIDNumberLast4DigestWithKey(value, key string) string {
+	value = strings.TrimSpace(value)
+	if len(value) < 4 {
+		return ""
+	}
+	return utils.DigestField(value[len(value)-4:], key, farmerFieldScope("id_number_last4"))
+}
+
+func farmerNamePrefixCodeWithKey(value, key string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var builder strings.Builder
+	for _, ch := range value {
+		builder.WriteString(farmerNameCharCodeWithKey(string(ch), key))
+	}
+	return builder.String()
+}
+
+func farmerNameCharCodeWithKey(ch, key string) string {
+	digest := utils.DigestField(ch, key, farmerFieldScope("name_char"))
+	if len(digest) < 8 {
+		return ""
+	}
+	n, err := strconv.ParseUint(digest[:8], 16, 32)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%08d", n%100000000)
+}
+
+func FarmerNameMatches(name, keyword string) bool {
+	name = strings.TrimSpace(name)
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return true
+	}
+	return name == keyword || strings.HasPrefix(name, keyword)
+}
+
+func FarmerIDNumberMatches(idNumber, keyword string) bool {
+	idNumber = strings.TrimSpace(idNumber)
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return true
+	}
+	return idNumber == keyword || (len(keyword) == 4 && strings.HasSuffix(idNumber, keyword))
+}
+
+func FarmerProfileMatchesKeyword(name, idNumber, phone, keyword string) bool {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return true
+	}
+	return FarmerNameMatches(name, keyword) ||
+		FarmerIDNumberMatches(idNumber, keyword) ||
+		strings.TrimSpace(phone) == keyword
 }
 
 func farmerFieldScope(field string) string {

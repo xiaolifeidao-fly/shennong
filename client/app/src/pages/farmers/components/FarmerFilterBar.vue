@@ -2,7 +2,7 @@
   <view>
     <view class="search-card">
       <text class="search-icon"></text>
-      <input :value="keyword" placeholder="搜索我的农户、身份证号、手机号" @input="handleInput" />
+      <input :value="keyword" placeholder="姓名前缀、身份证或后4位、手机号" @input="handleInput" />
       <button @click="$emit('search')">
         <text class="arrow-icon"></text>
       </button>

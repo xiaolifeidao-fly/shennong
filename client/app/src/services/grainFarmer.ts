@@ -25,6 +25,10 @@ export function updateGrainFarmer(id: string | number, data: Partial<GrainFarmer
   return http.put<GrainFarmerDTO, Partial<GrainFarmerDTO>>(`/grain-farmers/${id}`, data)
 }
 
+export function deleteGrainFarmer(id: string | number) {
+  return http.delete<{ deleted: boolean }>(`/grain-farmers/${id}`)
+}
+
 export interface FarmerImagesResult {
   idCardFront: string
   idCardBack: string

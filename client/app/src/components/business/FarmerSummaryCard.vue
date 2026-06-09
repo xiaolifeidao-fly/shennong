@@ -9,6 +9,7 @@
         <text class="badge-dot"></text>
         <text>{{ badgeText }}</text>
       </text>
+      <button class="delete-btn" @click.stop="$emit('delete', farmer.id)">删除</button>
     </view>
 
     <view class="data-grid">
@@ -40,6 +41,7 @@ const props = defineProps<{
 
 defineEmits<{
   select: [farmerId: string]
+  delete: [farmerId: string]
 }>()
 
 const badgeText = computed(() => (props.farmer.status === 'missing-bank' ? '待补' : '完整'))
@@ -112,6 +114,20 @@ const metaText = computed(() => {
 .badge.warn {
   background: #fff4dd;
   color: #b7791f;
+}
+
+.delete-btn {
+  flex: 0 0 auto;
+  min-width: 88rpx;
+  min-height: 52rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #f0c7bf;
+  border-radius: 12rpx;
+  background: #fff7f5;
+  color: #c2412d;
+  font-size: 22rpx;
+  font-weight: 760;
+  line-height: 52rpx;
 }
 
 .data-grid {

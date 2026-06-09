@@ -136,6 +136,7 @@ type AppUserStatsDTO struct {
 type CurrentAppUserProfileDTO struct {
 	Id                int        `json:"id"`
 	Name              string     `json:"name"`
+	IDNumber          string     `json:"idNumber"`
 	Username          string     `json:"username"`
 	Email             string     `json:"email"`
 	Phone             string     `json:"phone"`
@@ -170,13 +171,14 @@ type WechatUserInfoDTO struct {
 }
 
 type UpdateCurrentAppUserProfileDTO struct {
-	Name       string `json:"name"`
-	Email      string `json:"email"`
-	Phone      string `json:"phone"`
-	Department string `json:"department"`
-	Remark     string `json:"remark"`
-	WxNickname string `json:"wxNickname"`
-	WxAvatar   string `json:"wxAvatar"`
+	Name       string  `json:"name"`
+	IDNumber   *string `json:"idNumber,omitempty"`
+	Email      string  `json:"email"`
+	Phone      string  `json:"phone"`
+	Department string  `json:"department"`
+	Remark     string  `json:"remark"`
+	WxNickname string  `json:"wxNickname"`
+	WxAvatar   string  `json:"wxAvatar"`
 }
 
 type WechatPhoneDTO struct {

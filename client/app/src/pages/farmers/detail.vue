@@ -150,6 +150,7 @@
             <view class="entry-price-badge">
               <text>{{ getEntryPrice(entry) }}</text>
             </view>
+            <button class="entry-delete-btn" @click.stop="confirmDeleteEntry(entry.id)">删除</button>
           </view>
           <view class="entry-grid">
             <view class="entry-kv">
@@ -260,6 +261,24 @@ function goEntry() {
 function goEntryDetail(entryId: string) {
   grainStore.selectEntry(entryId)
   uni.navigateTo({ url: '/pages/farmers/entry-detail' })
+}
+
+function confirmDeleteEntry(entryId: string) {
+  uni.showModal({
+    title: '删除粮食明细',
+    content: '确认删除该笔粮食明细？删除后会同步更新农户汇总数据。',
+    confirmText: '删除',
+    confirmColor: '#c2412d',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await grainStore.voidEntry(entryId)
+        uni.showToast({ title: '已删除明细', icon: 'success' })
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '删除失败', icon: 'none' })
+      }
+    },
+  })
 }
 
 function loadMore() {
@@ -590,6 +609,20 @@ function uploadFarmerCardImage(type: 'id-front' | 'bank') {
   font-size: 22rpx;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.entry-delete-btn {
+  flex: 0 0 auto;
+  min-width: 88rpx;
+  min-height: 52rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #f0c7bf;
+  border-radius: 12rpx;
+  background: #fff7f5;
+  color: #c2412d;
+  font-size: 22rpx;
+  font-weight: 760;
+  line-height: 52rpx;
 }
 
 .entry-grid {

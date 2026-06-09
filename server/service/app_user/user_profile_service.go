@@ -74,6 +74,12 @@ func (s *AppUserService) UpdateCurrentUserProfile(id uint, req *appUserDTO.Updat
 	entity.Phone = strings.TrimSpace(req.Phone)
 	entity.Department = strings.TrimSpace(req.Department)
 	entity.Remark = strings.TrimSpace(req.Remark)
+	if req.IDNumber != nil {
+		entity.IDNumber = strings.TrimSpace(*req.IDNumber)
+		if err := prepareAppUserIDCardForSave(entity); err != nil {
+			return nil, err
+		}
+	}
 	if wxNickname != "" {
 		entity.WxNickname = wxNickname
 	}
@@ -520,9 +526,14 @@ func toCurrentAppUserProfileDTO(entity *appUserRepository.AppUser) *appUserDTO.C
 	if entity == nil {
 		return nil
 	}
+	idNumber := entity.IDNumber
+	if err := decryptAppUserIDNumber(entity); err == nil {
+		idNumber = entity.IDNumber
+	}
 	result := &appUserDTO.CurrentAppUserProfileDTO{
 		Id:                entity.Id,
 		Name:              entity.Name,
+		IDNumber:          idNumber,
 		Username:          entity.Username,
 		Email:             entity.Email,
 		Phone:             entity.Phone,

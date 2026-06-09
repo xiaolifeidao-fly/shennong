@@ -78,6 +78,7 @@ const profileItems = computed(() => {
   if (!profile) {
     return [
       { label: '姓名', value: '-' },
+      { label: '身份证号', value: '-' },
       { label: '手机号', value: '-' },
       { label: '昵称', value: '-' },
     ]
@@ -85,6 +86,7 @@ const profileItems = computed(() => {
 
   return [
     { label: '姓名', value: profile.name ?? '-' },
+    { label: '身份证号', value: profile.idNumber ?? '-' },
     { label: '手机号', value: profile.phone ?? '-' },
     { label: '昵称', value: profile.wxNickname ?? '-' },
   ]

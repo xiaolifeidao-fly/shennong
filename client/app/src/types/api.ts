@@ -44,6 +44,7 @@ export interface WechatLoginResponse {
 
 export interface UpdateAppUserProfileRequest {
   name?: string
+  idNumber?: string
   email?: string
   phone?: string
   department?: string
@@ -74,6 +75,7 @@ export interface AuthState {
 export interface AppUserProfile {
   id?: number
   name?: string
+  idNumber?: string
   username?: string
   avatar?: string
   phone?: string
