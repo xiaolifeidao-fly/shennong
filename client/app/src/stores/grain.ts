@@ -448,12 +448,17 @@ export const useGrainStore = defineStore('grain', {
     entriesCurrentFarmerId: '',
   }),
   getters: {
-    todayEntryCount: (state) => state.dailyFarmerSummaries.reduce((sum, item) => sum + item.entryCount, 0),
-    todayTotalQuantity: (state) => state.dailyFarmerSummaries.reduce((sum, item) => sum + item.totalQuantity, 0),
-    todayTotalAmount: (state) => state.dailyFarmerSummaries.reduce((sum, item) => sum + item.totalAmount, 0),
-    todayFarmerCount: (state) => state.dailySummaryTotal || state.dailyFarmerSummaries.length,
-    recentEntries: (state) => state.entries.slice(0, 10),
-    farmerSummaries: (state): FarmerSummary[] => state.dailyFarmerSummaries,
+    activeDailyFarmerSummaries: (state): FarmerSummary[] => state.dailyFarmerSummaries.filter((farmer) => farmer.status !== 'inactive'),
+    activeFarmerIds: (state) => new Set(state.farmers.filter((farmer) => farmer.status !== 'inactive').map((farmer) => farmer.id)),
+    todayEntryCount: (state) => state.dailyFarmerSummaries.filter((farmer) => farmer.status !== 'inactive').reduce((sum, item) => sum + item.entryCount, 0),
+    todayTotalQuantity: (state) => state.dailyFarmerSummaries.filter((farmer) => farmer.status !== 'inactive').reduce((sum, item) => sum + item.totalQuantity, 0),
+    todayTotalAmount: (state) => state.dailyFarmerSummaries.filter((farmer) => farmer.status !== 'inactive').reduce((sum, item) => sum + item.totalAmount, 0),
+    todayFarmerCount: (state) => state.dailyFarmerSummaries.filter((farmer) => farmer.status !== 'inactive').length,
+    recentEntries: (state) => {
+      const activeFarmerIds = new Set(state.farmers.filter((farmer) => farmer.status !== 'inactive').map((farmer) => farmer.id))
+      return state.entries.filter((entry) => activeFarmerIds.has(entry.farmerId)).slice(0, 10)
+    },
+    farmerSummaries: (state): FarmerSummary[] => state.dailyFarmerSummaries.filter((farmer) => farmer.status !== 'inactive'),
     selectedFarmer: (state) =>
       state.farmers.find((farmer) => farmer.id === state.selectedFarmerId) ||
       state.dailyFarmerSummaries.find((farmer) => farmer.id === state.selectedFarmerId),

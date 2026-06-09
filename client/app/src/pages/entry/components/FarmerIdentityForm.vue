@@ -11,8 +11,11 @@
         <input
           v-model="farmerKeyword"
           class="input"
+          confirm-type="search"
           placeholder="输入姓名、手机号、身份证号快速查找"
+          @input="handleFarmerInput"
           @focus="showFarmerResults = true"
+          @confirm="handleFarmerSearch"
         />
         <button class="new-farmer-btn" @click="selectFarmer('new')">新农户</button>
       </view>
@@ -29,7 +32,7 @@
         >
           <view>
             <text class="farmer-name">{{ farmer.name }}</text>
-            <text class="farmer-meta">{{ farmer.phone || farmer.idNumber || '已建档' }}</text>
+            <text class="farmer-meta">{{ farmerMeta(farmer) }}</text>
           </view>
           <text class="farmer-status">{{ farmer.statusText || '已建档' }}</text>
         </button>
@@ -116,6 +119,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { FarmerProfile, GrainEntryDraft, GrainPreset } from '@/types/grain'
+import { maskIdNumber, maskPhone } from '@/utils/privacy'
 
 const props = defineProps<{
   modelValue: GrainEntryDraft
@@ -140,7 +144,8 @@ const showFarmerResults = ref(false)
 const selectedFarmer = computed(() => props.farmers.find((farmer) => farmer.id === props.modelValue.farmerId))
 const selectedFarmerText = computed(() => {
   if (selectedFarmer.value) {
-    return `当前：${selectedFarmer.value.name} · ${selectedFarmer.value.phone || selectedFarmer.value.idNumber || '已建档'}`
+    const meta = farmerMeta(selectedFarmer.value)
+    return `当前：${selectedFarmer.value.name}${meta ? ` · ${meta}` : ' · 已建档'}`
   }
   return '当前：新农户，拍身份证建档'
 })
@@ -192,6 +197,19 @@ function selectFarmer(farmerId: string) {
   farmerKeyword.value = farmer?.name || ''
   showFarmerResults.value = false
   emit('farmer-change', farmerId)
+}
+
+function handleFarmerInput() {
+  showFarmerResults.value = true
+}
+
+function handleFarmerSearch() {
+  showFarmerResults.value = true
+}
+
+function farmerMeta(farmer: FarmerProfile) {
+  const items = [maskPhone(farmer.phone), maskIdNumber(farmer.idNumber)].filter(Boolean)
+  return items.length ? items.join(' · ') : '已建档'
 }
 
 function selectPayType(event: { detail: { value: number | string } }) {

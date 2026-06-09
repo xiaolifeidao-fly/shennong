@@ -2,7 +2,13 @@
   <view>
     <view class="search-card">
       <text class="search-icon"></text>
-      <input :value="keyword" placeholder="姓名前缀、身份证或后4位、手机号" @input="handleInput" />
+      <input
+        :value="keyword"
+        confirm-type="search"
+        placeholder="姓名前缀、身份证或后4位、手机号"
+        @input="handleInput"
+        @confirm="$emit('search')"
+      />
       <button @click="$emit('search')">
         <text class="arrow-icon"></text>
       </button>

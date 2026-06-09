@@ -342,40 +342,20 @@ func (s *GrainPurchaseService) GetDashboard(query grainPurchaseDTO.GrainPurchase
 	if s.stationSummaryRepository == nil || s.stationSummaryRepository.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
 	}
-	overview, err := s.stationSummaryRepository.DashboardOverview(query)
+	overview, err := s.summaryRepository.DashboardOverview(query)
 	if err != nil {
 		return nil, err
 	}
-	newFarmerCount, err := s.summaryRepository.DashboardNewFarmerCount(query)
+	byStation, err := s.summaryRepository.DashboardByStation(query)
 	if err != nil {
 		return nil, err
 	}
-	overview.NewFarmerCount = newFarmerCount
-	if overview.NewFarmerCount > 0 {
-		overview.AverageFarmerDeal = overview.TotalAmount / float64(overview.NewFarmerCount)
-	}
-	byStation, err := s.stationSummaryRepository.DashboardByStation(query)
+	byCrop, err := s.summaryRepository.DashboardByCrop(query)
 	if err != nil {
 		return nil, err
 	}
-	stationFarmerCount, err := s.summaryRepository.DashboardFarmerCountByStation(query)
-	if err != nil {
-		return nil, err
-	}
-	byCrop, err := s.stationSummaryRepository.DashboardByCrop(query)
-	if err != nil {
-		return nil, err
-	}
-	cropFarmerCount, err := s.summaryRepository.DashboardFarmerCountByCrop(query)
-	if err != nil {
-		return nil, err
-	}
-	enrichDashboardRows(byStation, overview, func(row *grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int {
-		return stationFarmerCount[row.StationID]
-	})
-	enrichDashboardRows(byCrop, overview, func(row *grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int {
-		return cropFarmerCount[row.Name]
-	})
+	enrichDashboardRows(byStation, overview, func(row *grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int { return row.FarmerCount })
+	enrichDashboardRows(byCrop, overview, func(row *grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO) int { return row.FarmerCount })
 	now := time.Now()
 	return &grainPurchaseDTO.GrainPurchaseDashboardDTO{
 		StartDate: formatDashboardDate(query.StartDate),

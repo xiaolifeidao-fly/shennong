@@ -160,11 +160,11 @@
           </view>
           <view class="kv">
             <text class="kv-label">电话</text>
-            <text class="kv-value">{{ farmer.phone || '-' }}</text>
+            <text class="kv-value">{{ maskPhone(farmer.phone) || '-' }}</text>
           </view>
           <view class="kv">
             <text class="kv-label">身份证号</text>
-            <text class="kv-value">{{ farmer.idNumber || '-' }}</text>
+            <text class="kv-value">{{ maskIdNumber(farmer.idNumber) || '-' }}</text>
           </view>
         </view>
       </view>
@@ -177,6 +177,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useGrainStore } from '@/stores/grain'
 import { formatAmount, formatQuantityByDisplayUnit, getEntryPrice } from '@/utils/grain'
+import { maskIdNumber, maskPhone } from '@/utils/privacy'
 import type { GrainEntryDraft } from '@/types/grain'
 
 const grainStore = useGrainStore()

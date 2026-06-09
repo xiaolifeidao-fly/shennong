@@ -47,8 +47,8 @@ func (r *GrainPurchaseEntryRepository) ListDTOByQuery(query grainPurchaseDTO.Gra
 func (r *GrainPurchaseEntryRepository) entryListBaseQuery() *gorm.DB {
 	return r.Db.Table("grain_purchase_entry AS e").
 		Joins("LEFT JOIN grain_station AS gs ON gs.id = e.station_id").
-		Joins("LEFT JOIN grain_farmer AS f ON f.id = e.farmer_id AND f.active = ?", 1).
-		Where("e.active = ?", 1)
+		Joins("JOIN grain_farmer AS f ON f.id = e.farmer_id AND f.active = ? AND COALESCE(f.status, '') <> ?", 1, "inactive").
+		Where("e.active = ? AND e.status NOT IN ?", 1, []string{"voided", "deleted"})
 }
 
 type GrainPurchaseEntrySnapshotRepository struct {
@@ -145,7 +145,7 @@ func (r *GrainFarmerPurchaseSummaryRepository) ListDailyFarmerSummaries(query gr
 
 func (r *GrainFarmerPurchaseSummaryRepository) dailySummaryBaseQuery() *gorm.DB {
 	return r.Db.Table("grain_farmer_purchase_summary AS s").
-		Joins("JOIN grain_farmer AS f ON f.id = s.farmer_id AND f.active = ?", 1).
+		Joins("JOIN grain_farmer AS f ON f.id = s.farmer_id AND f.active = ? AND COALESCE(f.status, '') <> ?", 1, "inactive").
 		Where("s.active = ? AND s.entry_count > ?", 1, 0)
 }
 
@@ -407,6 +407,7 @@ func applySnapshotQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainEntrySnaps
 }
 
 func applySummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainFarmerPurchaseSummaryQueryDTO) *gorm.DB {
+	dbQuery = dbQuery.Where("entry_count > ?", 0)
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("station_id = ?", query.StationID)
 	}
@@ -493,10 +494,36 @@ func (r *GrainFarmerPurchaseSummaryRepository) DashboardNewFarmerCount(query gra
 		return 0, fmt.Errorf("database is not initialized")
 	}
 	var total int64
-	err := applyDashboardFarmerSummaryQuery(r.Db.Table("grain_farmer_purchase_summary AS s"), query).
+	err := applyDashboardFarmerSummaryQuery(r.activeFarmerSummaryBaseQuery(), query).
 		Distinct("s.farmer_id").
 		Count(&total).Error
 	return int(total), err
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) DashboardOverview(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (*grainPurchaseDTO.GrainPurchaseDashboardMetricDTO, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var metric grainPurchaseDTO.GrainPurchaseDashboardMetricDTO
+	err := applyDashboardFarmerSummaryQuery(r.activeFarmerSummaryBaseQuery(), query).
+		Select(`
+			COALESCE(SUM(s.entry_count), 0) AS entry_count,
+			COALESCE(SUM(s.total_quantity), 0) AS total_quantity,
+			COALESCE(SUM(s.total_amount), 0) AS total_amount,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.app_user_id END) AS active_user_count,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.farmer_id END) AS new_farmer_count`,
+		).
+		Scan(&metric).Error
+	if err != nil {
+		return nil, err
+	}
+	if metric.TotalQuantity > 0 {
+		metric.AverageUnitPrice = metric.TotalAmount / metric.TotalQuantity
+	}
+	if metric.NewFarmerCount > 0 {
+		metric.AverageFarmerDeal = metric.TotalAmount / float64(metric.NewFarmerCount)
+	}
+	return &metric, nil
 }
 
 func (r *GrainFarmerPurchaseSummaryRepository) DashboardFarmerCountByStation(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) (map[uint64]int, error) {
@@ -508,7 +535,7 @@ func (r *GrainFarmerPurchaseSummaryRepository) DashboardFarmerCountByStation(que
 		FarmerCount int
 	}
 	var rows []row
-	err := applyDashboardFarmerSummaryQuery(r.Db.Table("grain_farmer_purchase_summary AS s"), query).
+	err := applyDashboardFarmerSummaryQuery(r.activeFarmerSummaryBaseQuery(), query).
 		Select("s.station_id AS station_id, COUNT(DISTINCT s.farmer_id) AS farmer_count").
 		Group("s.station_id").
 		Scan(&rows).Error
@@ -531,7 +558,7 @@ func (r *GrainFarmerPurchaseSummaryRepository) DashboardFarmerCountByCrop(query 
 		FarmerCount int
 	}
 	var rows []row
-	err := applyDashboardFarmerSummaryQuery(r.Db.Table("grain_farmer_purchase_summary AS s"), query).
+	err := applyDashboardFarmerSummaryQuery(r.activeFarmerSummaryBaseQuery(), query).
 		Select("COALESCE(NULLIF(s.crop, ''), '未命名粮食') AS name, COUNT(DISTINCT s.farmer_id) AS farmer_count").
 		Group("COALESCE(NULLIF(s.crop, ''), '未命名粮食')").
 		Scan(&rows).Error
@@ -543,6 +570,56 @@ func (r *GrainFarmerPurchaseSummaryRepository) DashboardFarmerCountByCrop(query 
 		result[item.Name] = item.FarmerCount
 	}
 	return result, nil
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) DashboardByStation(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) ([]*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var rows []*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO
+	err := applyDashboardFarmerSummaryQuery(r.activeFarmerSummaryBaseQuery(), query).
+		Joins("LEFT JOIN grain_station AS gs ON gs.id = s.station_id").
+		Select(`
+			CAST(s.station_id AS CHAR) AS ` + "`key`" + `,
+			s.station_id AS station_id,
+			COALESCE(NULLIF(gs.station_name, ''), CONCAT('粮站 ', s.station_id)) AS name,
+			COALESCE(SUM(s.entry_count), 0) AS entry_count,
+			COALESCE(SUM(s.total_quantity), 0) AS total_quantity,
+			COALESCE(SUM(s.total_amount), 0) AS total_amount,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.app_user_id END) AS active_user_count,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.farmer_id END) AS farmer_count`,
+		).
+		Group("s.station_id, gs.station_name").
+		Order("total_amount DESC, total_quantity DESC").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) DashboardByCrop(query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) ([]*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var rows []*grainPurchaseDTO.GrainPurchaseDashboardDimensionDTO
+	err := applyDashboardFarmerSummaryQuery(r.activeFarmerSummaryBaseQuery(), query).
+		Select(`
+			COALESCE(NULLIF(s.crop, ''), '未命名粮食') AS ` + "`key`" + `,
+			COALESCE(NULLIF(s.crop, ''), '未命名粮食') AS name,
+			MAX(s.purchase_type_id) AS purchase_type_id,
+			COALESCE(SUM(s.entry_count), 0) AS entry_count,
+			COALESCE(SUM(s.total_quantity), 0) AS total_quantity,
+			COALESCE(SUM(s.total_amount), 0) AS total_amount,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.app_user_id END) AS active_user_count,
+			COUNT(DISTINCT CASE WHEN s.entry_count > 0 THEN s.farmer_id END) AS farmer_count`,
+		).
+		Group("COALESCE(NULLIF(s.crop, ''), '未命名粮食')").
+		Order("total_amount DESC, total_quantity DESC").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func (r *GrainFarmerPurchaseSummaryRepository) activeFarmerSummaryBaseQuery() *gorm.DB {
+	return r.Db.Table("grain_farmer_purchase_summary AS s").
+		Joins("JOIN grain_farmer AS f ON f.id = s.farmer_id AND f.active = ? AND COALESCE(f.status, '') <> ?", 1, "inactive")
 }
 
 func applyDashboardSummaryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseDashboardQueryDTO) *gorm.DB {

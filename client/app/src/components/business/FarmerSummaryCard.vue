@@ -33,6 +33,7 @@
 import { computed } from 'vue'
 import { formatAmount, formatQuantitySummary, pickTime } from '@/utils/grain'
 import type { FarmerSummary } from '@/types/grain'
+import { maskIdNumber, maskPhone } from '@/utils/privacy'
 
 const props = defineProps<{
   farmer: FarmerSummary
@@ -47,9 +48,9 @@ defineEmits<{
 const badgeText = computed(() => (props.farmer.status === 'missing-bank' ? '待补' : '完整'))
 const metaText = computed(() => {
   if (props.compact) {
-    return props.farmer.statusText
+    return [props.farmer.statusText, maskPhone(props.farmer.phone), maskIdNumber(props.farmer.idNumber)].filter(Boolean).join(' · ')
   }
-  return `身份证 ${props.farmer.idNumber} · 最近 ${pickTime(props.farmer.latestTime)}`
+  return `身份证 ${maskIdNumber(props.farmer.idNumber) || '-'} · 手机 ${maskPhone(props.farmer.phone) || '-'} · 最近 ${pickTime(props.farmer.latestTime)}`
 })
 </script>
 
