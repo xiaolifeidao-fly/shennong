@@ -12,6 +12,7 @@ import (
 
 	appUserPassword "service/app_user/password"
 	appUserRepository "service/app_user/repository"
+	grainConfigRepository "service/grain_config/repository"
 
 	"gorm.io/gorm"
 )
@@ -26,6 +27,7 @@ var (
 	ErrNotLogin           = errors.New("user not login")
 	ErrInvalidCredential  = errors.New("用户名或密码错误")
 	ErrUserDisabled       = errors.New("该用户已被封禁")
+	ErrStationDisabled    = errors.New("所属粮站已禁用，不允许登录")
 	ErrLoginTooManyErrors = errors.New("用户密码错误次数太多,请一小时后再试")
 )
 
@@ -39,12 +41,16 @@ type LoginUser struct {
 type AuthService struct {
 	appUserRepository            *appUserRepository.AppUserRepository
 	appUserLoginRecordRepository *appUserRepository.AppUserLoginRecordRepository
+	stationRepository            *grainConfigRepository.GrainStationRepository
+	stationUserRepository        *grainConfigRepository.GrainStationUserRepository
 }
 
 func NewAuthService() *AuthService {
 	return &AuthService{
 		appUserRepository:            db.GetRepository[appUserRepository.AppUserRepository](),
 		appUserLoginRecordRepository: db.GetRepository[appUserRepository.AppUserLoginRecordRepository](),
+		stationRepository:            db.GetRepository[grainConfigRepository.GrainStationRepository](),
+		stationUserRepository:        db.GetRepository[grainConfigRepository.GrainStationUserRepository](),
 	}
 }
 
@@ -75,6 +81,9 @@ func (s *AuthService) Login(account, password, ip string, maxLoginErrorNum int64
 	}
 	if user.Active == 0 || !strings.EqualFold(strings.TrimSpace(user.Status), "active") {
 		return "", nil, ErrUserDisabled
+	}
+	if err := s.ensureUserStationActive(uint64(user.Id)); err != nil {
+		return "", nil, err
 	}
 	encryptedPassword := appUserPassword.Encrypt(user.Username, password)
 	if !strings.EqualFold(encryptedPassword, strings.TrimSpace(user.Password)) {
@@ -120,7 +129,7 @@ func (s *AuthService) ValidateToken(token, requestURL string) (*LoginUser, error
 		return nil, ErrNotLogin
 	}
 	if err := s.ensureLoginUserValid(loginUser); err != nil {
-		if err == ErrNotLogin || err == ErrUserDisabled {
+		if err == ErrNotLogin || err == ErrUserDisabled || err == ErrStationDisabled {
 			redisMiddleware.Del(buildUserTokenKey(token))
 		}
 		return nil, err
@@ -152,6 +161,9 @@ func (s *AuthService) LoginAppUser(user *appUserRepository.AppUser, ip string) (
 	}
 	if user.Active == 0 || !strings.EqualFold(strings.TrimSpace(user.Status), "active") {
 		return "", nil, ErrUserDisabled
+	}
+	if err := s.ensureUserStationActive(uint64(user.Id)); err != nil {
+		return "", nil, err
 	}
 
 	now := time.Now()
@@ -226,6 +238,9 @@ func (s *AuthService) ensureLoginUserValid(loginUser *LoginUser) error {
 	if !strings.EqualFold(strings.TrimSpace(entity.Status), "active") {
 		return ErrUserDisabled
 	}
+	if err := s.ensureUserStationActive(uint64(entity.Id)); err != nil {
+		return err
+	}
 
 	loginUser.Name = entity.Name
 	loginUser.Username = entity.Username
@@ -235,6 +250,36 @@ func (s *AuthService) ensureLoginUserValid(loginUser *LoginUser) error {
 
 func (s *AuthService) flushExpireTime(token string) error {
 	redisMiddleware.Expire(buildUserTokenKey(token), time.Duration(tokenExpireSeconds)*time.Second)
+	return nil
+}
+
+func (s *AuthService) ensureUserStationActive(appUserID uint64) error {
+	if appUserID == 0 {
+		return ErrNotLogin
+	}
+	if s.stationUserRepository.Db == nil || s.stationRepository.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	stationUser, err := s.stationUserRepository.FindActiveByAppUserID(appUserID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrStationDisabled
+		}
+		return err
+	}
+	if stationUser == nil || stationUser.Active == 0 || !strings.EqualFold(strings.TrimSpace(stationUser.Status), "active") {
+		return ErrStationDisabled
+	}
+	station, err := s.stationRepository.FindById(uint(stationUser.StationID))
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return ErrStationDisabled
+		}
+		return err
+	}
+	if station == nil || station.Active == 0 || !strings.EqualFold(strings.TrimSpace(station.Status), "active") {
+		return ErrStationDisabled
+	}
 	return nil
 }
 

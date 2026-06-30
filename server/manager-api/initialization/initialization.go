@@ -68,6 +68,7 @@ var initializers = []Initializer{
 				Enabled:         vipper.GetBool("oss.enabled"),
 				DirPrefix:       vipper.GetString("oss.dirPrefix"),
 				Endpoint:        vipper.GetString("oss.endpoint"),
+				PublicEndpoint:  vipper.GetString("oss.public.endpoint"),
 				BucketName:      vipper.GetString("oss.bucketName"),
 				AccessKeyId:     vipper.GetString("oss.accessKeyId"),
 				AccessKeySecret: vipper.GetString("oss.accessKeySecret"),

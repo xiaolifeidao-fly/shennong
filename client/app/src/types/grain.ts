@@ -76,9 +76,9 @@ export interface GrainEntryDraft {
   bankName: string
   purchaseTypeId: number
   crop: string
-  quantity: number
+  quantity: number | string
   unit: string
-  amount: number
+  amount: number | string
   buyTime: string
   payTime: string
   placeId: number
@@ -171,7 +171,11 @@ export interface GrainStationDetail {
   latitude: string
   status: string
   remark: string
+  accountHolderName: string
+  bankName: string
+  bankAccountNumber: string
   businessLicenseUrl: string
+  businessLicenseKey?: string
   lastSource?: string
   wxCloudUrl?: string
 }
@@ -388,7 +392,15 @@ export interface GrainDashboard {
   generated?: string
 }
 
-export type GrainCardOcrType = 'id-card' | 'bank-card'
+export type GrainCardOcrType = 'id-card' | 'bank-card' | 'social-security-card'
+
+// 收款卡识别类型：银行卡或社保卡（社保卡读取其关联的金融账户号回填收款账号）
+export type PayCardOcrType = Extract<GrainCardOcrType, 'bank-card' | 'social-security-card'>
+
+export const PAY_CARD_OCR_OPTIONS: Array<{ label: string; value: PayCardOcrType }> = [
+  { label: '银行卡', value: 'bank-card' },
+  { label: '社保卡', value: 'social-security-card' },
+]
 
 export interface GrainCardOcrResult {
   cardType: GrainCardOcrType
@@ -396,6 +408,7 @@ export interface GrainCardOcrResult {
   ossBucket: string
   ossObjectKey: string
   ossUrl: string
+  imageUrl?: string
   wxCloudUrl?: string
   fileName: string
   fileSize: number

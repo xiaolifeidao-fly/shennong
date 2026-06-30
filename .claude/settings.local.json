@@ -85,7 +85,28 @@
       "Bash(python3 -c \"import pymysql; print\\('ok'\\)\")",
       "Bash(pip3 install *)",
       "Bash(role)",
-      "Bash(grep -r \"pub_token\\\\|PubToken\\\\|\\\\\"role\\\\\"\\\\|`role`\\\\|column:role\" /Users/fly/Documents/develop/project/private/shennong/server --include=\"*.go\" -n)"
+      "Bash(grep -r \"pub_token\\\\|PubToken\\\\|\\\\\"role\\\\\"\\\\|`role`\\\\|column:role\" /Users/fly/Documents/develop/project/private/shennong/server --include=\"*.go\" -n)",
+      "WebFetch(domain:help.aliyun.com)",
+      "Bash(echo \"service exit: $?\")",
+      "Bash(echo \"vue-tsc exit: $?\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"=== internal contents ===\"; find server/app-api/pkg/internal -type f 2>/dev/null; echo \"=== grain_config handler ===\"; ls server/app-api/pkg/grain_config/; echo \"---\"; sed -n '1,40p' server/app-api/pkg/grain_config/*.go 2>/dev/null | head -60; echo \"=== auth pkg ===\"; find server/app-api/auth -type f; grep -rn \"func Public\\\\|ContextUserKey\\\\|ContextTokenKey\\\\|func ExtractToken\" server/app-api/auth/ | head)",
+      "Bash(mkdir -p service/agreement/repository service/agreement/content app-api/pkg/internal/wechat app-api/pkg/agreement)",
+      "Bash(ls *.mod)",
+      "Bash(ls app-api/go.mod service/go.mod common/go.mod)",
+      "Bash(gofmt -l agreement/ ../app-api/pkg/agreement/ ../app-api/pkg/internal/wechat/)",
+      "Bash(gofmt -w app-api/pkg/agreement/agreement.go)",
+      "Bash(gofmt -l app-api/pkg/agreement/agreement.go)",
+      "Bash(go vet *)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('src/pages.json','utf8'\\)\\);console.log\\('pages.json OK'\\)\")",
+      "Bash(curl -s -m 15 -o /tmp/agr.json -w \"HTTP %{http_code}\\\\n\" https://www.nongshoubao.cn/app/api/agreement)",
+      "Bash(curl -s -m 15 -o /dev/null -w \"HTTP %{http_code}\\\\n\" -X POST -H \"Content-Type: application/json\" -d '{}' https://www.nongshoubao.cn/app/api/login)",
+      "Bash(echo \"退出码: $?\")",
+      "Bash(node -e \"const j=require\\('./app.json'\\); console.log\\(j.pages.join\\('\\\\n'\\)\\)\")",
+      "Bash(curl -s -m 15 -X POST -H \"Content-Type: application/json\" -d '{\"code\":\"dummy123\"}' https://www.nongshoubao.cn/app/api/agreement/agree -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -m 15 -X POST -H \"Content-Type: application/json\" -d '{\"code\":\"dummy123\"}' https://www.nongshoubao.cn/app/api/agreement/status -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(node -e \"const j=require\\('./src/pages.json'\\); console.log\\(JSON.stringify\\(j.globalStyle,null,2\\)\\)\")",
+      "Bash(node -e \"const j=require\\('./src/pages.json'\\); console.log\\(JSON.stringify\\(j.pages.find\\(p=>p.path==='pages/agreement/index'\\),null,2\\)\\)\")"
     ]
   }
 }

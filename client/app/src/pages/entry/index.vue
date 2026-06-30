@@ -43,7 +43,7 @@ import FarmerIdentityForm from './components/FarmerIdentityForm.vue'
 import GrainPurchaseForm from './components/GrainPurchaseForm.vue'
 import SectionHeader from '@/components/business/SectionHeader.vue'
 import { useGrainStore } from '@/stores/grain'
-import type { GrainEntryDraft } from '@/types/grain'
+import type { GrainEntryDraft, PayCardOcrType } from '@/types/grain'
 
 const grainStore = useGrainStore()
 const draft = ref<GrainEntryDraft>(grainStore.createEntryDraft())
@@ -138,13 +138,14 @@ async function applyIdScan() {
   }
 }
 
-async function applyBankScan() {
+async function applyBankScan(cardType: PayCardOcrType = 'bank-card') {
+  const cardLabel = cardType === 'social-security-card' ? '社保卡' : '银行卡'
   try {
     const filePath = await chooseCardPhoto()
-    draft.value = { ...draft.value, ...(await grainStore.recognizeBankCard(filePath, draft.value)) }
-    uni.showToast({ title: '银行卡识别完成', icon: 'success' })
+    draft.value = { ...draft.value, ...(await grainStore.recognizeBankCard(filePath, draft.value, cardType)) }
+    uni.showToast({ title: `${cardLabel}识别完成`, icon: 'success' })
   } catch (error) {
-    const message = error instanceof Error ? error.message : '银行卡识别失败'
+    const message = error instanceof Error ? error.message : `${cardLabel}识别失败`
     if (!message.includes('cancel') && !message.includes('取消')) {
       uni.showToast({ title: message, icon: 'none' })
     }
@@ -225,8 +226,14 @@ function validateDraft(value: GrainEntryDraft) {
   if (!/^\d{11}$/.test(phone)) {
     return '农户电话必须为 11 位数字'
   }
-  if (!value.crop.trim()) {
-    return '请选择或填写收购类型'
+  if (!grainStore.preset.purchaseTypes.length) {
+    return '当前粮站暂无粮食类型，请先联系管理员维护'
+  }
+  const selectedPurchaseType = grainStore.preset.purchaseTypes.find(
+    (item) => item.id === Number(value.purchaseTypeId) && item.typeName === value.crop,
+  )
+  if (!selectedPurchaseType) {
+    return '收购粮食类型为必填项，请从已有粮食类型中选择'
   }
   if (Number(value.quantity) <= 0) {
     return '请填写购进重量'

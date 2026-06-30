@@ -6,7 +6,9 @@ import {
   BankOutlined,
   CameraOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
+  ExportOutlined,
   FileImageOutlined,
   HistoryOutlined,
   IdcardOutlined,
@@ -31,6 +33,7 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
+  Progress,
   Select,
   Space,
   Table,
@@ -53,6 +56,7 @@ import {
   grainFarmerApi,
   grainPaymentMethodApi,
   grainPurchaseEntryApi,
+  grainPurchaseEntryExportApi,
   grainPurchaseEntrySnapshotApi,
   listAllGrainPurchaseTypes,
   recognizeGrainCard,
@@ -62,6 +66,7 @@ import {
   type GrainFarmerRecord,
   type GrainPayload,
   type GrainEntryMaterialRecord,
+  type GrainPurchaseEntryExportBatchRecord,
   type GrainPurchaseEntryRecord,
   type GrainPurchaseEntrySnapshotRecord,
 } from "../api/grain.api";
@@ -96,7 +101,7 @@ type EntryFormValues = {
 
 type OcrTarget = {
   title: string;
-  cardType: "id-card" | "bank-card";
+  cardType: "id-card" | "bank-card" | "social-security-card";
   imageSide?: "front" | "back";
 };
 
@@ -128,6 +133,23 @@ function renderValue(value: unknown) {
 function statusTag(value: unknown) {
   const option = statusOptions.find((item) => item.value === value);
   return <Tag color={value === "voided" ? "red" : "green"}>{option?.label ?? renderValue(value)}</Tag>;
+}
+
+function exportStatusMeta(value: string) {
+  switch (value) {
+    case "pending":
+      return { label: "等待中", color: "default" };
+    case "running":
+      return { label: "导出中", color: "processing" };
+    case "success":
+      return { label: "已完成", color: "success" };
+    case "partial_success":
+      return { label: "部分成功", color: "warning" };
+    case "failed":
+      return { label: "失败", color: "error" };
+    default:
+      return { label: renderValue(value), color: "default" };
+  }
 }
 
 function compactPayload(values: Record<string, unknown>) {
@@ -228,6 +250,14 @@ export function GrainPurchaseEntryPanel() {
   const [historySnapshots, setHistorySnapshots] = useState<GrainPurchaseEntrySnapshotRecord[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportCount, setExportCount] = useState<number | null>(null);
+  const [exportCounting, setExportCounting] = useState(false);
+  const [exportStarting, setExportStarting] = useState(false);
+  const [exportBatches, setExportBatches] = useState<GrainPurchaseEntryExportBatchRecord[]>([]);
+  const [exportTotal, setExportTotal] = useState(0);
+  const [exportPageIndex, setExportPageIndex] = useState(1);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const watchedQuantity = Form.useWatch("quantity", form);
   const watchedAmount = Form.useWatch("amount", form);
@@ -325,6 +355,70 @@ export function GrainPurchaseEntryPanel() {
     maxAmount: filterMaxAmount,
   });
 
+  const exportFilterQuery = () => {
+    return Object.fromEntries(Object.entries(filterQuery()).filter(([key]) => key !== "pageIndex")) as CrudListQuery;
+  };
+
+  const loadExportBatches = useCallback(async (pageIndex = exportPageIndex) => {
+    setExportLoading(true);
+    try {
+      const result = await grainPurchaseEntryExportApi.list({ pageIndex, pageSize: 5 });
+      setExportBatches(result.data);
+      setExportTotal(result.total);
+      setExportPageIndex(pageIndex);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载导出批次失败");
+    } finally {
+      setExportLoading(false);
+    }
+  }, [exportPageIndex]);
+
+  const openExport = async () => {
+    setExportOpen(true);
+    setExportCount(null);
+    await loadExportBatches(1);
+  };
+
+  const handleExportCount = async () => {
+    setExportCounting(true);
+    try {
+      const result = await grainPurchaseEntryExportApi.count(exportFilterQuery());
+      setExportCount(result.totalCount);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "统计导出数量失败");
+    } finally {
+      setExportCounting(false);
+    }
+  };
+
+  const handleStartExport = async () => {
+    setExportStarting(true);
+    try {
+      const result = await grainPurchaseEntryExportApi.create(exportFilterQuery());
+      setExportCount(result.totalCount);
+      message.success(`导出批次 ${result.batch.batchNo} 已创建`);
+      await loadExportBatches(1);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "创建导出批次失败");
+    } finally {
+      setExportStarting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!exportOpen) {
+      return undefined;
+    }
+    const hasRunning = exportBatches.some((item) => item.status === "pending" || item.status === "running");
+    if (!hasRunning) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      void loadExportBatches(exportPageIndex);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [exportBatches, exportOpen, exportPageIndex, loadExportBatches]);
+
   const searchFarmers = useCallback(async (keyword: string) => {
     if (!keyword.trim()) return;
     setFarmerSearching(true);
@@ -396,7 +490,7 @@ export function GrainPurchaseEntryPanel() {
       { key: "farmerIdNumber", label: "身份证号", render: (value) => <SensitiveValue value={value} keepStart={6} keepEnd={4} /> },
       { key: "farmerPhone", label: "手机号" },
       { key: "farmerBankNumber", label: "银行卡号", render: (value) => <SensitiveValue value={value} keepStart={4} keepEnd={4} /> },
-      { key: "farmerBankName", label: "开户行" },
+      { key: "farmerBankName", label: "开户人" },
       { key: "crop", label: "收购类型" },
       { key: "quantity", label: "重量" },
       { key: "unit", label: "单位" },
@@ -556,11 +650,12 @@ export function GrainPurchaseEntryPanel() {
       message.success(result.mock ? "模拟身份证识别完成" : "身份证识别完成");
       return;
     }
+    const cardLabel = result.cardType === "social-security-card" ? "社保卡" : "银行卡";
     form.setFieldsValue({
       farmerBankNumber: result.bankNumber || form.getFieldValue("farmerBankNumber"),
       farmerBankName: result.bankName || form.getFieldValue("farmerBankName"),
     });
-    message.success(result.mock ? "模拟银行卡识别完成" : "银行卡识别完成");
+    message.success(result.mock ? `模拟${cardLabel}识别完成` : `${cardLabel}识别完成`);
   };
 
   const beforeUpload = (file: RcFile) => {
@@ -761,6 +856,49 @@ export function GrainPurchaseEntryPanel() {
     },
   ];
 
+  const exportColumns: ColumnsType<GrainPurchaseEntryExportBatchRecord> = [
+    { title: "批次", dataIndex: "batchNo", width: 180 },
+    { title: "用户名", dataIndex: "username", width: 120, render: renderValue },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 120,
+      render: (value: string) => {
+        const meta = exportStatusMeta(value);
+        return <Tag color={meta.color}>{meta.label}</Tag>;
+      },
+    },
+    { title: "总数量", dataIndex: "totalCount", width: 90 },
+    { title: "成功数量", dataIndex: "successCount", width: 90 },
+    { title: "失败数量", dataIndex: "failCount", width: 90 },
+    {
+      title: "进度",
+      key: "progress",
+      width: 160,
+      render: (_, record) => {
+        const done = Number(record.successCount || 0) + Number(record.failCount || 0);
+        const percent = record.totalCount > 0 ? Math.min(100, Math.round((done / record.totalCount) * 100)) : 0;
+        return <Progress percent={percent} size="small" status={record.status === "failed" ? "exception" : undefined} />;
+      },
+    },
+    { title: "时间", dataIndex: "createdTime", width: 170, render: formatTime },
+    {
+      title: "操作",
+      key: "actions",
+      width: 90,
+      render: (_, record) =>
+        record.status === "success" || record.status === "partial_success" ? (
+          <Tooltip title="下载文件">
+            <Button
+              type="text"
+              icon={<DownloadOutlined />}
+              onClick={() => window.open(grainPurchaseEntryExportApi.downloadUrl(record.batchNo), "_blank")}
+            />
+          </Tooltip>
+        ) : null,
+    },
+  ];
+
   const imageCards = [
     { label: "身份证人像面", value: farmerImages?.idCardFront },
     { label: "身份证国徽面", value: farmerImages?.idCardBack },
@@ -858,14 +996,6 @@ export function GrainPurchaseEntryPanel() {
               <Tag style={{ color: "var(--manager-text-soft)", background: "var(--manager-green-soft)", border: "none" }}>
                 共 {total} 条
               </Tag>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={openCreate}
-                style={{ color: "#ffffff", border: "none", background: "linear-gradient(135deg, #145535 0%, #237a4b 100%)" }}
-              >
-                新增收粮明细
-              </Button>
             </Space>
           </div>
           <Space wrap size={12}>
@@ -907,6 +1037,17 @@ export function GrainPurchaseEntryPanel() {
             >
               重置
             </Button>
+            <Button icon={<ExportOutlined />} onClick={() => void openExport()}>
+              导出
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+              style={{ color: "#ffffff", border: "none", background: "linear-gradient(135deg, #145535 0%, #237a4b 100%)" }}
+            >
+              新增收粮明细
+            </Button>
           </Space>
         </div>
       </section>
@@ -927,6 +1068,165 @@ export function GrainPurchaseEntryPanel() {
           }}
         />
       </section>
+
+      <Modal
+        title="导出收粮明细"
+        open={exportOpen}
+        width={1080}
+        footer={<Button onClick={() => setExportOpen(false)}>关闭</Button>}
+        onCancel={() => setExportOpen(false)}
+        destroyOnClose={false}
+      >
+        <div style={{ display: "grid", gap: 16 }}>
+          <section style={{ display: "grid", gap: 12 }}>
+            <Space wrap size={12}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="粮站"
+                value={filterStationId}
+                onChange={(value: number | undefined) => {
+                  setFilterStationId(value);
+                  setFilterPurchaseTypeIds([]);
+                  setExportCount(null);
+                }}
+                options={stationOptions}
+                style={{ minWidth: 180 }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="收粮类型"
+                value={filterPurchaseTypeIds}
+                onChange={(value) => {
+                  setFilterPurchaseTypeIds(value);
+                  setExportCount(null);
+                }}
+                options={purchaseTypeOptions}
+                loading={purchaseTypeLoading}
+                style={{ minWidth: 180 }}
+              />
+              <DatePicker.RangePicker
+                value={filterDateRange}
+                onChange={(dates) => {
+                  setFilterDateRange(dates as [Dayjs, Dayjs] | null);
+                  setExportCount(null);
+                }}
+                format="YYYY-MM-DD"
+                style={{ width: 250 }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                filterOption={false}
+                placeholder="业务员"
+                value={filterAppUserIds}
+                onChange={(value) => {
+                  setFilterAppUserIds(value);
+                  setExportCount(null);
+                }}
+                onSearch={(keyword) => void searchAppUsers(keyword)}
+                options={filterAppUserOptions}
+                loading={appUserSearching}
+                style={{ minWidth: 180 }}
+              />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                filterOption={false}
+                placeholder="农户"
+                value={filterFarmerIds}
+                onChange={(value) => {
+                  setFilterFarmerIds(value);
+                  setExportCount(null);
+                }}
+                onSearch={(keyword) => void searchFarmers(keyword)}
+                options={filterFarmerOptions}
+                loading={farmerSearching}
+                style={{ minWidth: 180 }}
+              />
+              <InputNumber
+                placeholder="最低金额"
+                min={0}
+                precision={2}
+                value={filterMinAmount}
+                onChange={(value) => {
+                  setFilterMinAmount(value ?? undefined);
+                  setExportCount(null);
+                }}
+                addonBefore="￥"
+                style={{ width: 140 }}
+              />
+              <InputNumber
+                placeholder="最高金额"
+                min={0}
+                precision={2}
+                value={filterMaxAmount}
+                onChange={(value) => {
+                  setFilterMaxAmount(value ?? undefined);
+                  setExportCount(null);
+                }}
+                addonBefore="￥"
+                style={{ width: 140 }}
+              />
+            </Space>
+            <Space wrap>
+              <Button type="primary" icon={<SearchOutlined />} loading={exportCounting} onClick={() => void handleExportCount()}>
+                筛选
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  setFilterStationId(undefined);
+                  setFilterPurchaseTypeIds([]);
+                  setFilterDateRange(null);
+                  setFilterAppUserIds([]);
+                  setFilterFarmerIds([]);
+                  setFilterFarmerOptions([]);
+                  setFilterAppUserOptions([]);
+                  setFilterMinAmount(undefined);
+                  setFilterMaxAmount(undefined);
+                  setExportCount(null);
+                }}
+              >
+                重置条件
+              </Button>
+              <Button
+                type="primary"
+                icon={<ExportOutlined />}
+                disabled={exportCount === null || exportCount <= 0}
+                loading={exportStarting}
+                onClick={() => void handleStartExport()}
+              >
+                下一步导出
+              </Button>
+              {exportCount !== null ? <Tag color="green">符合条件 {exportCount} 条</Tag> : null}
+            </Space>
+          </section>
+
+          <Divider style={{ margin: "4px 0" }} />
+          <Table<GrainPurchaseEntryExportBatchRecord>
+            rowKey="batchNo"
+            size="small"
+            loading={exportLoading}
+            dataSource={exportBatches}
+            columns={exportColumns}
+            scroll={{ x: 1050 }}
+            pagination={{
+              current: exportPageIndex,
+              pageSize: 5,
+              total: exportTotal,
+              showSizeChanger: false,
+              onChange: (page) => void loadExportBatches(page),
+            }}
+          />
+        </div>
+      </Modal>
 
       <Drawer
         title={null}
@@ -1089,11 +1389,18 @@ export function GrainPurchaseEntryPanel() {
                     <Text type="secondary">{formSections[2].description}</Text>
                   </div>
                   {bankPaymentSelected ? (
-                    <Tooltip title="识别银行卡">
-                      <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
-                        银行卡
-                      </Button>
-                    </Tooltip>
+                    <Space wrap>
+                      <Tooltip title="识别银行卡">
+                        <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别银行卡", cardType: "bank-card" })}>
+                          银行卡
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="识别社保卡">
+                        <Button icon={<BankOutlined />} onClick={() => setOcrTarget({ title: "识别社保卡", cardType: "social-security-card" })}>
+                          社保卡
+                        </Button>
+                      </Tooltip>
+                    </Space>
                   ) : null}
                 </div>
                 <div className="manager-form-grid">
@@ -1120,8 +1427,8 @@ export function GrainPurchaseEntryPanel() {
                   </Form.Item>
                   {hasPaymentMethod ? (
                     <>
-                      <Form.Item name="farmerBankName" label={bankPaymentSelected ? "开户行" : "收款人姓名"}>
-                        <Input placeholder={bankPaymentSelected ? "请输入开户行" : "请输入收款人姓名"} />
+                      <Form.Item name="farmerBankName" label={bankPaymentSelected ? "开户人" : "收款人姓名"}>
+                        <Input placeholder={bankPaymentSelected ? "请输入开户人姓名" : "请输入收款人姓名"} />
                       </Form.Item>
                       <Form.Item name="farmerBankNumber" label={bankPaymentSelected ? "银行卡号" : "收款账号"}>
                         <Input
@@ -1339,7 +1646,7 @@ export function GrainPurchaseEntryPanel() {
                   <Descriptions.Item label="银行卡号">
                     <SensitiveValue value={selectedSnapshot.farmerBankNumber} keepStart={4} keepEnd={4} />
                   </Descriptions.Item>
-                  <Descriptions.Item label="开户行">{renderValue(selectedSnapshot.farmerBankName)}</Descriptions.Item>
+                  <Descriptions.Item label="开户人">{renderValue(selectedSnapshot.farmerBankName)}</Descriptions.Item>
                   <Descriptions.Item label="手机号">{renderValue(selectedSnapshot.farmerPhone)}</Descriptions.Item>
                   <Descriptions.Item label="收购类型">{renderValue(selectedSnapshot.crop)}</Descriptions.Item>
                   <Descriptions.Item label="重量">
@@ -1386,7 +1693,7 @@ export function GrainPurchaseEntryPanel() {
             <ScanOutlined />
           </p>
           <p className="ant-upload-text">{ocrLoading ? "正在识别，请稍候" : "点击或拖拽图片到这里识别"}</p>
-          <p className="ant-upload-hint">支持身份证正面和银行卡照片；识别失败时可直接回到表单手动输入。</p>
+          <p className="ant-upload-hint">支持身份证正面、银行卡和社保卡照片；识别失败时可直接回到表单手动输入。</p>
         </Upload.Dragger>
       </Modal>
     </div>

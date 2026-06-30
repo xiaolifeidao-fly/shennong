@@ -4,14 +4,11 @@ import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
 	"common/middleware/storage/image_source"
-	"net/http"
-	"net/url"
 	farmerImageService "service/farmer_image"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type GrainFarmerImageHandler struct {
@@ -57,59 +54,16 @@ func (h *GrainFarmerImageHandler) getFarmerImages(context *gin.Context) {
 	}
 	appUserID, _ := appCtx.CurrentAppUserID(context)
 	if imageType := strings.TrimSpace(context.Query("imageType")); imageType != "" {
-		h.streamFarmerImage(context, farmerID, appUserID, imageType)
+		imageURL := h.farmerImageService.LatestFarmerImageURL(farmerID, appUserID, imageType)
+		if imageURL == "" {
+			commonRouter.ToError(context, "image not found")
+			return
+		}
+		commonRouter.ToJson(context, gin.H{"imageUrl": imageURL}, nil)
 		return
 	}
-	result := &farmerImageService.FarmerImagesResult{}
-	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "id-card-front") {
-		wxCloudURL := h.farmerImageService.LatestFarmerImageWXCloudURL(farmerID, appUserID, "id-card-front", "")
-		result.IDCardFrontWXCloudURL = wxCloudURL
-	}
-	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "id-card-back") {
-		wxCloudURL := h.farmerImageService.LatestFarmerImageWXCloudURL(farmerID, appUserID, "id-card-back", "")
-		result.IDCardBackWXCloudURL = wxCloudURL
-	}
-	if h.farmerImageService.HasLatestFarmerImage(farmerID, appUserID, "bank-card") {
-		wxCloudURL := h.farmerImageService.LatestFarmerImageWXCloudURL(farmerID, appUserID, "bank-card", "")
-		result.BankCardWXCloudURL = wxCloudURL
-	}
+	result := h.farmerImageService.GetLatestFarmerImages(farmerID, appUserID)
 	commonRouter.ToJson(context, result, nil)
-}
-
-func (h *GrainFarmerImageHandler) streamFarmerImage(context *gin.Context, farmerID, appUserID uint64, imageType string) {
-	content, err := h.farmerImageService.GetLatestFarmerImageContent(farmerID, appUserID, imageType)
-	if err == gorm.ErrRecordNotFound {
-		context.Status(http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		commonRouter.ToError(context, err.Error())
-		return
-	}
-	if content.Base64 != "" {
-		commonRouter.ToJson(context, imageBase64Response{
-			Mode:     "base64",
-			MimeType: content.MimeType,
-			FileName: content.FileName,
-			Base64:   content.Base64,
-			DataURL:  "data:" + content.MimeType + ";base64," + content.Base64,
-		}, nil)
-		return
-	}
-	context.Header("Cache-Control", "private, max-age=300")
-	context.Data(http.StatusOK, content.MimeType, content.Data)
-}
-
-type imageBase64Response struct {
-	Mode     string `json:"mode"`
-	MimeType string `json:"mimeType"`
-	FileName string `json:"fileName"`
-	Base64   string `json:"base64"`
-	DataURL  string `json:"dataUrl"`
-}
-
-func farmerImagePath(farmerID uint64, imageType string) string {
-	return "/grain-farmer-images?farmerId=" + strconv.FormatUint(farmerID, 10) + "&imageType=" + url.QueryEscape(imageType)
 }
 
 func (h *GrainFarmerImageHandler) saveFarmerImage(context *gin.Context) {

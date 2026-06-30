@@ -4,8 +4,6 @@ import (
 	commonRouter "common/middleware/routers"
 	"log"
 	"manager-api/pkg/internal/tenantctx"
-	"net/http"
-	"net/url"
 	farmerImageService "service/farmer_image"
 	grainFarmerService "service/grain_farmer"
 	grainFarmerDTO "service/grain_farmer/dto"
@@ -66,19 +64,10 @@ func (h *GrainFarmerHandler) getFarmerImages(context *gin.Context) {
 	}
 	appUserID, _ := strconv.ParseUint(context.Query("appUserId"), 10, 64)
 	if imageType := strings.TrimSpace(context.Query("imageType")); imageType != "" {
-		h.streamFarmerImage(context, id, appUserID, imageType)
+		h.getFarmerImageURL(context, id, appUserID, imageType)
 		return
 	}
-	result := &farmerImageService.FarmerImagesResult{}
-	if h.imageService.HasLatestFarmerImage(uint64(id), appUserID, "id-card-front") {
-		result.IDCardFront = h.farmerImagePath(id, appUserID, "id-card-front")
-	}
-	if h.imageService.HasLatestFarmerImage(uint64(id), appUserID, "id-card-back") {
-		result.IDCardBack = h.farmerImagePath(id, appUserID, "id-card-back")
-	}
-	if h.imageService.HasLatestFarmerImage(uint64(id), appUserID, "bank-card") {
-		result.BankCard = h.farmerImagePath(id, appUserID, "bank-card")
-	}
+	result := h.imageService.GetLatestFarmerImages(uint64(id), appUserID)
 	log.Printf("[farmer-image] list image paths success farmerID=%d appUserID=%d hasIDCardFront=%t hasIDCardBack=%t hasBankCard=%t", id, appUserID, result.IDCardFront != "", result.IDCardBack != "", result.BankCard != "")
 	commonRouter.ToJson(context, result, nil)
 }
@@ -93,25 +82,16 @@ func (h *GrainFarmerHandler) getFarmerImage(context *gin.Context) {
 	}
 	appUserID, _ := strconv.ParseUint(context.Query("appUserId"), 10, 64)
 	imageType := strings.TrimSpace(context.Param("imageType"))
-	h.streamFarmerImage(context, id, appUserID, imageType)
+	h.getFarmerImageURL(context, id, appUserID, imageType)
 }
 
-func (h *GrainFarmerHandler) streamFarmerImage(context *gin.Context, id uint, appUserID uint64, imageType string) {
-	log.Printf("[farmer-image] stream image request farmerID=%d appUserID=%d imageType=%s path=%s", id, appUserID, imageType, context.Request.URL.Path)
-	content, err := h.imageService.GetLatestFarmerImageContent(uint64(id), appUserID, imageType)
-	if err == gorm.ErrRecordNotFound {
-		log.Printf("[farmer-image] stream image not found farmerID=%d appUserID=%d imageType=%s", id, appUserID, imageType)
-		context.Status(http.StatusNotFound)
+func (h *GrainFarmerHandler) getFarmerImageURL(context *gin.Context, id uint, appUserID uint64, imageType string) {
+	imageURL := h.imageService.LatestFarmerImageURL(uint64(id), appUserID, imageType)
+	if imageURL == "" {
+		commonRouter.ToError(context, "image not found")
 		return
 	}
-	if err != nil {
-		log.Printf("[farmer-image] stream image failed farmerID=%d appUserID=%d imageType=%s err=%v", id, appUserID, imageType, err)
-		commonRouter.ToError(context, err.Error())
-		return
-	}
-	context.Header("Cache-Control", "private, max-age=300")
-	context.Data(http.StatusOK, content.MimeType, content.Data)
-	log.Printf("[farmer-image] stream image success farmerID=%d appUserID=%d imageType=%s fileName=%s mimeType=%s bytes=%d", id, appUserID, imageType, content.FileName, content.MimeType, len(content.Data))
+	commonRouter.ToJson(context, gin.H{"imageUrl": imageURL}, nil)
 }
 
 func (h *GrainFarmerHandler) createFarmer(context *gin.Context) {
@@ -180,14 +160,6 @@ func (h *GrainFarmerHandler) ensureFarmerAccess(context *gin.Context, id uint) b
 		return false
 	}
 	return true
-}
-
-func (h *GrainFarmerHandler) farmerImagePath(farmerID uint, appUserID uint64, imageType string) string {
-	path := "/grain-farmers/" + strconv.FormatUint(uint64(farmerID), 10) + "/images?imageType=" + url.QueryEscape(imageType)
-	if appUserID > 0 {
-		path += "&appUserId=" + strconv.FormatUint(appUserID, 10)
-	}
-	return path
 }
 
 func parseID(context *gin.Context) (uint, bool) {

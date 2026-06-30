@@ -52,7 +52,7 @@
             <view class="img-row">
               <image
                 v-for="(img, idx) in entry.materialImages"
-                :key="idx"
+                :key="img"
                 :src="img"
                 class="material-img"
                 mode="aspectFill"
@@ -70,12 +70,32 @@
         <!-- 编辑表单 -->
         <template v-else>
           <view class="field">
-            <text class="label">粮食类型</text>
-            <input v-model="editForm.crop" class="input" placeholder="请输入粮食类型" />
+            <text class="label required">收购粮食类型</text>
+            <input
+              v-model="editCropKeyword"
+              class="input"
+              placeholder="输入关键词搜索，请从下方选择"
+              @input="handleEditCropInput"
+              @focus="showEditCropResults = true"
+            />
+            <view class="crop-helper">仅可选择粮站已维护的粮食类型，输入内容不会直接保存。</view>
+            <view class="crop-options">
+              <button
+                v-for="crop in filteredEditCropOptions"
+                :key="crop.id"
+                class="crop-chip"
+                :class="{ active: crop.id === editForm.purchaseTypeId }"
+                @click="selectEditCrop(crop)"
+              >
+                {{ crop.name }}
+              </button>
+              <view v-if="!filteredEditCropOptions.length && editCropKeyword.trim()" class="crop-empty">未找到匹配粮食类型，请从已有类型中选择或联系管理员维护。</view>
+              <view v-else-if="!grainStore.preset.purchaseTypes.length" class="crop-empty">当前粮站暂无可选粮食类型，请先联系管理员维护。</view>
+            </view>
           </view>
           <view class="field">
             <text class="label">数量</text>
-            <input v-model.number="editForm.quantity" class="input" type="number" placeholder="请输入数量" />
+            <input v-model="editForm.quantity" class="input" type="digit" placeholder="请输入数量" />
           </view>
           <view class="field">
             <text class="label">单位</text>
@@ -85,7 +105,7 @@
           </view>
           <view class="field">
             <text class="label">金额（元）</text>
-            <input v-model.number="editForm.amount" class="input" type="number" placeholder="请输入金额" />
+            <input v-model="editForm.amount" class="input" type="digit" placeholder="请输入金额" />
           </view>
           <view class="field">
             <text class="label">收购时间</text>
@@ -132,6 +152,7 @@
                 class="img-cell"
               >
                 <image
+                  :key="img"
                   :src="img"
                   class="material-img"
                   mode="aspectFill"
@@ -178,7 +199,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { useGrainStore } from '@/stores/grain'
 import { formatAmount, formatQuantityByDisplayUnit, getEntryPrice } from '@/utils/grain'
 import { maskIdNumber, maskPhone } from '@/utils/privacy'
-import type { GrainEntryDraft } from '@/types/grain'
+import type { GrainEntryDraft, GrainPurchaseType } from '@/types/grain'
 
 const grainStore = useGrainStore()
 
@@ -198,8 +219,11 @@ const farmer = computed(() =>
 const editing = ref(false)
 const saving = ref(false)
 const todayDate = new Date().toISOString().slice(0, 10)
+const editCropKeyword = ref('')
+const showEditCropResults = ref(false)
 
 const editForm = reactive<Partial<GrainEntryDraft>>({
+  purchaseTypeId: 0,
   crop: '',
   quantity: 0,
   unit: '公斤',
@@ -221,7 +245,9 @@ onLoad((options) => {
 
 watch(entry, (e) => {
   if (e) {
+    editForm.purchaseTypeId = e.purchaseTypeId
     editForm.crop = e.crop
+    editCropKeyword.value = e.crop
     editForm.quantity = e.quantity
     editForm.unit = e.unit
     editForm.amount = e.amount
@@ -234,7 +260,7 @@ watch(entry, (e) => {
 }, { immediate: true })
 
 async function ensureEntryLoaded(entryId: string) {
-  await Promise.all([grainStore.loadFarmers(), grainStore.loadEntries()])
+  await Promise.all([grainStore.loadPreset(), grainStore.loadFarmers(), grainStore.loadEntries()])
   if (entryId && !grainStore.selectedEntry) {
     grainStore.selectEntry(entryId)
   }
@@ -250,7 +276,9 @@ function startEdit() {
 
 function cancelEdit() {
   if (entry.value) {
+    editForm.purchaseTypeId = entry.value.purchaseTypeId
     editForm.crop = entry.value.crop
+    editCropKeyword.value = entry.value.crop
     editForm.quantity = entry.value.quantity
     editForm.unit = entry.value.unit
     editForm.amount = entry.value.amount
@@ -261,6 +289,36 @@ function cancelEdit() {
     editForm.materialImages = [...(entry.value.materialImages || [])]
   }
   editing.value = false
+}
+
+const filteredEditCropOptions = computed(() => {
+  const key = editCropKeyword.value.trim()
+  if (!showEditCropResults.value && editForm.crop) {
+    return []
+  }
+  return grainStore.preset.purchaseTypes
+    .filter((item) => !key || item.typeName.includes(key))
+    .slice(0, 8)
+    .map((item) => ({ id: item.id, name: item.typeName, unit: item.unit }))
+})
+
+function selectEditCrop(crop: Pick<GrainPurchaseType, 'id' | 'unit'> & { name: string }) {
+  editForm.purchaseTypeId = crop.id
+  editForm.crop = crop.name
+  editForm.unit = crop.unit || editForm.unit || '公斤'
+  editCropKeyword.value = crop.name
+  showEditCropResults.value = false
+}
+
+function handleEditCropInput(event: unknown) {
+  const value =
+    typeof event === 'object' && event && 'detail' in event
+      ? String((event as { detail?: { value?: string } }).detail?.value ?? editCropKeyword.value)
+      : editCropKeyword.value
+  editCropKeyword.value = value
+  editForm.purchaseTypeId = 0
+  editForm.crop = ''
+  showEditCropResults.value = true
 }
 
 function addMaterials() {
@@ -301,11 +359,17 @@ function clearDateTime(field: 'buyTime' | 'payTime') {
 
 async function saveEntry() {
   if (!entry.value || !farmer.value) return
+  const validateMessage = validateEditForm()
+  if (validateMessage) {
+    uni.showToast({ title: validateMessage, icon: 'none' })
+    return
+  }
   saving.value = true
   try {
     const draft = grainStore.createEntryDraftFromHistory(entry.value.id)
     // 将展示单位下的数量赋给 draft（buildEntryPayload 会在保存时统一转换为公斤）
     Object.assign(draft, {
+      purchaseTypeId: editForm.purchaseTypeId,
       crop: editForm.crop,
       quantity: Number(editForm.quantity),
       unit: editForm.unit || '公斤',
@@ -324,6 +388,25 @@ async function saveEntry() {
   } finally {
     saving.value = false
   }
+}
+
+function validateEditForm() {
+  if (!grainStore.preset.purchaseTypes.length) {
+    return '当前粮站暂无粮食类型，请先联系管理员维护'
+  }
+  const selectedPurchaseType = grainStore.preset.purchaseTypes.find(
+    (item) => item.id === Number(editForm.purchaseTypeId) && item.typeName === editForm.crop,
+  )
+  if (!selectedPurchaseType) {
+    return '收购粮食类型为必填项，请从已有粮食类型中选择'
+  }
+  if (Number(editForm.quantity) <= 0) {
+    return '请输入有效数量'
+  }
+  if (Number(editForm.amount) <= 0) {
+    return '请输入有效金额'
+  }
+  return ''
 }
 
 function previewImage(current: string, urls: string[]) {
@@ -504,6 +587,11 @@ function continueEntry() {
   font-weight: 700;
 }
 
+.required::after {
+  content: ' *';
+  color: #d14343;
+}
+
 .input {
   width: 100%;
   height: 88rpx;
@@ -513,6 +601,48 @@ function continueEntry() {
   background: #fbfcfa;
   color: #172018;
   font-size: 28rpx;
+}
+
+.crop-helper {
+  margin-top: 10rpx;
+  color: #7b857b;
+  font-size: 23rpx;
+  line-height: 1.45;
+}
+
+.crop-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.crop-chip {
+  min-height: 64rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid #d8e5d6;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #2d4633;
+  font-size: 25rpx;
+  font-weight: 760;
+  line-height: 64rpx;
+}
+
+.crop-chip.active {
+  border-color: #237a4b;
+  background: #e8f5ec;
+  color: #145535;
+}
+
+.crop-empty {
+  width: 100%;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: #f8faf6;
+  color: #667266;
+  font-size: 24rpx;
+  line-height: 1.45;
 }
 
 .datetime-row {

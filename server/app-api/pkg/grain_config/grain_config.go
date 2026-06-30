@@ -3,7 +3,6 @@ package grain_config
 import (
 	appCtx "app-api/pkg/internal/appctx"
 	commonRouter "common/middleware/routers"
-	"common/middleware/storage/image_source"
 	"net/http"
 	grainConfigService "service/grain_config"
 	grainConfigDTO "service/grain_config/dto"
@@ -45,13 +44,6 @@ func (h *GrainConfigHandler) getMyStationDetail(context *gin.Context) {
 		return
 	}
 	result, err := h.grainConfigService.GetStationDetail(stationID)
-	if err == nil && result != nil {
-		if result.WXCloudURL != "" && result.LastSource == image_source.WXCloud {
-			result.BusinessLicenseUrl = result.WXCloudURL
-		} else {
-			result.BusinessLicenseUrl = ""
-		}
-	}
 	commonRouter.ToJson(context, result, err)
 }
 
@@ -60,7 +52,7 @@ func (h *GrainConfigHandler) getMyBusinessLicense(context *gin.Context) {
 	if !ok {
 		return
 	}
-	content, err := h.grainConfigService.GetBusinessLicenseContent(stationID)
+	result, err := h.grainConfigService.GetBusinessLicenseURL(stationID)
 	if err == gorm.ErrRecordNotFound {
 		context.Status(http.StatusNotFound)
 		return
@@ -69,26 +61,7 @@ func (h *GrainConfigHandler) getMyBusinessLicense(context *gin.Context) {
 		commonRouter.ToError(context, err.Error())
 		return
 	}
-	if content.Base64 != "" {
-		commonRouter.ToJson(context, imageBase64Response{
-			Mode:     "base64",
-			MimeType: content.MimeType,
-			FileName: content.FileName,
-			Base64:   content.Base64,
-			DataURL:  "data:" + content.MimeType + ";base64," + content.Base64,
-		}, nil)
-		return
-	}
-	context.Header("Cache-Control", "private, max-age=300")
-	context.Data(http.StatusOK, content.MimeType, content.Data)
-}
-
-type imageBase64Response struct {
-	Mode     string `json:"mode"`
-	MimeType string `json:"mimeType"`
-	FileName string `json:"fileName"`
-	Base64   string `json:"base64"`
-	DataURL  string `json:"dataUrl"`
+	commonRouter.ToJson(context, gin.H{"imageUrl": result.ImageURL}, nil)
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {

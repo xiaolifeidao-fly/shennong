@@ -65,11 +65,11 @@
       <text class="label">身份证照片</text>
       <view class="card-image-row">
         <view v-if="idCardFrontUrl" class="card-image-cell">
-          <image class="card-image" :src="idCardFrontUrl" mode="aspectFill" @click="previewCardImage(idCardFrontUrl)" />
+          <image :key="idCardFrontUrl" class="card-image" :src="idCardFrontUrl" mode="aspectFill" @click="previewCardImage(idCardFrontUrl)" />
           <text class="card-image-label">身份证正面</text>
         </view>
         <view v-if="idCardBackUrl" class="card-image-cell">
-          <image class="card-image" :src="idCardBackUrl" mode="aspectFill" @click="previewCardImage(idCardBackUrl)" />
+          <image :key="idCardBackUrl" class="card-image" :src="idCardBackUrl" mode="aspectFill" @click="previewCardImage(idCardBackUrl)" />
           <text class="card-image-label">身份证背面</text>
         </view>
       </view>
@@ -85,10 +85,18 @@
     <view class="field">
       <view class="label-row">
         <text class="label">收款人姓名</text>
-        <button v-if="isBankPayment" class="scan-btn" @click="$emit('scan-bank')">
-          <text class="mini-icon card-mini"></text>
-          <text>拍银行卡</text>
-        </button>
+        <view v-if="isBankPayment" class="scan-group">
+          <picker :value="payCardTypeIndex" :range="payCardTypeNames" @change="selectPayCardType">
+            <view class="card-type-picker">
+              <text>{{ payCardTypeLabel }}</text>
+              <text class="caret"></text>
+            </view>
+          </picker>
+          <button class="scan-btn" @click="$emit('scan-bank', payCardType)">
+            <text class="mini-icon card-mini"></text>
+            <text>拍{{ payCardTypeLabel }}</text>
+          </button>
+        </view>
       </view>
       <input v-model="model.bankName" class="input" placeholder="请输入收款人姓名" />
     </view>
@@ -100,7 +108,7 @@
       <text class="label">银行卡照片</text>
       <view class="card-image-row single">
         <view class="card-image-cell">
-          <image class="card-image" :src="bankCardUrl" mode="aspectFill" @click="previewCardImage(bankCardUrl)" />
+          <image :key="bankCardUrl" class="card-image" :src="bankCardUrl" mode="aspectFill" @click="previewCardImage(bankCardUrl)" />
           <text class="card-image-label">银行卡</text>
         </view>
       </view>
@@ -121,7 +129,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { FarmerProfile, GrainEntryDraft, GrainPreset } from '@/types/grain'
+import { normalizeFileUrl } from '@/utils/fileUrl'
+import { PAY_CARD_OCR_OPTIONS, type FarmerProfile, type GrainEntryDraft, type GrainPreset, type PayCardOcrType } from '@/types/grain'
 import { maskIdNumber, maskPhone } from '@/utils/privacy'
 
 const props = defineProps<{
@@ -136,13 +145,22 @@ const emit = defineEmits<{
   'farmer-change': [farmerId: string]
   'farmer-search': [keyword: string]
   'scan-id-front': []
-  'scan-bank': []
+  'scan-bank': [cardType: PayCardOcrType]
 }>()
 
 const model = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
+
+const payCardType = ref<PayCardOcrType>('bank-card')
+const payCardTypeNames = PAY_CARD_OCR_OPTIONS.map((item) => item.label)
+const payCardTypeIndex = computed(() => Math.max(0, PAY_CARD_OCR_OPTIONS.findIndex((item) => item.value === payCardType.value)))
+const payCardTypeLabel = computed(() => PAY_CARD_OCR_OPTIONS[payCardTypeIndex.value]?.label || '银行卡')
+
+function selectPayCardType(event: { detail: { value: number | string } }) {
+  payCardType.value = PAY_CARD_OCR_OPTIONS[Number(event.detail.value)]?.value || 'bank-card'
+}
 
 const farmerKeyword = ref('')
 const showFarmerResults = ref(false)
@@ -169,9 +187,9 @@ const selectedPaymentMethod = computed(() =>
   props.preset.paymentMethods.find((item) => item.id === model.value.paymentMethodId) ||
   props.preset.paymentMethods.find((item) => item.methodName === model.value.payType),
 )
-const idCardFrontUrl = computed(() => model.value.cardImages?.idCardFront?.displayUrl || model.value.cardImages?.idCardFront?.ossUrl || '')
-const idCardBackUrl = computed(() => model.value.cardImages?.idCardBack?.displayUrl || model.value.cardImages?.idCardBack?.ossUrl || '')
-const bankCardUrl = computed(() => model.value.cardImages?.bankCard?.displayUrl || model.value.cardImages?.bankCard?.ossUrl || '')
+const idCardFrontUrl = computed(() => normalizeFileUrl(model.value.cardImages?.idCardFront?.displayUrl || model.value.cardImages?.idCardFront?.ossUrl))
+const idCardBackUrl = computed(() => normalizeFileUrl(model.value.cardImages?.idCardBack?.displayUrl || model.value.cardImages?.idCardBack?.ossUrl))
+const bankCardUrl = computed(() => normalizeFileUrl(model.value.cardImages?.bankCard?.displayUrl || model.value.cardImages?.bankCard?.ossUrl))
 const paymentMethodCode = computed(() => model.value.paymentMethodCode || selectedPaymentMethod.value?.methodCode || '')
 const isBankPayment = computed(() => paymentMethodCode.value === 'Bank')
 const accountLabel = computed(() => (paymentMethodCode.value === 'Bank' ? '银行卡号' : '收款账号'))
@@ -384,7 +402,31 @@ function previewCardImage(current: string) {
 
 .scan-group {
   display: flex;
+  align-items: center;
   gap: 12rpx;
+}
+
+.card-type-picker {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  height: 56rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #cfe0d1;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #2d4633;
+  font-size: 24rpx;
+  font-weight: 760;
+  line-height: 56rpx;
+}
+
+.card-type-picker .caret {
+  width: 0;
+  height: 0;
+  border-left: 7rpx solid transparent;
+  border-right: 7rpx solid transparent;
+  border-top: 9rpx solid #6d776c;
 }
 
 .farmer-search {

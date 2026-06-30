@@ -74,6 +74,24 @@ export class GrainPurchaseEntryRecord {
   [key: string]: unknown;
 }
 
+export class GrainPurchaseEntryExportBatchRecord {
+  id!: number;
+  batchNo = "";
+  userId = 0;
+  username = "";
+  status = "";
+  totalCount = 0;
+  successCount = 0;
+  failCount = 0;
+  fileName = "";
+  errorMessage = "";
+  startedAt?: string;
+  finishedAt?: string;
+  createdTime?: string;
+  updatedTime?: string;
+  [key: string]: unknown;
+}
+
 export class GrainPurchaseEntrySnapshotRecord {
   id!: number;
   entryId = 0;
@@ -280,6 +298,22 @@ function crudApi<R>(cls: new () => R, url: string) {
 export const grainStationApi = crudApi(GrainStationRecord, "/grain-stations");
 export const grainFarmerApi = crudApi(GrainFarmerRecord, "/grain-farmers");
 export const grainPurchaseEntryApi = crudApi(GrainPurchaseEntryRecord, "/grain-purchase-entries");
+export const grainPurchaseEntryExportApi = {
+  count: async (query: CrudListQuery) => {
+    const response = await instance.get<ApiResponse<{ totalCount: number }>>("/grain-purchase-entry-exports/count", {
+      params: query,
+    });
+    return unwrapApiResponse(response.data);
+  },
+  list: (query: CrudListQuery) => getPage(GrainPurchaseEntryExportBatchRecord, "/grain-purchase-entry-exports", query),
+  create: async (query: CrudListQuery) => {
+    const response = await instance.post<
+      ApiResponse<{ totalCount: number; batch: GrainPurchaseEntryExportBatchRecord }>
+    >("/grain-purchase-entry-exports", undefined, { params: query });
+    return unwrapApiResponse(response.data);
+  },
+  downloadUrl: (batchNo: string) => imageApiUrl(`/grain-purchase-entry-exports/${encodeURIComponent(batchNo)}/download`),
+};
 export const grainPurchaseEntrySnapshotApi = {
   list: (query: CrudListQuery) => getPage(GrainPurchaseEntrySnapshotRecord, "/grain-entry-snapshots", query),
 };
@@ -290,7 +324,7 @@ export const grainEntryMaterialApi = {
       total: page.total,
       data: page.data.map((item) => ({
         ...item,
-        imageUrl: imageApiUrl(`/grain-entry-materials?imageId=${item.id}`),
+        imageUrl: imageApiUrl(item.imageUrl || item.ossUrl),
       })),
     };
   },
@@ -417,7 +451,7 @@ function withBusinessLicenseTimestamp(path: string, timestamp: number) {
 export async function recognizeGrainCard(
   file: File,
   payload: {
-    cardType: "id-card" | "bank-card";
+    cardType: "id-card" | "bank-card" | "social-security-card";
     stationId?: number;
     appUserId?: number;
     farmerId?: number;

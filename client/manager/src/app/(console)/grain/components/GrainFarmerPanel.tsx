@@ -45,7 +45,7 @@ const fields: CrudField<GrainFarmerRecord>[] = [
   { name: "phone", label: "手机号", placeholder: "请输入农户联系电话" },
   { name: "address", label: "户籍或联系地址", span: 2, placeholder: "可通过身份证识别自动回填" },
   { name: "bankNumber", label: "银行卡号", placeholder: "可通过银行卡识别自动回填" },
-  { name: "bankName", label: "开户行", placeholder: "请输入开户银行名称" },
+  { name: "bankName", label: "开户人", placeholder: "请输入开户人姓名" },
   { name: "status", label: "资料状态", type: "select", options: statusOptions, placeholder: "请选择资料状态" },
   { name: "statusText", label: "状态说明", placeholder: "例如：银行卡待补充" },
   { name: "remark", label: "备注", type: "textarea", span: 2, placeholder: "记录补充材料、沟通情况或特殊说明" },
@@ -70,7 +70,7 @@ const columns: CrudTableColumn<GrainFarmerRecord>[] = [
       <Space direction="vertical" size={0}>
         <SensitiveValue value={value} keepStart={4} keepEnd={4} />
         <Text type="secondary" style={{ fontSize: 12 }}>
-          {record.bankName || "未填写开户行"}
+          {record.bankName || "未填写开户人"}
         </Text>
       </Space>
     ),
@@ -80,7 +80,7 @@ const columns: CrudTableColumn<GrainFarmerRecord>[] = [
 
 type OcrTarget = {
   title: string;
-  cardType: "id-card" | "bank-card";
+  cardType: "id-card" | "bank-card" | "social-security-card";
   imageSide?: "front" | "back";
 };
 
@@ -157,13 +157,14 @@ export function GrainFarmerPanel() {
       message.success(result.mock ? "模拟身份证识别完成" : "身份证识别完成");
       return;
     }
+    const cardLabel = result.cardType === "social-security-card" ? "社保卡" : "银行卡";
     form.setFieldsValue({
       bankNumber: result.bankNumber || form.getFieldValue("bankNumber"),
       bankName: result.bankName || form.getFieldValue("bankName"),
       status: result.bankNumber ? "complete" : form.getFieldValue("status"),
       statusText: result.bankNumber ? "资料完整" : form.getFieldValue("statusText"),
     });
-    message.success(result.mock ? "模拟银行卡识别完成" : "银行卡识别完成");
+    message.success(result.mock ? `模拟${cardLabel}识别完成` : `${cardLabel}识别完成`);
   };
 
   const handleRecognize = async (file: File, target: OcrTarget, form: FormInstance, editingRecord: GrainFarmerRecord | null) => {
@@ -250,7 +251,7 @@ export function GrainFarmerPanel() {
     {
       key: "bank",
       title: "收款账户",
-      description: "保存银行卡号与开户行，用于粮款结算核对。",
+      description: "保存银行卡号与开户人，用于粮款结算核对。",
       fields: ["bankNumber", "bankName"],
     },
     {
@@ -292,12 +293,13 @@ export function GrainFarmerPanel() {
               <Space direction="vertical" size={2}>
                 <Text strong>证件与银行卡识别</Text>
                 <Text type="secondary">
-                  上传身份证人像面或银行卡照片可自动回填表单；识别结果仍可手动修正后保存。
+                  上传身份证人像面、银行卡或社保卡照片可自动回填表单；识别结果仍可手动修正后保存。
                 </Text>
               </Space>
               <Space wrap>
                 {renderOcrUpload({ title: "身份证人像面", cardType: "id-card", imageSide: "front" }, form, editingRecord)}
                 {renderOcrUpload({ title: "银行卡", cardType: "bank-card" }, form, editingRecord)}
+                {renderOcrUpload({ title: "社保卡", cardType: "social-security-card" }, form, editingRecord)}
               </Space>
             </Space>
           </section>
@@ -325,7 +327,7 @@ export function GrainFarmerPanel() {
               <Descriptions.Item label="银行卡号">
                 <SensitiveValue value={archiveRecord.bankNumber} keepStart={4} keepEnd={4} />
               </Descriptions.Item>
-              <Descriptions.Item label="开户行">{renderValue(archiveRecord.bankName)}</Descriptions.Item>
+              <Descriptions.Item label="开户人">{renderValue(archiveRecord.bankName)}</Descriptions.Item>
               <Descriptions.Item label="状态">
                 <Tag color={archiveRecord.status === "inactive" ? "red" : archiveRecord.status === "missing-bank" ? "orange" : "green"}>
                   {statusOptions.find((item) => item.value === archiveRecord.status)?.label ?? renderValue(archiveRecord.status)}

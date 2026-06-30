@@ -77,7 +77,7 @@ func (h *GrainEntryMaterialHandler) listMaterials(context *gin.Context) {
 			commonRouter.ToError(context, "imageId必须是正整数")
 			return
 		}
-		h.streamMaterialImage(context, uint(id))
+		h.getMaterialImageURL(context, uint(id))
 		return
 	}
 	var query grainPurchaseDTO.GrainEntryMaterialQueryDTO
@@ -169,10 +169,7 @@ func (h *GrainEntryMaterialHandler) uploadMaterial(context *gin.Context) {
 	}
 	result, err := h.grainPurchaseService.CreateMaterial(req)
 	if result != nil && result.Id > 0 {
-		result.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", result.Id)
-		if image_source.IsWXCloud() && strings.TrimSpace(result.WXCloudURL) != "" && result.LastSource == image_source.WXCloud {
-			result.ImageURL = result.WXCloudURL
-		}
+		result.ImageURL = result.OssURL
 	}
 	commonRouter.ToJson(context, result, err)
 }
@@ -292,8 +289,8 @@ func downloadCloudImage(rawURL string) ([]byte, string, error) {
 	return data, contentType, nil
 }
 
-func (h *GrainEntryMaterialHandler) streamMaterialImage(context *gin.Context, id uint) {
-	content, err := h.grainPurchaseService.GetMaterialImageContent(id)
+func (h *GrainEntryMaterialHandler) getMaterialImageURL(context *gin.Context, id uint) {
+	result, err := h.grainPurchaseService.GetMaterialImageURL(id)
 	if err == gorm.ErrRecordNotFound {
 		context.Status(http.StatusNotFound)
 		return
@@ -306,30 +303,11 @@ func (h *GrainEntryMaterialHandler) streamMaterialImage(context *gin.Context, id
 	if !ok {
 		return
 	}
-	if content.StationID != stationID {
+	if result.StationID != stationID {
 		context.Status(http.StatusNotFound)
 		return
 	}
-	if content.Base64 != "" {
-		commonRouter.ToJson(context, imageBase64Response{
-			Mode:     "base64",
-			MimeType: content.MimeType,
-			FileName: content.FileName,
-			Base64:   content.Base64,
-			DataURL:  "data:" + content.MimeType + ";base64," + content.Base64,
-		}, nil)
-		return
-	}
-	context.Header("Cache-Control", "private, max-age=300")
-	context.Data(http.StatusOK, content.MimeType, content.Data)
-}
-
-type imageBase64Response struct {
-	Mode     string `json:"mode"`
-	MimeType string `json:"mimeType"`
-	FileName string `json:"fileName"`
-	Base64   string `json:"base64"`
-	DataURL  string `json:"dataUrl"`
+	commonRouter.ToJson(context, gin.H{"imageUrl": result.ImageURL}, nil)
 }
 
 func (h *GrainEntryMaterialHandler) deleteMaterial(context *gin.Context) {

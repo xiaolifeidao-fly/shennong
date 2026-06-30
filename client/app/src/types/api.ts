@@ -72,6 +72,22 @@ export interface AuthState {
   displayName: string
 }
 
+export interface AgreementDocument {
+  key: string
+  title: string
+  content: string
+}
+
+export interface AgreementResponse {
+  version: string
+  documents: AgreementDocument[]
+}
+
+export interface AgreementStatusResponse {
+  agreed: boolean
+  version: string
+}
+
 export interface AppUserProfile {
   id?: number
   name?: string

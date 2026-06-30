@@ -2,6 +2,7 @@ package login
 
 import (
 	webAuth "app-api/auth"
+	"app-api/pkg/internal/wechat"
 	"bytes"
 	commonRouter "common/middleware/routers"
 	"common/middleware/vipper"
@@ -88,7 +89,7 @@ func (h *LoginHandler) wechatLogin(context *gin.Context) {
 		return
 	}
 
-	session, err := code2Session(strings.TrimSpace(req.Code))
+	session, err := wechat.Code2Session(strings.TrimSpace(req.Code))
 	if err != nil {
 		commonRouter.ToError(context, err.Error())
 		return
@@ -170,50 +171,6 @@ func (h *LoginHandler) authState(context *gin.Context) {
 		Username:      user.Username,
 		DisplayName:   user.Name,
 	}, nil)
-}
-
-type wechatSessionResponse struct {
-	OpenID     string `json:"openid"`
-	SessionKey string `json:"session_key"`
-	UnionID    string `json:"unionid"`
-	ErrCode    int    `json:"errcode"`
-	ErrMsg     string `json:"errmsg"`
-}
-
-func code2Session(code string) (*wechatSessionResponse, error) {
-	if code == "" {
-		return nil, fmt.Errorf("微信登录 code 不能为空")
-	}
-	appID := strings.TrimSpace(vipper.GetString("wechat.appid"))
-	secret := strings.TrimSpace(vipper.GetString("wechat.secret"))
-	if appID == "" || secret == "" {
-		return nil, fmt.Errorf("未配置 wechat.appid 或 wechat.secret")
-	}
-
-	values := url.Values{}
-	values.Set("appid", appID)
-	values.Set("secret", secret)
-	values.Set("js_code", code)
-	values.Set("grant_type", "authorization_code")
-
-	client := &http.Client{Timeout: 8 * time.Second}
-	response, err := client.Get("https://api.weixin.qq.com/sns/jscode2session?" + values.Encode())
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	var session wechatSessionResponse
-	if err := json.NewDecoder(response.Body).Decode(&session); err != nil {
-		return nil, err
-	}
-	if session.ErrCode != 0 {
-		return nil, fmt.Errorf("微信登录失败: %s", session.ErrMsg)
-	}
-	if strings.TrimSpace(session.OpenID) == "" {
-		return nil, fmt.Errorf("微信未返回 openid")
-	}
-	return &session, nil
 }
 
 type wechatAccessTokenResponse struct {

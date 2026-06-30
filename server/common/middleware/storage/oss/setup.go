@@ -17,9 +17,10 @@ func Setup(entity *OssEntity) {
 	}
 	entity.Default()
 	log.Printf(
-		"oss setup config: enabled=%t endpoint=%s bucket=%s dirPrefix=%s accessKeyId=%s accessKeySecretSet=%t accessKeySecretLen=%d",
+		"oss setup config: enabled=%t endpoint=%s publicEndpoint=%s bucket=%s dirPrefix=%s accessKeyId=%s accessKeySecretSet=%t accessKeySecretLen=%d",
 		entity.Enabled,
 		entity.Endpoint,
+		entity.PublicEndpoint,
 		entity.BucketName,
 		entity.DirPrefix,
 		maskSecret(entity.AccessKeyId),
@@ -35,7 +36,7 @@ func Setup(entity *OssEntity) {
 		return
 	}
 	Oss = oss
-	log.Printf("oss setup success: endpoint=%s bucket=%s dirPrefix=%s", oss.Endpoint, oss.BucketName, oss.DirPrefix)
+	log.Printf("oss setup success: endpoint=%s publicEndpoint=%s bucket=%s dirPrefix=%s", oss.Endpoint, oss.PublicEndpoint, oss.BucketName, oss.DirPrefix)
 }
 
 func maskSecret(value string) string {

@@ -2,7 +2,7 @@ import { clearToken, getToken } from './token'
 
 const LOGIN_URL = '/pages/login/index'
 const HOME_URL = '/pages/index/index'
-const PUBLIC_ROUTES = new Set(['pages/login/index'])
+const PUBLIC_ROUTES = new Set(['pages/login/index', 'pages/agreement/index'])
 
 let installed = false
 

@@ -1,32 +1,34 @@
 <template>
   <view class="card form-card">
     <view class="field">
-      <text class="label required">购进农产品类型</text>
+      <text class="label required">收购粮食类型</text>
       <input
         v-model="cropKeyword"
         class="input"
-        placeholder="输入产品类型，支持搜索或直接新增"
+        placeholder="输入关键词搜索，请从下方选择"
         @input="handleCropInput"
         @focus="showCropResults = true"
       />
+      <view class="crop-helper">仅可选择粮站已维护的粮食类型，输入内容不会直接保存。</view>
       <view class="crop-options">
         <button
           v-for="crop in filteredCropOptions"
-          :key="crop.name"
+          :key="crop.id"
           class="crop-chip"
-          :class="{ active: crop.name === model.crop }"
-          @click="selectCropByName(crop.name)"
+          :class="{ active: crop.id === model.purchaseTypeId }"
+          @click="selectCrop(crop)"
         >
           {{ crop.name }}
         </button>
-        <view v-if="!filteredCropOptions.length && cropKeyword.trim()" class="crop-empty">将按“{{ cropKeyword.trim() }}”保存为产品类型</view>
+        <view v-if="!filteredCropOptions.length && cropKeyword.trim()" class="crop-empty">未找到匹配粮食类型，请从已有类型中选择或联系管理员维护。</view>
+        <view v-else-if="!props.preset.purchaseTypes.length" class="crop-empty">当前粮站暂无可选粮食类型，请先联系管理员维护。</view>
       </view>
     </view>
 
     <view class="field">
       <text class="label required">购进重量</text>
       <view class="split">
-        <input v-model.number="model.quantity" class="input" type="digit" placeholder="请输入重量" />
+        <input v-model="model.quantity" class="input" type="digit" placeholder="请输入重量" />
         <picker :value="unitIndex" :range="unitOptions" @change="selectUnit">
           <view class="unit-value">{{ model.unit || '公斤' }}</view>
         </picker>
@@ -35,7 +37,7 @@
 
     <view class="field">
       <text class="label required">购进货物金额</text>
-      <input v-model.number="model.amount" class="input" type="digit" placeholder="请输入金额" />
+      <input v-model="model.amount" class="input" type="digit" placeholder="请输入金额" />
     </view>
 
     <view class="field">
@@ -108,7 +110,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { calcUnitPrice } from '@/utils/grain'
-import type { GrainEntryDraft, GrainPreset } from '@/types/grain'
+import type { GrainEntryDraft, GrainPreset, GrainPurchaseType } from '@/types/grain'
 
 const props = defineProps<{
   modelValue: GrainEntryDraft
@@ -130,7 +132,6 @@ const priceText = computed(() => {
   const unit = model.value.unit || '公斤'
   return calcUnitPrice(Number(model.value.amount), Number(model.value.quantity), unit)
 })
-const cropNames = computed(() => props.preset.purchaseTypes.length ? props.preset.purchaseTypes.map((item) => item.typeName) : props.preset.crops)
 const cropKeyword = ref('')
 const showCropResults = ref(false)
 const todayDate = new Date().toISOString().slice(0, 10)
@@ -139,10 +140,10 @@ const filteredCropOptions = computed(() => {
   if (!showCropResults.value && model.value.crop) {
     return []
   }
-  return cropNames.value
-    .filter((name) => !key || name.includes(key))
+  return props.preset.purchaseTypes
+    .filter((item) => !key || item.typeName.includes(key))
     .slice(0, 8)
-    .map((name) => ({ name }))
+    .map((item) => ({ id: item.id, name: item.typeName, unit: item.unit }))
 })
 
 watch(
@@ -157,11 +158,10 @@ function selectUnit(event: { detail: { value: number | string } }) {
   model.value.unit = unitOptions[Number(event.detail.value)] || '公斤'
 }
 
-function selectCropByName(cropName: string) {
-  const option = props.preset.purchaseTypes.find((item) => item.typeName === cropName)
-  model.value.purchaseTypeId = option?.id || 0
-  model.value.crop = option?.typeName || cropName
-  model.value.unit = option?.unit || model.value.unit || '公斤'
+function selectCrop(crop: Pick<GrainPurchaseType, 'id' | 'unit'> & { name: string }) {
+  model.value.purchaseTypeId = crop.id
+  model.value.crop = crop.name
+  model.value.unit = crop.unit || model.value.unit || '公斤'
   cropKeyword.value = model.value.crop
   showCropResults.value = false
 }
@@ -172,11 +172,9 @@ function handleCropInput(event: unknown) {
       ? String((event as { detail?: { value?: string } }).detail?.value ?? cropKeyword.value)
       : cropKeyword.value
   cropKeyword.value = value
-  model.value.crop = value
+  model.value.purchaseTypeId = 0
+  model.value.crop = ''
   showCropResults.value = true
-  const option = props.preset.purchaseTypes.find((item) => item.typeName === value)
-  model.value.purchaseTypeId = option?.id || 0
-  model.value.unit = option?.unit || model.value.unit || '公斤'
 }
 
 function handlePlaceInput() {
@@ -312,6 +310,13 @@ function previewMaterial(index: number) {
   flex-wrap: wrap;
   gap: 12rpx;
   margin-top: 14rpx;
+}
+
+.crop-helper {
+  margin-top: 10rpx;
+  color: #7b857b;
+  font-size: 23rpx;
+  line-height: 1.45;
 }
 
 .crop-chip {

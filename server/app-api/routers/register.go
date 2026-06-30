@@ -1,6 +1,7 @@
 package routers
 
 import (
+	"app-api/pkg/agreement"
 	"app-api/pkg/app_user"
 	"app-api/pkg/grain_card_ocr"
 	"app-api/pkg/grain_config"
@@ -24,5 +25,6 @@ func registerHandler() []routers.Handler {
 		grain_entry_material.NewGrainEntryMaterialHandler(),
 		grain_entry_snapshot.NewGrainEntrySnapshotHandler(),
 		login.NewLoginHandler(),
+		agreement.NewAgreementHandler(),
 	}
 }

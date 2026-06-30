@@ -33,20 +33,6 @@ interface WechatCloudContainer {
     method: HttpMethod
     data?: RequestData
   }): Promise<ApiRawResponse<TData>>
-  uploadFile(options: {
-    cloudPath: string
-    filePath: string
-  }): Promise<{ fileID: string }>
-  getTempFileURL(options: {
-    fileList: string[]
-  }): Promise<{
-    fileList: Array<{
-      fileID: string
-      tempFileURL: string
-      status: number
-      errMsg?: string
-    }>
-  }>
 }
 
 declare const wx: {
@@ -126,6 +112,16 @@ function fileHeaders(contentType?: string) {
   }
 }
 
+function isLoginExpiredMessage(message: string) {
+  return (
+    message.includes('未登录') ||
+    message.includes('过期') ||
+    message.includes('不允许登录') ||
+    message.includes('所属粮站已禁用') ||
+    message.toLowerCase().includes('login')
+  )
+}
+
 async function sendRequest<TData, TBody extends RequestData>(
   url: string,
   method: HttpMethod,
@@ -189,7 +185,7 @@ export async function request<TData, TBody extends RequestData = RequestData>(
     if (isUnauthorized || !payload?.success) {
       const message = payload?.message || payload?.error || '请求失败'
 
-      if (isUnauthorized || message.includes('未登录') || message.includes('过期') || message.toLowerCase().includes('login')) {
+      if (isUnauthorized || isLoginExpiredMessage(message)) {
         expireLogin()
       }
 
@@ -226,7 +222,7 @@ export async function upload<TData>(
 
     if (isUnauthorized || !payload?.success) {
       const message = payload?.message || payload?.error || '上传失败'
-      if (isUnauthorized || message.includes('未登录') || message.includes('过期') || message.toLowerCase().includes('login')) {
+      if (isUnauthorized || isLoginExpiredMessage(message)) {
         expireLogin()
       }
       throw new Error(message)
@@ -235,37 +231,6 @@ export async function upload<TData>(
     return payload.data
   } finally {
     uni.hideLoading()
-  }
-}
-
-export async function uploadToCloudStorage(filePath: string, cloudPath: string) {
-  if (!cloudEnv) {
-    throw new Error('云存储配置缺失')
-  }
-  const wechatCloud = getWechatCloud()
-  if (!wechatCloud?.uploadFile || !wechatCloud.getTempFileURL) {
-    throw new Error('当前环境不支持云存储上传')
-  }
-
-  const uploadResult = await wechatCloud.uploadFile({
-    cloudPath,
-    filePath,
-  })
-  if (!uploadResult.fileID) {
-    throw new Error('云存储上传失败')
-  }
-
-  const tempURLResult = await wechatCloud.getTempFileURL({
-    fileList: [uploadResult.fileID],
-  })
-  const file = tempURLResult.fileList?.[0]
-  if (!file?.tempFileURL || file.status !== 0) {
-    throw new Error(file?.errMsg || '获取图片访问地址失败')
-  }
-
-  return {
-    fileID: uploadResult.fileID,
-    tempFileURL: file.tempFileURL,
   }
 }
 

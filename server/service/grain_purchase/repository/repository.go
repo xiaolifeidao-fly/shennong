@@ -5,6 +5,7 @@ import (
 	"fmt"
 	grainPurchaseDTO "service/grain_purchase/dto"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -36,7 +37,8 @@ func (r *GrainPurchaseEntryRepository) ListByQuery(query grainPurchaseDTO.GrainP
 func (r *GrainPurchaseEntryRepository) ListDTOByQuery(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, pageIndex, pageSize int) ([]*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
 	dbQuery := applyEntryQuery(r.entryListBaseQuery(), query)
 	var dtos []*grainPurchaseDTO.GrainPurchaseEntryDTO
-	err := dbQuery.Select("e.*, gs.station_name AS station_name").
+	err := dbQuery.Joins("LEFT JOIN grain_station_extra AS gse ON gse.station_id = e.station_id AND gse.active = ?", 1).
+		Select("e.*, gs.station_name AS station_name, gse.bank_account_number AS station_bank_account_number").
 		Order("e.id DESC").
 		Offset((pageIndex - 1) * pageSize).
 		Limit(pageSize).
@@ -337,6 +339,88 @@ func (r *GrainEntryMaterialRepository) DeletePhysicalByID(id uint) error {
 	return nil
 }
 
+type GrainPurchaseEntryExportBatchRepository struct {
+	db.Repository[*GrainPurchaseEntryExportBatch]
+}
+
+func (r *GrainPurchaseEntryExportBatchRepository) EnsureTable() error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return r.Db.AutoMigrate(&GrainPurchaseEntryExportBatch{})
+}
+
+func (r *GrainPurchaseEntryExportBatchRepository) CountByUser(userID uint64, query grainPurchaseDTO.GrainPurchaseEntryExportQueryDTO) (int64, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
+	dbQuery := applyExportBatchQuery(r.Db.Model(&GrainPurchaseEntryExportBatch{}).Where("active = ? AND user_id = ?", 1, userID), query)
+	var total int64
+	return total, dbQuery.Count(&total).Error
+}
+
+func (r *GrainPurchaseEntryExportBatchRepository) ListByUser(userID uint64, query grainPurchaseDTO.GrainPurchaseEntryExportQueryDTO, pageIndex, pageSize int) ([]*GrainPurchaseEntryExportBatch, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	dbQuery := applyExportBatchQuery(r.Db.Model(&GrainPurchaseEntryExportBatch{}).Where("active = ? AND user_id = ?", 1, userID), query)
+	var entities []*GrainPurchaseEntryExportBatch
+	err := dbQuery.Order("id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&entities).Error
+	return entities, err
+}
+
+func (r *GrainPurchaseEntryExportBatchRepository) FindLatestRunningByUser(userID uint64) (*GrainPurchaseEntryExportBatch, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity GrainPurchaseEntryExportBatch
+	err := r.Db.Where("active = ? AND user_id = ? AND status IN ?", 1, userID, []string{"pending", "running"}).
+		Order("id DESC").
+		First(&entity).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
+func (r *GrainPurchaseEntryExportBatchRepository) FindByBatchNoForUser(batchNo string, userID uint64) (*GrainPurchaseEntryExportBatch, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	var entity GrainPurchaseEntryExportBatch
+	err := r.Db.Where("active = ? AND batch_no = ? AND user_id = ?", 1, batchNo, userID).First(&entity).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entity, nil
+}
+
+func (r *GrainPurchaseEntryExportBatchRepository) UpdateProgress(id int, status string, successCount, failCount int, fileName, filePath, errorMessage string, finishedAt *time.Time) error {
+	if r.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	updates := map[string]interface{}{
+		"status":        status,
+		"success_count": successCount,
+		"fail_count":    failCount,
+		"file_name":     fileName,
+		"file_path":     filePath,
+		"error_message": errorMessage,
+		"updated_time":  time.Now(),
+	}
+	if finishedAt != nil {
+		updates["finished_at"] = finishedAt
+	}
+	return r.Db.Model(&GrainPurchaseEntryExportBatch{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func applyExportBatchQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntryExportQueryDTO) *gorm.DB {
+	if value := strings.TrimSpace(query.Status); value != "" {
+		dbQuery = dbQuery.Where("status = ?", value)
+	}
+	return dbQuery
+}
+
 func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) *gorm.DB {
 	if query.StationID > 0 {
 		dbQuery = dbQuery.Where("e.station_id = ?", query.StationID)
@@ -374,12 +458,12 @@ func applyEntryQuery(dbQuery *gorm.DB, query grainPurchaseDTO.GrainPurchaseEntry
 	if startDate := strings.TrimSpace(query.StartDate); startDate != "" {
 		dbQuery = dbQuery.Where("DATE(e.created_time) >= ?", startDate)
 	} else if query.StartTime != nil {
-		dbQuery = dbQuery.Where("e.buy_time >= ?", query.StartTime)
+		dbQuery = dbQuery.Where("e.created_time >= ?", query.StartTime)
 	}
 	if endDate := strings.TrimSpace(query.EndDate); endDate != "" {
 		dbQuery = dbQuery.Where("DATE(e.created_time) <= ?", endDate)
 	} else if query.EndTime != nil {
-		dbQuery = dbQuery.Where("e.buy_time <= ?", query.EndTime)
+		dbQuery = dbQuery.Where("e.created_time <= ?", query.EndTime)
 	}
 	if query.MinAmount != nil {
 		dbQuery = dbQuery.Where("e.amount >= ?", *query.MinAmount)

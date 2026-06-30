@@ -32,6 +32,23 @@
         </view>
       </view>
 
+      <view class="section-card">
+        <view class="card-header">
+          <text class="section-title">营业执照</text>
+        </view>
+        <image
+          v-if="businessLicenseUrl"
+          :key="businessLicenseUrl"
+          class="license-img"
+          :src="businessLicenseUrl"
+          mode="widthFix"
+          @click="previewBusinessLicense"
+        />
+        <view v-else class="license-empty">
+          <text>{{ licenseLoading ? '加载营业执照中...' : '暂无营业执照' }}</text>
+        </view>
+      </view>
+
     </template>
   </view>
 </template>
@@ -39,12 +56,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { getMyGrainStationDetail } from '@/services/grainConfig'
+import { downloadMyBusinessLicense, getMyGrainStationDetail } from '@/services/grainConfig'
+import { normalizeFileUrl } from '@/utils/fileUrl'
 import type { GrainStationDetail } from '@/types/grain'
 
 const station = ref<GrainStationDetail | null>(null)
 const loading = ref(false)
+const licenseLoading = ref(false)
 const errorMessage = ref('')
+const businessLicenseUrl = ref('')
 
 const statusText = computed(() => {
   switch (station.value?.status) {
@@ -71,9 +91,14 @@ onLoad(() => {
 async function loadDetail() {
   loading.value = true
   errorMessage.value = ''
+  businessLicenseUrl.value = ''
   try {
     const detail = await getMyGrainStationDetail()
     station.value = detail
+    businessLicenseUrl.value = normalizeFileUrl(detail.businessLicenseUrl)
+    if (!businessLicenseUrl.value && hasBusinessLicenseSource(detail)) {
+      await loadBusinessLicense()
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : '获取粮站信息失败'
     errorMessage.value = message
@@ -81,6 +106,29 @@ async function loadDetail() {
   } finally {
     loading.value = false
   }
+}
+
+function hasBusinessLicenseSource(detail: GrainStationDetail) {
+  return Boolean(detail.businessLicenseKey || detail.businessLicenseUrl)
+}
+
+async function loadBusinessLicense() {
+  licenseLoading.value = true
+  try {
+    businessLicenseUrl.value = await downloadMyBusinessLicense()
+  } catch {
+    businessLicenseUrl.value = ''
+  } finally {
+    licenseLoading.value = false
+  }
+}
+
+function previewBusinessLicense() {
+  if (!businessLicenseUrl.value) return
+  uni.previewImage({
+    current: businessLicenseUrl.value,
+    urls: [businessLicenseUrl.value],
+  })
 }
 
 </script>
@@ -165,6 +213,24 @@ async function loadDetail() {
   font-size: 28rpx;
   font-weight: 600;
   word-break: break-all;
+}
+
+.license-img {
+  width: 100%;
+  border-radius: 16rpx;
+  background: #f3f6f1;
+}
+
+.license-empty {
+  display: flex;
+  min-height: 260rpx;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx dashed #d7dfd2;
+  border-radius: 16rpx;
+  background: #f8faf7;
+  color: #8a9588;
+  font-size: 26rpx;
 }
 
 </style>

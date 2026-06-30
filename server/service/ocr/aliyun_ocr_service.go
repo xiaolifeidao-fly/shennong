@@ -23,10 +23,11 @@ import (
 )
 
 const (
-	cardTypeIDCard   = "id-card"
-	cardTypeBankCard = "bank-card"
-	defaultEndpoint  = "https://ocr-api.cn-hangzhou.aliyuncs.com"
-	apiVersion       = "2021-07-07"
+	cardTypeIDCard             = "id-card"
+	cardTypeBankCard           = "bank-card"
+	cardTypeSocialSecurityCard = "social-security-card"
+	defaultEndpoint            = "https://ocr-api.cn-hangzhou.aliyuncs.com"
+	apiVersion                 = "2021-07-07"
 )
 
 type AliyunOCRService struct {
@@ -76,10 +77,13 @@ func (s *AliyunOCRService) RecognizeCard(ctx context.Context, req ocrDTO.Recogni
 	if req.CardType == cardTypeBankCard {
 		return s.RecognizeBankCard(ctx, req)
 	}
+	if req.CardType == cardTypeSocialSecurityCard {
+		return s.RecognizeSocialSecurityCard(ctx, req)
+	}
 	if req.CardType == cardTypeIDCard {
 		return s.RecognizeIDCard(ctx, req)
 	}
-	return nil, errors.New("cardType必须是id-card或bank-card")
+	return nil, errors.New("cardType必须是id-card、bank-card或social-security-card")
 }
 
 func (s *AliyunOCRService) RecognizeIDCard(ctx context.Context, req ocrDTO.RecognizeCardRequest) (*ocrDTO.RecognizeCardResult, error) {
@@ -113,6 +117,20 @@ func (s *AliyunOCRService) RecognizeBankCard(ctx context.Context, req ocrDTO.Rec
 	}
 	result := baseResult(req, resp.RequestID, rawData)
 	fillBankCardResult(result, rawData)
+	return result, nil
+}
+
+func (s *AliyunOCRService) RecognizeSocialSecurityCard(ctx context.Context, req ocrDTO.RecognizeCardRequest) (*ocrDTO.RecognizeCardResult, error) {
+	params := map[string]string{}
+	if len(req.ImageBytes) == 0 {
+		params["Url"] = req.ImageURL
+	}
+	resp, rawData, err := s.call(ctx, "RecognizeSocialSecurityCardVersionII", params, req.ImageBytes)
+	if err != nil {
+		return nil, err
+	}
+	result := baseResult(req, resp.RequestID, rawData)
+	fillSocialSecurityCardResult(result, rawData)
 	return result, nil
 }
 
@@ -221,6 +239,17 @@ func fillBankCardResult(result *ocrDTO.RecognizeCardResult, rawData map[string]i
 	result.BankNumber = stringValue(data["cardNumber"])
 	result.BankCardType = stringValue(data["cardType"])
 	result.ValidToDate = stringValue(data["validToDate"])
+}
+
+// fillSocialSecurityCardResult 解析社保卡（第三代）识别结果。
+// 社保卡背面金融账户与银行卡等价，将其关联的银行账号回填到 BankNumber，
+// 以便与银行卡识别走相同的收款账号回填逻辑。
+func fillSocialSecurityCardResult(result *ocrDTO.RecognizeCardResult, rawData map[string]interface{}) {
+	data := nestedMap(rawData, "data")
+	result.Name = stringValue(data["name"])
+	result.IDNumber = stringValue(data["idNumber"])
+	result.BankNumber = stringValue(data["bankAccount"])
+	result.ValidToDate = stringValue(data["validPeriod"])
 }
 
 func nestedMap(data map[string]interface{}, keys ...string) map[string]interface{} {

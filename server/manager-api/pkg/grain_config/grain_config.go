@@ -127,7 +127,7 @@ func (h *GrainConfigHandler) getBusinessLicense(context *gin.Context) {
 	if !ok {
 		return
 	}
-	content, err := h.service.GetBusinessLicenseContent(uint64(id))
+	result, err := h.service.GetBusinessLicenseURL(uint64(id))
 	if err == gorm.ErrRecordNotFound {
 		context.Status(http.StatusNotFound)
 		return
@@ -136,8 +136,7 @@ func (h *GrainConfigHandler) getBusinessLicense(context *gin.Context) {
 		commonRouter.ToError(context, err.Error())
 		return
 	}
-	context.Header("Cache-Control", "private, max-age=300")
-	context.Data(http.StatusOK, content.MimeType, content.Data)
+	commonRouter.ToJson(context, gin.H{"imageUrl": result.ImageURL}, nil)
 }
 
 func (h *GrainConfigHandler) listStations(context *gin.Context) {

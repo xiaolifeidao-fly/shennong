@@ -147,3 +147,24 @@ type GrainEntryMaterial struct {
 func (g *GrainEntryMaterial) TableName() string {
 	return "grain_entry_material"
 }
+
+type GrainPurchaseEntryExportBatch struct {
+	db.BaseEntity
+	BatchNo      string     `gorm:"column:batch_no;type:varchar(64);uniqueIndex:uniq_batch_no" description:"导出批次号"`
+	UserID       uint64     `gorm:"column:user_id;type:bigint unsigned;index:idx_user_status" description:"管理端用户ID"`
+	Username     string     `gorm:"column:username;type:varchar(100)" description:"管理端用户名"`
+	Status       string     `gorm:"column:status;type:varchar(30);index:idx_user_status" description:"状态"`
+	TotalCount   int        `gorm:"column:total_count;type:int;default:0" description:"总数量"`
+	SuccessCount int        `gorm:"column:success_count;type:int;default:0" description:"成功数量"`
+	FailCount    int        `gorm:"column:fail_count;type:int;default:0" description:"失败数量"`
+	FilterJSON   string     `gorm:"column:filter_json;type:text" description:"导出筛选条件"`
+	FileName     string     `gorm:"column:file_name;type:varchar(255)" description:"导出文件名"`
+	FilePath     string     `gorm:"column:file_path;type:varchar(1000)" description:"导出文件OSS对象Key"`
+	ErrorMessage string     `gorm:"column:error_message;type:varchar(1000)" description:"错误信息"`
+	StartedAt    *time.Time `gorm:"column:started_at;type:datetime" description:"开始时间"`
+	FinishedAt   *time.Time `gorm:"column:finished_at;type:datetime" description:"结束时间"`
+}
+
+func (g *GrainPurchaseEntryExportBatch) TableName() string {
+	return "grain_purchase_entry_export_batch"
+}

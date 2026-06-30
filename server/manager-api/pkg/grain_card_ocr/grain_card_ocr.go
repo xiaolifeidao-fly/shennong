@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"manager-api/pkg/internal/tenantctx"
 	"path/filepath"
 	farmerImageService "service/farmer_image"
@@ -52,8 +53,8 @@ func (h *GrainCardOcrHandler) RegisterHandler(engine *gin.RouterGroup) {
 
 func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	cardType := strings.TrimSpace(context.PostForm("cardType"))
-	if cardType != "id-card" && cardType != "bank-card" {
-		commonRouter.ToError(context, "cardType必须是id-card或bank-card")
+	if cardType != "id-card" && cardType != "bank-card" && cardType != "social-security-card" {
+		commonRouter.ToError(context, "cardType必须是id-card、bank-card或social-security-card")
 		return
 	}
 	file, err := context.FormFile("file")
@@ -129,7 +130,7 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 				}
 			}
 
-			result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
+			result, err = h.recognizeCardWithFallback(context, ocrDTO.RecognizeCardRequest{
 				CardType:   cardType,
 				FileName:   file.Filename,
 				FileSize:   file.Size,
@@ -142,7 +143,7 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 	}
 
 	if result == nil && err == nil {
-		result, err = h.ocrService.RecognizeCard(context.Request.Context(), ocrDTO.RecognizeCardRequest{
+		result, err = h.recognizeCardWithFallback(context, ocrDTO.RecognizeCardRequest{
 			CardType:   cardType,
 			FileName:   file.Filename,
 			FileSize:   file.Size,
@@ -161,6 +162,31 @@ func (h *GrainCardOcrHandler) recognize(context *gin.Context) {
 		err = h.saveFarmerCardInfo(farmerID, stationID, result)
 	}
 	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainCardOcrHandler) recognizeCardWithFallback(context *gin.Context, req ocrDTO.RecognizeCardRequest) (*ocrDTO.RecognizeCardResult, error) {
+	if strings.TrimSpace(req.ImageURL) != "" {
+		urlReq := req
+		urlReq.ImageBytes = nil
+		log.Printf("[grain-card-ocr] aliyun ocr start: cardType=%s mode=url", req.CardType)
+		result, err := h.ocrService.RecognizeCard(context.Request.Context(), urlReq)
+		if err == nil {
+			log.Printf("[grain-card-ocr] aliyun ocr success: cardType=%s mode=url requestId=%s", req.CardType, result.RequestID)
+			return result, nil
+		}
+		log.Printf("[grain-card-ocr] aliyun ocr failed: cardType=%s mode=url err=%v", req.CardType, err)
+	}
+
+	bytesReq := req
+	bytesReq.ImageURL = ""
+	log.Printf("[grain-card-ocr] aliyun ocr start: cardType=%s mode=bytes bytes=%d", req.CardType, len(req.ImageBytes))
+	result, err := h.ocrService.RecognizeCard(context.Request.Context(), bytesReq)
+	if err != nil {
+		log.Printf("[grain-card-ocr] aliyun ocr failed: cardType=%s mode=bytes bytes=%d err=%v", req.CardType, len(req.ImageBytes), err)
+		return nil, err
+	}
+	log.Printf("[grain-card-ocr] aliyun ocr success: cardType=%s mode=bytes requestId=%s", req.CardType, result.RequestID)
+	return result, nil
 }
 
 func stationAllowed(context *gin.Context, stationID uint64) bool {

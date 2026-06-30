@@ -7,39 +7,40 @@ import (
 
 type GrainPurchaseEntryDTO struct {
 	baseDTO.BaseDTO
-	StationID        uint64     `json:"stationId"`
-	StationName      string     `json:"stationName"`
-	AppUserID        uint64     `json:"appUserId"`
-	FarmerID         uint64     `json:"farmerId"`
-	FarmerName       string     `json:"farmerName"`
-	FarmerIDNumber   string     `json:"farmerIdNumber"`
-	FarmerPhone      string     `json:"farmerPhone"`
-	FarmerAddress    string     `json:"farmerAddress"`
-	FarmerBankNumber string     `json:"farmerBankNumber"`
-	FarmerBankName   string     `json:"farmerBankName"`
-	PurchaseTypeID   uint64     `json:"purchaseTypeId"`
-	Crop             string     `json:"crop"`
-	Quantity         float64    `json:"quantity"`
-	Unit             string     `json:"unit"`
-	DisplayUnit      string     `json:"displayUnit"`
-	Amount           float64    `json:"amount"`
-	UnitPrice        float64    `json:"unitPrice"`
-	BuyTime          *time.Time `json:"buyTime"`
-	PayTime          *time.Time `json:"payTime"`
-	PlaceID          uint64     `json:"placeId"`
-	Place            string     `json:"place"`
-	LocationName     string     `json:"locationName"`
-	LocationAddress  string     `json:"locationAddress"`
-	Longitude        string     `json:"longitude"`
-	Latitude         string     `json:"latitude"`
-	Province         string     `json:"province"`
-	City             string     `json:"city"`
-	District         string     `json:"district"`
-	PaymentMethodID  uint64     `json:"paymentMethodId"`
-	PayType          string     `json:"payType"`
-	Status           string     `json:"status"`
-	Version          int        `json:"version"`
-	Remark           string     `json:"remark"`
+	StationID                uint64     `json:"stationId"`
+	StationName              string     `json:"stationName"`
+	StationBankAccountNumber string     `json:"stationBankAccountNumber"`
+	AppUserID                uint64     `json:"appUserId"`
+	FarmerID                 uint64     `json:"farmerId"`
+	FarmerName               string     `json:"farmerName"`
+	FarmerIDNumber           string     `json:"farmerIdNumber"`
+	FarmerPhone              string     `json:"farmerPhone"`
+	FarmerAddress            string     `json:"farmerAddress"`
+	FarmerBankNumber         string     `json:"farmerBankNumber"`
+	FarmerBankName           string     `json:"farmerBankName"`
+	PurchaseTypeID           uint64     `json:"purchaseTypeId"`
+	Crop                     string     `json:"crop"`
+	Quantity                 float64    `json:"quantity"`
+	Unit                     string     `json:"unit"`
+	DisplayUnit              string     `json:"displayUnit"`
+	Amount                   float64    `json:"amount"`
+	UnitPrice                float64    `json:"unitPrice"`
+	BuyTime                  *time.Time `json:"buyTime"`
+	PayTime                  *time.Time `json:"payTime"`
+	PlaceID                  uint64     `json:"placeId"`
+	Place                    string     `json:"place"`
+	LocationName             string     `json:"locationName"`
+	LocationAddress          string     `json:"locationAddress"`
+	Longitude                string     `json:"longitude"`
+	Latitude                 string     `json:"latitude"`
+	Province                 string     `json:"province"`
+	City                     string     `json:"city"`
+	District                 string     `json:"district"`
+	PaymentMethodID          uint64     `json:"paymentMethodId"`
+	PayType                  string     `json:"payType"`
+	Status                   string     `json:"status"`
+	Version                  int        `json:"version"`
+	Remark                   string     `json:"remark"`
 }
 
 type GrainPurchaseEntrySnapshotDTO struct {
@@ -176,6 +177,37 @@ type GrainEntryMaterialDTO struct {
 	MimeType        string `json:"mimeType"`
 	ETag            string `json:"etag"`
 	SortOrder       int    `json:"sortOrder"`
+}
+
+type GrainPurchaseEntryExportBatchDTO struct {
+	baseDTO.BaseDTO
+	BatchNo      string     `json:"batchNo"`
+	UserID       uint64     `json:"userId"`
+	Username     string     `json:"username"`
+	Status       string     `json:"status"`
+	TotalCount   int        `json:"totalCount"`
+	SuccessCount int        `json:"successCount"`
+	FailCount    int        `json:"failCount"`
+	FileName     string     `json:"fileName"`
+	ErrorMessage string     `json:"errorMessage"`
+	StartedAt    *time.Time `json:"startedAt"`
+	FinishedAt   *time.Time `json:"finishedAt"`
+}
+
+type GrainPurchaseEntryExportQueryDTO struct {
+	Page      int    `form:"page"`
+	PageIndex int    `form:"pageIndex"`
+	PageSize  int    `form:"pageSize"`
+	Status    string `form:"status"`
+}
+
+type GrainPurchaseEntryExportCountDTO struct {
+	TotalCount int `json:"totalCount"`
+}
+
+type GrainPurchaseEntryExportCreateDTO struct {
+	TotalCount int                               `json:"totalCount"`
+	Batch      *GrainPurchaseEntryExportBatchDTO `json:"batch"`
 }
 
 type GrainPurchaseEntryQueryDTO struct {

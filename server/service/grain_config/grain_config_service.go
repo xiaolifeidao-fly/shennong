@@ -5,7 +5,6 @@ import (
 	"common/middleware/db"
 	"common/middleware/storage/image_source"
 	"common/middleware/storage/oss"
-	"encoding/base64"
 	"fmt"
 	"mime"
 	"net/url"
@@ -34,7 +33,11 @@ type BusinessLicenseContent struct {
 	Data      []byte
 	MimeType  string
 	FileName  string
-	Base64    string
+}
+
+type BusinessLicenseURL struct {
+	StationID uint64
+	ImageURL  string
 }
 
 func NewGrainConfigService() *GrainConfigService {
@@ -101,7 +104,11 @@ func (s *GrainConfigService) GetStationDetail(stationID uint64) (*grainConfigDTO
 	}
 	extra, err := s.stationExtraRepository.FindByStationID(stationID)
 	if err == nil && extra != nil {
+		detail.AccountHolderName = extra.AccountHolderName
+		detail.BankName = extra.BankName
+		detail.BankAccountNumber = extra.BankAccountNumber
 		detail.BusinessLicenseUrl = businessLicenseDisplayURL(stationID, extra.BusinessLicenseKey, extra.BusinessLicenseUrl, extra.WXCloudURL, extra.LastSource, extra.UpdatedTime)
+		detail.BusinessLicenseKey = extra.BusinessLicenseKey
 		detail.LastSource = extra.LastSource
 		detail.WXCloudURL = extra.WXCloudURL
 	} else if err != nil && err != gorm.ErrRecordNotFound {
@@ -199,16 +206,25 @@ func (s *GrainConfigService) GetBusinessLicenseContent(stationID uint64) (*Busin
 		return nil, err
 	}
 	mimeType := detectBusinessLicenseMimeType(data, entity.BusinessLicenseKey, entity.BusinessLicenseUrl)
-	base64Content := ""
-	if image_source.IsWXCloud() && normalizeImageSource(entity.LastSource) == image_source.OSS {
-		base64Content = base64.StdEncoding.EncodeToString(data)
-	}
 	return &BusinessLicenseContent{
 		StationID: stationID,
 		Data:      data,
 		MimeType:  mimeType,
 		FileName:  businessLicenseFileName(entity.BusinessLicenseKey, entity.BusinessLicenseUrl),
-		Base64:    base64Content,
+	}, nil
+}
+
+func (s *GrainConfigService) GetBusinessLicenseURL(stationID uint64) (*BusinessLicenseURL, error) {
+	entity, err := s.stationExtraRepository.FindByStationID(stationID)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &BusinessLicenseURL{
+		StationID: stationID,
+		ImageURL:  businessLicenseDisplayURL(stationID, entity.BusinessLicenseKey, entity.BusinessLicenseUrl, entity.WXCloudURL, entity.LastSource, entity.UpdatedTime),
 	}, nil
 }
 
@@ -548,10 +564,19 @@ func businessLicensePath(stationID uint64, ossObjectKey, fallbackURL string, upd
 }
 
 func businessLicenseDisplayURL(stationID uint64, ossObjectKey, fallbackURL, wxCloudURL, lastSource string, updatedTime time.Time) string {
-	if image_source.IsWXCloud() && normalizeImageSource(lastSource) == image_source.WXCloud && strings.TrimSpace(wxCloudURL) != "" {
-		return strings.TrimSpace(wxCloudURL)
+	key := strings.TrimSpace(ossObjectKey)
+	if key != "" {
+		expiry := 30 * time.Minute
+		if oss.Oss != nil {
+			if url, err := oss.Oss.GetUrlByKey(key, &expiry); err == nil {
+				return url
+			}
+		}
+		if url, err := oss.GetUrl(key, &expiry); err == nil {
+			return url
+		}
 	}
-	return businessLicensePath(stationID, ossObjectKey, fallbackURL, updatedTime)
+	return strings.TrimSpace(fallbackURL)
 }
 
 func normalizeImageSource(source string) string {

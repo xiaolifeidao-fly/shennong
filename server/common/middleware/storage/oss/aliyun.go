@@ -13,6 +13,7 @@ import (
 type AliyunOss struct {
 	DirPrefix       string
 	Endpoint        string
+	PublicEndpoint  string
 	BucketName      string
 	AccessKeyId     string
 	AccessKeySecret string
@@ -27,6 +28,7 @@ func NewAliyun(entity *OssEntity) (*AliyunOss, error) {
 	aliyunOss := &AliyunOss{
 		DirPrefix:       entity.DirPrefix,
 		Endpoint:        entity.Endpoint,
+		PublicEndpoint:  entity.PublicEndpoint,
 		BucketName:      entity.BucketName,
 		AccessKeyId:     entity.AccessKeyId,
 		AccessKeySecret: entity.AccessKeySecret,
@@ -173,5 +175,17 @@ func (a *AliyunOss) GetUrlByKey(key string, duration *time.Duration) (string, er
 
 func (a *AliyunOss) signURL(bucket *oss.Bucket, key string, duration *time.Duration) (string, error) {
 	expiredInSec := int64((*duration).Seconds())
-	return bucket.SignURL(key, oss.HTTPGet, expiredInSec)
+	if a.PublicEndpoint == "" || a.PublicEndpoint == a.Endpoint {
+		return bucket.SignURL(key, oss.HTTPGet, expiredInSec)
+	}
+
+	publicClient, err := oss.New(a.PublicEndpoint, a.AccessKeyId, a.AccessKeySecret)
+	if err != nil {
+		return "", err
+	}
+	publicBucket, err := publicClient.Bucket(a.BucketName)
+	if err != nil {
+		return "", err
+	}
+	return publicBucket.SignURL(key, oss.HTTPGet, expiredInSec)
 }

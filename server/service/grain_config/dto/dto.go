@@ -87,7 +87,11 @@ type GrainStationDetailDTO struct {
 	Latitude           string `json:"latitude"`
 	Status             string `json:"status"`
 	Remark             string `json:"remark"`
+	AccountHolderName  string `json:"accountHolderName"`
+	BankName           string `json:"bankName"`
+	BankAccountNumber  string `json:"bankAccountNumber"`
 	BusinessLicenseUrl string `json:"businessLicenseUrl"`
+	BusinessLicenseKey string `json:"businessLicenseKey"`
 	LastSource         string `json:"lastSource"`
 	WXCloudURL         string `json:"wxCloudUrl"`
 }

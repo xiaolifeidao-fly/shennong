@@ -1,5 +1,6 @@
 import { http } from './request'
 import { buildQuery } from './query'
+import { normalizeFileUrl } from '@/utils/fileUrl'
 import type { PageResponse } from '@/types/api'
 import type { GrainDraftCardImage, GrainFarmerDTO } from '@/types/grain'
 
@@ -39,13 +40,21 @@ export interface FarmerImagesResult {
 }
 
 export function getGrainFarmerImages(farmerId: string | number) {
-  return http.get<FarmerImagesResult>(`/grain-farmer-images?farmerId=${farmerId}`)
+  return http.get<FarmerImagesResult>(`/grain-farmer-images?farmerId=${farmerId}`).then((result) => ({
+    ...result,
+    idCardFront: normalizeFileUrl(result.idCardFront),
+    idCardBack: normalizeFileUrl(result.idCardBack),
+    bankCard: normalizeFileUrl(result.bankCard),
+    idCardFrontWxCloudUrl: normalizeFileUrl(result.idCardFrontWxCloudUrl),
+    idCardBackWxCloudUrl: normalizeFileUrl(result.idCardBackWxCloudUrl),
+    bankCardWxCloudUrl: normalizeFileUrl(result.bankCardWxCloudUrl),
+  }))
 }
 
 export function saveGrainFarmerImage(farmerId: string | number, image: GrainDraftCardImage) {
-  return http.post<unknown, GrainDraftCardImage & { farmerId: string | number; imageName?: string }>('/grain-farmer-images', {
+  return http.post<unknown, GrainDraftCardImage & { farmerId: number; imageName?: string }>('/grain-farmer-images', {
     ...image,
-    farmerId,
+    farmerId: Number(farmerId),
     imageName: image.fileName,
   })
 }

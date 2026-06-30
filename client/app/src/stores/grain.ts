@@ -21,6 +21,7 @@ import {
   voidGrainPurchaseEntry,
 } from '@/services/grainPurchase'
 import { recognizeGrainCard, type IDCardSide } from '@/services/grainOcr'
+import { normalizeFileUrl, normalizeFileUrls } from '@/utils/fileUrl'
 import type {
   FarmerProfile,
   FarmerStatus,
@@ -41,6 +42,7 @@ import type {
   GrainPurchaseEntryDTO,
   GrainPurchasePlace,
   GrainPurchaseType,
+  PayCardOcrType,
 } from '@/types/grain'
 
 interface NullablePage<T> {
@@ -202,9 +204,10 @@ function toEntry(dto: GrainPurchaseEntryDTO): GrainEntry {
 }
 
 function toMaterialItem(dto: GrainEntryMaterialDTO): GrainEntryMaterialItem {
+  const url = normalizeFileUrl(dto.imageUrl || dto.ossUrl)
   return {
     id: Number(dto.id) || 0,
-    url: dto.wxCloudUrl || '',
+    url,
     fileName: dto.fileName || '',
   }
 }
@@ -265,7 +268,7 @@ function createDraft(farmer: FarmerProfile | undefined, preset: GrainPreset): Gr
     bankNumber: farmer?.bankNumber || '',
     bankName: farmer?.bankName || '',
     purchaseTypeId: firstPurchaseType?.id || 0,
-    crop: firstPurchaseType?.typeName || preset.crops[0] || '',
+    crop: firstPurchaseType?.typeName || '',
     quantity: 0,
     unit: firstPurchaseType?.unit || '公斤',
     amount: 0,
@@ -325,13 +328,15 @@ function createDraftFromEntry(entry: GrainEntry, farmer: FarmerProfile | undefin
 }
 
 function toDraftCardImage(result: GrainCardOcrResult, imageSide?: IDCardSide): GrainDraftCardImage {
+  const ossUrl = normalizeFileUrl(result.ossUrl)
+  const displayUrl = normalizeFileUrl(result.imageUrl || result.ossUrl)
   return {
     cardType: result.cardType,
     imageSide,
     ossBucket: result.ossBucket,
     ossObjectKey: result.ossObjectKey,
-    ossUrl: result.ossUrl,
-    displayUrl: result.wxCloudUrl || '',
+    ossUrl,
+    displayUrl,
     fileName: result.fileName,
     fileSize: result.fileSize,
     mimeType: result.mimeType,
@@ -397,6 +402,16 @@ function buildEntryPayload(draft: GrainEntryDraft, farmerId: number): Partial<Gr
     payType: draft.payType,
     status: 'submitted',
   }
+}
+
+function resolveSelectedPurchaseType(draft: GrainEntryDraft, preset: GrainPreset): GrainPurchaseType {
+  const selectedPurchaseType = preset.purchaseTypes.find(
+    (item) => item.id === Number(draft.purchaseTypeId) && item.typeName === draft.crop,
+  )
+  if (!selectedPurchaseType) {
+    throw new Error('收购粮食类型为必填项，请从已有粮食类型中选择')
+  }
+  return selectedPurchaseType
 }
 
 function buildPreset(
@@ -669,9 +684,9 @@ export const useGrainStore = defineStore('grain', {
         this.farmerImages = {
           ...this.farmerImages,
           [farmerId]: {
-            idCardFront: result.idCardFrontWxCloudUrl || '',
-            idCardBack: result.idCardBackWxCloudUrl || '',
-            bankCard: result.bankCardWxCloudUrl || '',
+            idCardFront: result.idCardFront || '',
+            idCardBack: result.idCardBack || '',
+            bankCard: result.bankCard || '',
           },
         }
       } catch {
@@ -691,7 +706,7 @@ export const useGrainStore = defineStore('grain', {
           materialType: 'image',
         })
         const materialItems = pageItems(materialPage).map(toMaterialItem)
-        const materialImages = materialItems.map((item) => item.url).filter(Boolean)
+      const materialImages = normalizeFileUrls(materialItems.map((item) => item.url))
         this.entries = this.entries.map((item) =>
           item.id === entryId
             ? {
@@ -767,16 +782,19 @@ export const useGrainStore = defineStore('grain', {
         cardImages: applyCardImage(draft, toDraftCardImage(result, side)),
       }
     },
-    async recognizeBankCard(filePath: string, draft: GrainEntryDraft) {
+    async recognizeBankCard(filePath: string, draft: GrainEntryDraft, cardType: PayCardOcrType = 'bank-card') {
       const farmerId = draft.farmerId !== 'new' ? draft.farmerId : undefined
-      const result = await recognizeGrainCard(filePath, 'bank-card', { farmerId })
+      const result = await recognizeGrainCard(filePath, cardType, { farmerId })
+      // 社保卡的开户行字段为空，收款人取社保卡上的持卡人姓名；银行卡仍沿用识别到的开户行
+      const payeeName = cardType === 'social-security-card' ? result.name : result.bankName
       return {
         bankNumber: result.bankNumber || draft.bankNumber,
-        bankName: result.bankName || draft.bankName,
+        bankName: payeeName || draft.bankName,
         cardImages: applyCardImage(draft, toDraftCardImage(result)),
       }
     },
     async saveEntry(draft: GrainEntryDraft) {
+      resolveSelectedPurchaseType(draft, this.preset)
       let farmerId = Number(draft.farmerId)
 
       if (draft.farmerId === 'new' || !farmerId) {
@@ -797,6 +815,7 @@ export const useGrainStore = defineStore('grain', {
       return savedEntry
     },
     async updateEntry(entryId: string, draft: GrainEntryDraft) {
+      resolveSelectedPurchaseType(draft, this.preset)
       const farmerId = Number(draft.farmerId)
       if (!farmerId) {
         return this.saveEntry(draft)
@@ -815,12 +834,12 @@ export const useGrainStore = defineStore('grain', {
       return savedEntry
     },
     async syncEntryMaterials(entry: GrainPurchaseEntryDTO, images: string[], existingMaterials: GrainEntryMaterialItem[] = []) {
-      const nextImages = images.filter(Boolean)
+      const nextImages = normalizeFileUrls(images)
       const keptUrls = new Set(nextImages)
       const deleteTasks = existingMaterials
-        .filter((item) => item.id && !keptUrls.has(item.url))
+        .filter((item) => item.id && !keptUrls.has(normalizeFileUrl(item.url)))
         .map((item) => deleteGrainEntryMaterial(item.id))
-      const existingUrls = new Set(existingMaterials.map((item) => item.url))
+      const existingUrls = new Set(existingMaterials.map((item) => normalizeFileUrl(item.url)))
       const createTasks = nextImages
         .filter((image) => isLocalImagePath(image) || !existingUrls.has(image))
         .filter(Boolean)

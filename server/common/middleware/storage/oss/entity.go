@@ -6,6 +6,7 @@ type OssEntity struct {
 	Enabled         bool   `json:"enabled"`
 	DirPrefix       string `json:"dirPrefix"`
 	Endpoint        string `json:"endpoint"`
+	PublicEndpoint  string `json:"publicEndpoint"`
 	BucketName      string `json:"bucketName"`
 	AccessKeyId     string `json:"accessKeyId"`
 	AccessKeySecret string `json:"accessKeySecret"`

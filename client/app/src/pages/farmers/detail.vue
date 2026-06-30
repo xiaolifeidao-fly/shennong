@@ -79,6 +79,7 @@
                 <text class="img-label">身份证正面</text>
                 <image
                   v-if="farmerImages.idCardFront"
+                  :key="farmerImages.idCardFront"
                   :src="farmerImages.idCardFront"
                   class="cert-img"
                   mode="aspectFill"
@@ -93,6 +94,7 @@
                 <text class="img-label">银行卡</text>
                 <image
                   v-if="farmerImages.bankCard"
+                  :key="farmerImages.bankCard"
                   :src="farmerImages.bankCard"
                   class="cert-img"
                   mode="aspectFill"
@@ -101,7 +103,15 @@
                 <view v-else class="img-placeholder">
                   <text>暂无图片</text>
                 </view>
-                <button class="img-action" @click="uploadFarmerCardImage('bank')">重新OCR</button>
+                <view class="img-action-row">
+                  <picker :value="payCardTypeIndex" :range="payCardTypeNames" @change="selectPayCardType">
+                    <view class="card-type-picker">
+                      <text>{{ payCardTypeLabel }}</text>
+                      <text class="caret"></text>
+                    </view>
+                  </picker>
+                  <button class="img-action" @click="uploadFarmerCardImage('bank', payCardType)">重新OCR</button>
+                </view>
               </view>
             </view>
           </view>
@@ -188,7 +198,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { useGrainStore } from '@/stores/grain'
 import { formatAmount, formatQuantity, getEntryPrice } from '@/utils/grain'
-import type { FarmerProfile, GrainEntryDraft } from '@/types/grain'
+import { PAY_CARD_OCR_OPTIONS, type FarmerProfile, type GrainEntryDraft, type PayCardOcrType } from '@/types/grain'
 import type { FarmerImagesResult } from '@/services/grainFarmer'
 
 const grainStore = useGrainStore()
@@ -200,6 +210,15 @@ const farmerImages = computed((): FarmerImagesResult => grainStore.farmerImages[
 const allEntries = computed(() => grainStore.farmerEntriesSorted)
 const pagedEntries = computed(() => allEntries.value)
 const hasMore = computed(() => grainStore.farmerEntriesHasMore)
+
+const payCardType = ref<PayCardOcrType>('bank-card')
+const payCardTypeNames = PAY_CARD_OCR_OPTIONS.map((item) => item.label)
+const payCardTypeIndex = computed(() => Math.max(0, PAY_CARD_OCR_OPTIONS.findIndex((item) => item.value === payCardType.value)))
+const payCardTypeLabel = computed(() => PAY_CARD_OCR_OPTIONS[payCardTypeIndex.value]?.label || '银行卡')
+
+function selectPayCardType(event: { detail: { value: number | string } }) {
+  payCardType.value = PAY_CARD_OCR_OPTIONS[Number(event.detail.value)]?.value || 'bank-card'
+}
 
 const editing = ref(false)
 const editForm = reactive<FarmerProfile>({
@@ -322,7 +341,7 @@ function buildImageDraft(profile: FarmerProfile): GrainEntryDraft {
   }
 }
 
-function uploadFarmerCardImage(type: 'id-front' | 'bank') {
+function uploadFarmerCardImage(type: 'id-front' | 'bank', payCardType: PayCardOcrType = 'bank-card') {
   if (!farmer.value) return
   const farmerId = farmer.value.id
   uni.chooseImage({
@@ -333,7 +352,7 @@ function uploadFarmerCardImage(type: 'id-front' | 'bank') {
       try {
         const draft = buildImageDraft(farmer.value)
         if (type === 'bank') {
-          const result = await grainStore.recognizeBankCard(filePath, draft)
+          const result = await grainStore.recognizeBankCard(filePath, draft, payCardType)
           await grainStore.saveFarmerCardImages(farmer.value.id, result.cardImages)
           await grainStore.updateFarmer(farmer.value.id, {
             ...farmer.value,
@@ -513,6 +532,38 @@ function uploadFarmerCardImage(type: 'id-front' | 'bank') {
   color: #145535;
   font-size: 22rpx;
   line-height: 58rpx;
+}
+
+.img-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.img-action-row .img-action {
+  flex: 1;
+}
+
+.card-type-picker {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  min-height: 58rpx;
+  padding: 0 16rpx;
+  border: 1rpx solid #d8e5d6;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #2d4633;
+  font-size: 22rpx;
+  line-height: 58rpx;
+}
+
+.card-type-picker .caret {
+  width: 0;
+  height: 0;
+  border-left: 6rpx solid transparent;
+  border-right: 6rpx solid transparent;
+  border-top: 8rpx solid #6d776c;
 }
 
 .entry-btn {

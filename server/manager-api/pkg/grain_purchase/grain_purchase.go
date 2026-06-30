@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	webAuth "manager-api/auth"
 	"manager-api/pkg/internal/tenantctx"
 	"net/http"
 	"path/filepath"
 	grainPurchaseService "service/grain_purchase"
 	grainPurchaseDTO "service/grain_purchase/dto"
+	authService "service/manager_auth"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +39,10 @@ func NewGrainPurchaseHandler() *GrainPurchaseHandler {
 func (h *GrainPurchaseHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/grain-purchase-dashboard", h.getDashboard)
 	engine.GET("/grain-purchase-entries", h.listEntries)
+	engine.GET("/grain-purchase-entry-exports/count", h.countEntryExports)
+	engine.GET("/grain-purchase-entry-exports", h.listEntryExports)
+	engine.POST("/grain-purchase-entry-exports", h.createEntryExport)
+	engine.GET("/grain-purchase-entry-exports/:batchNo/download", h.downloadEntryExport)
 	engine.POST("/grain-purchase-entries", h.createEntry)
 	engine.PUT("/grain-purchase-entries/:id", h.updateEntry)
 	engine.PUT("/grain-purchase-entries/:id/void", h.voidEntry)
@@ -66,13 +72,75 @@ func (h *GrainPurchaseHandler) getDashboard(context *gin.Context) {
 }
 
 func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
-	var query grainPurchaseDTO.GrainPurchaseEntryQueryDTO
+	query, ok := h.bindEntryQuery(context)
+	if !ok {
+		return
+	}
+	result, err := h.service.ListEntries(query)
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainPurchaseHandler) countEntryExports(context *gin.Context) {
+	query, ok := h.bindEntryQuery(context)
+	if !ok {
+		return
+	}
+	result, err := h.service.CountEntriesForExport(query)
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainPurchaseHandler) listEntryExports(context *gin.Context) {
+	user, ok := currentLoginUser(context)
+	if !ok {
+		commonRouter.ToError(context, "用户未登录")
+		return
+	}
+	var query grainPurchaseDTO.GrainPurchaseEntryExportQueryDTO
 	if err := context.ShouldBindQuery(&query); err != nil {
 		commonRouter.ToError(context, "参数错误")
 		return
 	}
-	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+	result, err := h.service.ListEntryExportBatches(user.ID, query)
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainPurchaseHandler) createEntryExport(context *gin.Context) {
+	user, ok := currentLoginUser(context)
+	if !ok {
+		commonRouter.ToError(context, "用户未登录")
 		return
+	}
+	query, ok := h.bindEntryQuery(context)
+	if !ok {
+		return
+	}
+	result, err := h.service.CreateEntryExportBatch(query, user.ID, user.Username, user.RoleIDs)
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *GrainPurchaseHandler) downloadEntryExport(context *gin.Context) {
+	user, ok := currentLoginUser(context)
+	if !ok {
+		commonRouter.ToError(context, "用户未登录")
+		return
+	}
+	content, err := h.service.GetEntryExportFileContent(context.Param("batchNo"), user.ID)
+	if err != nil {
+		commonRouter.ToJson(context, nil, err)
+		return
+	}
+	context.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", content.FileName))
+	context.Data(http.StatusOK, content.MimeType, content.Data)
+}
+
+func (h *GrainPurchaseHandler) bindEntryQuery(context *gin.Context) (grainPurchaseDTO.GrainPurchaseEntryQueryDTO, bool) {
+	var query grainPurchaseDTO.GrainPurchaseEntryQueryDTO
+	if err := context.ShouldBindQuery(&query); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return query, false
+	}
+	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
+		return query, false
 	} else if stationIDs != nil {
 		query.StationIDs = stationIDs
 	} else if raw := strings.TrimSpace(context.Query("stationIds")); raw != "" {
@@ -87,8 +155,16 @@ func (h *GrainPurchaseHandler) listEntries(context *gin.Context) {
 	if raw := strings.TrimSpace(context.Query("purchaseTypeIds")); raw != "" {
 		query.PurchaseTypeIDs = parseUint64List(raw)
 	}
-	result, err := h.service.ListEntries(query)
-	commonRouter.ToJson(context, result, err)
+	return query, true
+}
+
+func currentLoginUser(context *gin.Context) (*authService.LoginUser, bool) {
+	value, ok := context.Get(webAuth.ContextUserKey)
+	if !ok {
+		return nil, false
+	}
+	user, ok := value.(*authService.LoginUser)
+	return user, ok && user != nil && user.ID > 0
 }
 
 func parseUint64List(raw string) []uint64 {
@@ -311,7 +387,7 @@ func (h *GrainPurchaseHandler) uploadMaterial(context *gin.Context) {
 	}
 	result, err := h.service.CreateMaterial(req)
 	if result != nil && result.Id > 0 {
-		result.ImageURL = fmt.Sprintf("/grain-entry-materials?imageId=%d", result.Id)
+		result.ImageURL = result.OssURL
 	}
 	commonRouter.ToJson(context, result, err)
 }
@@ -325,29 +401,28 @@ func (h *GrainPurchaseHandler) getMaterialImage(context *gin.Context) {
 }
 
 func (h *GrainPurchaseHandler) streamMaterialImage(context *gin.Context, id uint) {
-	log.Printf("[grain-material-image] stream image request id=%d path=%s", id, context.Request.URL.Path)
-	content, err := h.service.GetMaterialImageContent(id)
+	log.Printf("[grain-material-image] image url request id=%d path=%s", id, context.Request.URL.Path)
+	result, err := h.service.GetMaterialImageURL(id)
 	if err == gorm.ErrRecordNotFound {
-		log.Printf("[grain-material-image] stream image not found id=%d", id)
+		log.Printf("[grain-material-image] image url not found id=%d", id)
 		context.Status(http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		log.Printf("[grain-material-image] stream image failed id=%d err=%v", id, err)
+		log.Printf("[grain-material-image] image url failed id=%d err=%v", id, err)
 		commonRouter.ToError(context, err.Error())
 		return
 	}
 	if stationIDs, ok := tenantctx.ScopedStationIDs(context); !ok {
-		log.Printf("[grain-material-image] stream image tenant scope missing id=%d stationID=%d", id, content.StationID)
+		log.Printf("[grain-material-image] image url tenant scope missing id=%d stationID=%d", id, result.StationID)
 		return
-	} else if stationIDs != nil && !stationAllowed(content.StationID, stationIDs) {
-		log.Printf("[grain-material-image] stream image station denied id=%d stationID=%d scopedStationIDs=%v", id, content.StationID, stationIDs)
+	} else if stationIDs != nil && !stationAllowed(result.StationID, stationIDs) {
+		log.Printf("[grain-material-image] image url station denied id=%d stationID=%d scopedStationIDs=%v", id, result.StationID, stationIDs)
 		context.Status(http.StatusNotFound)
 		return
 	}
-	context.Header("Cache-Control", "private, max-age=300")
-	context.Data(http.StatusOK, content.MimeType, content.Data)
-	log.Printf("[grain-material-image] stream image success id=%d stationID=%d fileName=%s mimeType=%s bytes=%d", id, content.StationID, content.FileName, content.MimeType, len(content.Data))
+	commonRouter.ToJson(context, gin.H{"imageUrl": result.ImageURL}, nil)
+	log.Printf("[grain-material-image] image url success id=%d stationID=%d", id, result.StationID)
 }
 
 func (h *GrainPurchaseHandler) deleteMaterial(context *gin.Context) {

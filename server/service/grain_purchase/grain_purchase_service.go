@@ -1,6 +1,8 @@
 package grain_purchase
 
 import (
+	"archive/zip"
+	"bytes"
 	baseDTO "common/base/dto"
 	"common/middleware/db"
 	"common/middleware/storage/image_source"
@@ -14,10 +16,13 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	farmerImageRepository "service/farmer_image/repository"
 	grainFarmerService "service/grain_farmer"
 	grainFarmerRepository "service/grain_farmer/repository"
 	grainPurchaseDTO "service/grain_purchase/dto"
 	grainPurchaseRepository "service/grain_purchase/repository"
+	permissionRepository "service/manager_permission/repository"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,11 +32,14 @@ import (
 
 type GrainPurchaseService struct {
 	farmerRepository         *grainFarmerRepository.GrainFarmerRepository
+	idcardImageRepository    *farmerImageRepository.FarmerIDCardImageRepository
 	entryRepository          *grainPurchaseRepository.GrainPurchaseEntryRepository
 	snapshotRepository       *grainPurchaseRepository.GrainPurchaseEntrySnapshotRepository
 	summaryRepository        *grainPurchaseRepository.GrainFarmerPurchaseSummaryRepository
 	stationSummaryRepository *grainPurchaseRepository.GrainStationPurchaseSummaryRepository
 	materialRepository       *grainPurchaseRepository.GrainEntryMaterialRepository
+	exportBatchRepository    *grainPurchaseRepository.GrainPurchaseEntryExportBatchRepository
+	roleRepository           *permissionRepository.RoleRepository
 }
 
 type GrainEntryMaterialContent struct {
@@ -42,14 +50,22 @@ type GrainEntryMaterialContent struct {
 	Base64    string
 }
 
+type GrainEntryMaterialURL struct {
+	StationID uint64
+	ImageURL  string
+}
+
 func NewGrainPurchaseService() *GrainPurchaseService {
 	return &GrainPurchaseService{
 		farmerRepository:         db.GetRepository[grainFarmerRepository.GrainFarmerRepository](),
+		idcardImageRepository:    db.GetRepository[farmerImageRepository.FarmerIDCardImageRepository](),
 		entryRepository:          db.GetRepository[grainPurchaseRepository.GrainPurchaseEntryRepository](),
 		snapshotRepository:       db.GetRepository[grainPurchaseRepository.GrainPurchaseEntrySnapshotRepository](),
 		summaryRepository:        db.GetRepository[grainPurchaseRepository.GrainFarmerPurchaseSummaryRepository](),
 		stationSummaryRepository: db.GetRepository[grainPurchaseRepository.GrainStationPurchaseSummaryRepository](),
 		materialRepository:       db.GetRepository[grainPurchaseRepository.GrainEntryMaterialRepository](),
+		exportBatchRepository:    db.GetRepository[grainPurchaseRepository.GrainPurchaseEntryExportBatchRepository](),
+		roleRepository:           db.GetRepository[permissionRepository.RoleRepository](),
 	}
 }
 
@@ -60,6 +76,7 @@ func (s *GrainPurchaseService) EnsureTable() error {
 		s.summaryRepository.EnsureTable,
 		s.stationSummaryRepository.EnsureTable,
 		s.materialRepository.EnsureTable,
+		s.exportBatchRepository.EnsureTable,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -85,6 +102,579 @@ func (s *GrainPurchaseService) ListEntries(query grainPurchaseDTO.GrainPurchaseE
 	}
 	dtos = filterEntryDTOs(dtos, query.Search)
 	return baseDTO.BuildPage(int(total), dtos), nil
+}
+
+func (s *GrainPurchaseService) CountEntriesForExport(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) (*grainPurchaseDTO.GrainPurchaseEntryExportCountDTO, error) {
+	prepareEntryFarmerSearchIndexes(&query)
+	total, err := s.entryRepository.CountByQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	return &grainPurchaseDTO.GrainPurchaseEntryExportCountDTO{TotalCount: int(total)}, nil
+}
+
+func (s *GrainPurchaseService) ListEntryExportBatches(userID uint64, query grainPurchaseDTO.GrainPurchaseEntryExportQueryDTO) (*baseDTO.PageDTO[grainPurchaseDTO.GrainPurchaseEntryExportBatchDTO], error) {
+	pageIndex, pageSize := normalizePage(query.Page, query.PageIndex, query.PageSize)
+	total, err := s.exportBatchRepository.CountByUser(userID, query)
+	if err != nil {
+		return nil, err
+	}
+	entities, err := s.exportBatchRepository.ListByUser(userID, query, pageIndex, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	return baseDTO.BuildPage(int(total), db.ToDTOs[grainPurchaseDTO.GrainPurchaseEntryExportBatchDTO](entities)), nil
+}
+
+func (s *GrainPurchaseService) CreateEntryExportBatch(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, userID uint64, username string, roleIDs []uint64) (*grainPurchaseDTO.GrainPurchaseEntryExportCreateDTO, error) {
+	if running, err := s.exportBatchRepository.FindLatestRunningByUser(userID); err == nil && running != nil {
+		return nil, fmt.Errorf("当前用户已有进行中的导出批次：%s", running.BatchNo)
+	} else if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	includeIDCardImages := s.hasAdminRole(roleIDs)
+	prepareEntryFarmerSearchIndexes(&query)
+	total, err := s.entryRepository.CountByQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	filterBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	batch := &grainPurchaseRepository.GrainPurchaseEntryExportBatch{
+		BatchNo:    fmt.Sprintf("GPE%s%d", now.Format("20060102150405"), now.UnixNano()%1000000),
+		UserID:     userID,
+		Username:   strings.TrimSpace(username),
+		Status:     "pending",
+		TotalCount: int(total),
+		FilterJSON: string(filterBytes),
+		StartedAt:  &now,
+	}
+	created, err := s.exportBatchRepository.Create(batch)
+	if err != nil {
+		return nil, err
+	}
+	go NewGrainPurchaseService().runEntryExport(created.Id, query, includeIDCardImages)
+	return &grainPurchaseDTO.GrainPurchaseEntryExportCreateDTO{
+		TotalCount: int(total),
+		Batch:      db.ToDTO[grainPurchaseDTO.GrainPurchaseEntryExportBatchDTO](created),
+	}, nil
+}
+
+func (s *GrainPurchaseService) hasAdminRole(roleIDs []uint64) bool {
+	if len(roleIDs) == 0 || s.roleRepository == nil || s.roleRepository.Db == nil {
+		return false
+	}
+	var count int64
+	if err := s.roleRepository.Db.
+		Model(&permissionRepository.Role{}).
+		Where("active = ? AND id IN ? AND code IN ?", 1, roleIDs, []string{"admin", "super_admin"}).
+		Count(&count).Error; err != nil {
+		log.Printf("[grain-entry-export] check admin role failed roleIDs=%v err=%v", roleIDs, err)
+		return false
+	}
+	return count > 0
+}
+
+type GrainEntryExportFileContent struct {
+	Data     []byte
+	FileName string
+	MimeType string
+}
+
+func (s *GrainPurchaseService) GetEntryExportFileContent(batchNo string, userID uint64) (*GrainEntryExportFileContent, error) {
+	batch, err := s.exportBatchRepository.FindByBatchNoForUser(strings.TrimSpace(batchNo), userID)
+	if err != nil {
+		return nil, err
+	}
+	if (batch.Status != "success" && batch.Status != "partial_success") || strings.TrimSpace(batch.FilePath) == "" {
+		return nil, fmt.Errorf("导出批次尚未完成")
+	}
+	data, err := oss.GetByKey(strings.TrimSpace(batch.FilePath))
+	if err != nil {
+		return nil, err
+	}
+	return &GrainEntryExportFileContent{
+		Data:     data,
+		FileName: batch.FileName,
+		MimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	}, nil
+}
+
+func (s *GrainPurchaseService) runEntryExport(batchID int, query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, includeIDCardImages bool) {
+	fileName := ""
+	objectKey := ""
+	successCount := 0
+	failCount := 0
+	finishedAt := func() *time.Time {
+		now := time.Now()
+		return &now
+	}
+	if err := s.exportBatchRepository.UpdateProgress(batchID, "running", 0, 0, "", "", "", nil); err != nil {
+		log.Printf("[grain-entry-export] mark running failed batchID=%d err=%v", batchID, err)
+		return
+	}
+	fileName = fmt.Sprintf("grain_purchase_entries_%d.xlsx", batchID)
+	objectPath := fmt.Sprintf("grain-purchase-entry-exports/%s/%s", time.Now().Format("20060102"), fileName)
+	data, successCount, failCount, err := s.buildEntryExportWorkbook(query, batchID, includeIDCardImages, func(success, fail int) {
+		_ = s.exportBatchRepository.UpdateProgress(batchID, "running", success, fail, fileName, objectKey, "", nil)
+	})
+	if err != nil {
+		_ = s.exportBatchRepository.UpdateProgress(batchID, "failed", successCount, failCount, fileName, objectKey, err.Error(), finishedAt())
+		return
+	}
+	if err := oss.Put(objectPath, data); err != nil {
+		_ = s.exportBatchRepository.UpdateProgress(batchID, "failed", successCount, failCount, fileName, objectKey, err.Error(), finishedAt())
+		return
+	}
+	if oss.Oss != nil {
+		objectKey = oss.Oss.BuildKey(objectPath)
+	} else {
+		objectKey = objectPath
+	}
+	status := "success"
+	if failCount > 0 {
+		status = "partial_success"
+	}
+	_ = s.exportBatchRepository.UpdateProgress(batchID, status, successCount, failCount, fileName, objectKey, "", finishedAt())
+}
+
+func (s *GrainPurchaseService) buildEntryExportWorkbook(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, batchID int, includeIDCardImages bool, onProgress func(success, fail int)) ([]byte, int, int, error) {
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+	if err := writeXLSXStaticParts(zipWriter, includeIDCardImages); err != nil {
+		return nil, 0, 0, err
+	}
+	sheet, err := zipWriter.Create("xl/worksheets/sheet1.xml")
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	if _, err := sheet.Write([]byte(entryExportWorksheetHeader(includeIDCardImages))); err != nil {
+		return nil, 0, 0, err
+	}
+	writeEntryExportXLSXRow(sheet, 1, entryExportHeaders(includeIDCardImages), 1, includeIDCardImages)
+	pageIndex := 1
+	successCount := 0
+	failCount := 0
+	images := make([]entryExportXLSXImage, 0)
+	const exportPageSize = 500
+	for {
+		pageQuery := query
+		pageQuery.PageIndex = pageIndex
+		pageQuery.PageSize = exportPageSize
+		page, err := s.ListEntries(pageQuery)
+		if err != nil {
+			return nil, successCount, failCount, err
+		}
+		for _, item := range page.Data {
+			if item == nil {
+				failCount++
+				continue
+			}
+			rowIndex := successCount + failCount + 2
+			if err := writeEntryExportXLSXRow(sheet, rowIndex, entryExportRow(item, successCount+failCount+1, includeIDCardImages), 2, includeIDCardImages); err != nil {
+				failCount++
+				continue
+			}
+			if includeIDCardImages {
+				if image, err := s.entryExportIDCardImage(item, rowIndex); err == nil && image != nil {
+					images = append(images, *image)
+				} else if err != nil {
+					log.Printf("[grain-entry-export] skip idcard image batchID=%d entryID=%d farmerID=%d err=%v", batchID, item.Id, item.FarmerID, err)
+				}
+			}
+			successCount++
+		}
+		if onProgress != nil {
+			onProgress(successCount, failCount)
+		}
+		if pageIndex*exportPageSize >= page.Total {
+			break
+		}
+		pageIndex++
+	}
+	if _, err := sheet.Write([]byte(entryExportWorksheetFooter(includeIDCardImages))); err != nil {
+		return nil, successCount, failCount, err
+	}
+	if includeIDCardImages {
+		if err := writeEntryExportXLSXImages(zipWriter, images); err != nil {
+			return nil, successCount, failCount, err
+		}
+	}
+	if err := zipWriter.Close(); err != nil {
+		return nil, successCount, failCount, err
+	}
+	log.Printf("[grain-entry-export] xlsx generated batchID=%d bytes=%d success=%d fail=%d", batchID, buf.Len(), successCount, failCount)
+	return buf.Bytes(), successCount, failCount, nil
+}
+
+func entryExportHeaders(includeIDCardImages bool) []string {
+	headers := []string{
+		"序号",
+		"买方信息\n姓名",
+		"农户姓名",
+		"农户住址",
+		"农户电话",
+		"农户身份证\n号码",
+		"购粮品种",
+		"购粮数量\n(公斤)",
+		"计量单价",
+		"购粮金额",
+		"收购时间",
+		"收购地点",
+		"付款方式",
+		"农户银行卡账号",
+		"农户收款人姓名",
+		"付款账号\n（粮站公户账号）",
+		"付款日期",
+		"备注",
+	}
+	if includeIDCardImages {
+		headers = append(headers, "身份证图片")
+	}
+	return headers
+}
+
+func entryExportRow(item *grainPurchaseDTO.GrainPurchaseEntryDTO, index int, includeIDCardImages bool) []string {
+	row := []string{
+		strconv.Itoa(index),
+		item.StationName,
+		item.FarmerName,
+		item.FarmerAddress,
+		item.FarmerPhone,
+		item.FarmerIDNumber,
+		item.Crop,
+		fmt.Sprintf("%.3f", item.Quantity),
+		fmt.Sprintf("%.4f", item.UnitPrice),
+		fmt.Sprintf("%.2f", item.Amount),
+		formatExportTime(item.BuyTime),
+		firstNonEmpty(item.Place, item.LocationAddress),
+		item.PayType,
+		item.FarmerBankNumber,
+		entryExportReceiptName(item),
+		item.StationBankAccountNumber,
+		formatExportTime(item.PayTime),
+		item.Remark,
+	}
+	if includeIDCardImages {
+		row = append(row, "")
+	}
+	return row
+}
+
+func entryExportReceiptName(item *grainPurchaseDTO.GrainPurchaseEntryDTO) string {
+	if item == nil {
+		return ""
+	}
+	if isEntryBankPayment(item) {
+		return item.FarmerName
+	}
+	return item.FarmerBankName
+}
+
+func isEntryBankPayment(item *grainPurchaseDTO.GrainPurchaseEntryDTO) bool {
+	if item == nil {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(item.PayType))
+	return strings.Contains(text, "bank") || strings.Contains(text, "银行") || strings.Contains(text, "银行卡")
+}
+
+func formatExportTime(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format("2006-01-02 15:04:05")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func writeEntryExportXLSXRow(writer interface{ Write([]byte) (int, error) }, rowIndex int, values []string, styleID int, includeIDCardImages bool) error {
+	if _, err := writer.Write([]byte(fmt.Sprintf(`<row r="%d" ht="%s" customHeight="1">`, rowIndex, rowHeight(rowIndex, includeIDCardImages)))); err != nil {
+		return err
+	}
+	for colIndex, value := range values {
+		cell := fmt.Sprintf(
+			`<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>`,
+			columnName(colIndex+1),
+			rowIndex,
+			styleID,
+			xlsxEscape(value),
+		)
+		if _, err := writer.Write([]byte(cell)); err != nil {
+			return err
+		}
+	}
+	_, err := writer.Write([]byte(`</row>`))
+	return err
+}
+
+func rowHeight(rowIndex int, includeIDCardImages bool) string {
+	if rowIndex == 1 {
+		return "34"
+	}
+	if includeIDCardImages {
+		return "82"
+	}
+	return "22"
+}
+
+func columnName(index int) string {
+	name := ""
+	for index > 0 {
+		index--
+		name = string(rune('A'+index%26)) + name
+		index /= 26
+	}
+	return name
+}
+
+func xlsxEscape(value string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+		"'", "&apos;",
+	)
+	return replacer.Replace(value)
+}
+
+func entryExportWorksheetHeader(includeIDCardImages bool) string {
+	imageCol := ""
+	if includeIDCardImages {
+		imageCol = `<col min="19" max="19" width="22" customWidth="1"/>` + "\n"
+	}
+	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>
+<col min="1" max="1" width="8" customWidth="1"/>
+<col min="2" max="2" width="16" customWidth="1"/>
+<col min="3" max="3" width="14" customWidth="1"/>
+<col min="4" max="4" width="24" customWidth="1"/>
+<col min="5" max="5" width="15" customWidth="1"/>
+<col min="6" max="6" width="22" customWidth="1"/>
+<col min="7" max="7" width="14" customWidth="1"/>
+<col min="8" max="8" width="14" customWidth="1"/>
+<col min="9" max="10" width="12" customWidth="1"/>
+<col min="11" max="12" width="18" customWidth="1"/>
+<col min="13" max="13" width="14" customWidth="1"/>
+<col min="14" max="14" width="22" customWidth="1"/>
+<col min="15" max="15" width="18" customWidth="1"/>
+<col min="16" max="16" width="18" customWidth="1"/>
+<col min="17" max="17" width="18" customWidth="1"/>
+<col min="18" max="18" width="18" customWidth="1"/>
+` + imageCol + `</cols><sheetData>`
+}
+
+func entryExportWorksheetFooter(includeIDCardImages bool) string {
+	drawing := ""
+	if includeIDCardImages {
+		drawing = `<drawing r:id="rId1"/>`
+	}
+	return `</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>` + drawing + `</worksheet>`
+}
+
+func writeXLSXStaticParts(zipWriter *zip.Writer, includeIDCardImages bool) error {
+	contentTypesExtra := ""
+	if includeIDCardImages {
+		contentTypesExtra = `
+<Default Extension="png" ContentType="image/png"/>
+<Default Extension="jpg" ContentType="image/jpeg"/>
+<Default Extension="jpeg" ContentType="image/jpeg"/>
+<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`
+	}
+	parts := map[string]string{
+		"[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+` + contentTypesExtra + `
+</Types>`,
+		"_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`,
+		"xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="收粮明细" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`,
+		"xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+		"xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9EAD3"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right><top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="3">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`,
+		"docProps/core.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>shennong</dc:creator><cp:lastModifiedBy>shennong</cp:lastModifiedBy></cp:coreProperties>`,
+		"docProps/app.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Shennong</Application></Properties>`,
+	}
+	if includeIDCardImages {
+		parts["xl/worksheets/_rels/sheet1.xml.rels"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+</Relationships>`
+	}
+	for name, content := range parts {
+		part, err := zipWriter.Create(name)
+		if err != nil {
+			return err
+		}
+		if _, err := part.Write([]byte(content)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type entryExportXLSXImage struct {
+	RowIndex  int
+	FileIndex int
+	Ext       string
+	Data      []byte
+}
+
+func (s *GrainPurchaseService) entryExportIDCardImage(item *grainPurchaseDTO.GrainPurchaseEntryDTO, rowIndex int) (*entryExportXLSXImage, error) {
+	if item == nil || item.FarmerID == 0 || s.idcardImageRepository == nil || s.idcardImageRepository.Db == nil {
+		return nil, nil
+	}
+	record, err := s.idcardImageRepository.FindLatestBySide(item.FarmerID, item.AppUserID, "front")
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, err := getOssObject(record.OssObjectKey, record.OssURL)
+	if err != nil {
+		return nil, err
+	}
+	ext := entryExportImageExt(data, record.ImageName)
+	if ext == "" {
+		return nil, fmt.Errorf("unsupported idcard image type: %s", detectImageMimeType(data, record.ImageName))
+	}
+	return &entryExportXLSXImage{
+		RowIndex: rowIndex,
+		Ext:      ext,
+		Data:     data,
+	}, nil
+}
+
+func entryExportImageExt(data []byte, fileName string) string {
+	mimeType := strings.ToLower(strings.TrimSpace(detectImageMimeType(data, fileName)))
+	switch mimeType {
+	case "image/png":
+		return "png"
+	case "image/jpeg", "image/jpg":
+		return "jpg"
+	default:
+		switch strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), ".")) {
+		case "png":
+			return "png"
+		case "jpg", "jpeg":
+			return "jpg"
+		}
+	}
+	return ""
+}
+
+func writeEntryExportXLSXImages(zipWriter *zip.Writer, images []entryExportXLSXImage) error {
+	for i := range images {
+		images[i].FileIndex = i + 1
+		part, err := zipWriter.Create(fmt.Sprintf("xl/media/image%d.%s", images[i].FileIndex, images[i].Ext))
+		if err != nil {
+			return err
+		}
+		if _, err := part.Write(images[i].Data); err != nil {
+			return err
+		}
+	}
+	if err := writeEntryExportDrawing(zipWriter, images); err != nil {
+		return err
+	}
+	return writeEntryExportDrawingRels(zipWriter, images)
+}
+
+func writeEntryExportDrawing(zipWriter *zip.Writer, images []entryExportXLSXImage) error {
+	part, err := zipWriter.Create("xl/drawings/drawing1.xml")
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">`)); err != nil {
+		return err
+	}
+	for _, image := range images {
+		if _, err := part.Write([]byte(entryExportDrawingAnchor(image))); err != nil {
+			return err
+		}
+	}
+	_, err = part.Write([]byte(`</xdr:wsDr>`))
+	return err
+}
+
+func entryExportDrawingAnchor(image entryExportXLSXImage) string {
+	const imageColZeroBased = 18
+	rowZeroBased := image.RowIndex - 1
+	return fmt.Sprintf(`<xdr:twoCellAnchor editAs="oneCell">
+<xdr:from><xdr:col>%d</xdr:col><xdr:colOff>95250</xdr:colOff><xdr:row>%d</xdr:row><xdr:rowOff>95250</xdr:rowOff></xdr:from>
+<xdr:to><xdr:col>%d</xdr:col><xdr:colOff>1047750</xdr:colOff><xdr:row>%d</xdr:row><xdr:rowOff>857250</xdr:rowOff></xdr:to>
+<xdr:pic>
+<xdr:nvPicPr><xdr:cNvPr id="%d" name="IDCardImage%d"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>
+<xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId%d"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
+<xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
+</xdr:pic>
+<xdr:clientData/>
+</xdr:twoCellAnchor>`, imageColZeroBased, rowZeroBased, imageColZeroBased, rowZeroBased, image.FileIndex, image.FileIndex, image.FileIndex)
+}
+
+func writeEntryExportDrawingRels(zipWriter *zip.Writer, images []entryExportXLSXImage) error {
+	part, err := zipWriter.Create("xl/drawings/_rels/drawing1.xml.rels")
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`)); err != nil {
+		return err
+	}
+	for _, image := range images {
+		rel := fmt.Sprintf(`<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image%d.%s"/>`, image.FileIndex, image.FileIndex, image.Ext)
+		if _, err := part.Write([]byte(rel)); err != nil {
+			return err
+		}
+	}
+	_, err = part.Write([]byte(`</Relationships>`))
+	return err
 }
 
 func (s *GrainPurchaseService) CreateEntry(req *grainPurchaseDTO.GrainPurchaseEntryDTO, operatorAppUserID uint64, operatorName string) (*grainPurchaseDTO.GrainPurchaseEntryDTO, error) {
@@ -381,11 +971,7 @@ func (s *GrainPurchaseService) ListMaterials(query grainPurchaseDTO.GrainEntryMa
 	dtos := db.ToDTOs[grainPurchaseDTO.GrainEntryMaterialDTO](entities)
 	for _, dto := range dtos {
 		if dto != nil && dto.Id > 0 {
-			if strings.TrimSpace(dto.WXCloudURL) != "" && normalizeImageSource(dto.LastSource) == image_source.WXCloud {
-				dto.ImageURL = dto.WXCloudURL
-			} else {
-				dto.ImageURL = ""
-			}
+			dto.ImageURL = materialDisplayURL(dto.OssObjectKey, dto.OssURL)
 		}
 	}
 	return baseDTO.BuildPage(int(total), dtos), nil
@@ -519,6 +1105,36 @@ func (s *GrainPurchaseService) GetMaterialImageContent(id uint) (*GrainEntryMate
 		StationID: entity.StationID,
 		Base64:    base64Content,
 	}, nil
+}
+
+func (s *GrainPurchaseService) GetMaterialImageURL(id uint) (*GrainEntryMaterialURL, error) {
+	entity, err := s.materialRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &GrainEntryMaterialURL{
+		StationID: entity.StationID,
+		ImageURL:  materialDisplayURL(entity.OssObjectKey, entity.OssURL),
+	}, nil
+}
+
+func materialDisplayURL(ossObjectKey, fallbackURL string) string {
+	key := strings.TrimSpace(ossObjectKey)
+	if key != "" {
+		expiry := 30 * time.Minute
+		if oss.Oss != nil {
+			if url, err := oss.Oss.GetUrlByKey(key, &expiry); err == nil {
+				return url
+			}
+		}
+		if url, err := oss.GetUrl(key, &expiry); err == nil {
+			return url
+		}
+	}
+	return strings.TrimSpace(fallbackURL)
 }
 
 func normalizeImageSource(source string) string {
@@ -756,7 +1372,7 @@ func (s *GrainPurchaseService) applyEntryToSummary(entry *grainPurchaseRepositor
 }
 
 func (s *GrainPurchaseService) applyEntryToFarmerSummary(entry *grainPurchaseRepository.GrainPurchaseEntry, sign int) error {
-	summaryDate := summaryDay(entry.BuyTime)
+	summaryDate := entryCreatedSummaryDay(entry)
 	deltaCount := sign
 	deltaAmount := float64(sign) * entry.Amount
 	deltaQuantity := float64(sign) * entry.Quantity
@@ -804,7 +1420,7 @@ func (s *GrainPurchaseService) applyEntryToFarmerSummary(entry *grainPurchaseRep
 }
 
 func (s *GrainPurchaseService) applyEntryToStationSummary(entry *grainPurchaseRepository.GrainPurchaseEntry, sign int) error {
-	summaryDate := summaryDay(entry.BuyTime)
+	summaryDate := entryCreatedSummaryDay(entry)
 	deltaCount := sign
 	deltaAmount := float64(sign) * entry.Amount
 	deltaQuantity := float64(sign) * entry.Quantity
@@ -854,6 +1470,13 @@ func summaryDay(value *time.Time) time.Time {
 	location := grainBusinessLocation()
 	source = source.In(location)
 	return time.Date(source.Year(), source.Month(), source.Day(), 0, 0, 0, 0, location)
+}
+
+func entryCreatedSummaryDay(entry *grainPurchaseRepository.GrainPurchaseEntry) time.Time {
+	if entry == nil || entry.CreatedTime.IsZero() {
+		return summaryDay(nil)
+	}
+	return summaryDay(&entry.CreatedTime)
 }
 
 func applyTodayDefault(startDate, endDate **time.Time) {

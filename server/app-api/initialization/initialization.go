@@ -69,6 +69,7 @@ var initializers = []Initializer{
 			accessKeyId := vipper.GetString("oss.accessKeyId")
 			accessKeySecret := vipper.GetString("oss.accessKeySecret")
 			endpoint := vipper.GetString("oss.endpoint")
+			publicEndpoint := vipper.GetString("oss.public.endpoint")
 			expireTime := vipper.GetInt64("oss.expireTime")
 			callbackUrl := vipper.GetString("oss.callbackUrl")
 			tokenExpireTime := vipper.GetInt64("oss.tokenExpireTime")
@@ -76,6 +77,7 @@ var initializers = []Initializer{
 				Enabled:         enabled,
 				DirPrefix:       dirPrefix,
 				Endpoint:        endpoint,
+				PublicEndpoint:  publicEndpoint,
 				BucketName:      bucketName,
 				AccessKeyId:     accessKeyId,
 				AccessKeySecret: accessKeySecret,

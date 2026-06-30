@@ -148,9 +148,14 @@ func (s *GrainFarmerService) UpdateFarmerCardInfoInStation(id uint, result *ocrD
 			changed = assignNonEmpty(&entity.Name, result.Name) || changed
 			changed = assignNonEmpty(&entity.IDNumber, result.IDNumber) || changed
 			changed = assignNonEmpty(&entity.Address, result.Address) || changed
-		case "bank-card":
+		case "bank-card", "social-security-card":
 			changed = assignNonEmpty(&entity.BankNumber, result.BankNumber) || changed
-			changed = assignNonEmpty(&entity.BankName, result.BankName) || changed
+			// 社保卡无开户行，收款人取社保卡上的持卡人姓名；银行卡沿用识别到的开户行
+			payeeName := result.BankName
+			if result.CardType == "social-security-card" {
+				payeeName = result.Name
+			}
+			changed = assignNonEmpty(&entity.BankName, payeeName) || changed
 		}
 	}
 	if !changed {

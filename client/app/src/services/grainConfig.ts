@@ -1,5 +1,6 @@
 import { http } from './request'
 import { buildQuery } from './query'
+import { normalizeFileUrl } from '@/utils/fileUrl'
 import type { PageResponse } from '@/types/api'
 import type {
   GrainPaymentMethod,
@@ -23,7 +24,18 @@ export function listGrainStations(query: GrainStationQuery = {}) {
 }
 
 export function getMyGrainStationDetail() {
+  return http.get<GrainStationDetail>('/grain-stations/mine').then((detail) => ({
+    ...detail,
+    businessLicenseUrl: normalizeFileUrl(detail.businessLicenseUrl),
+  }))
+}
+
+export function getCurrentSalesmanGrainStation() {
   return http.get<GrainStationDetail>('/grain-stations/mine')
+}
+
+export function downloadMyBusinessLicense() {
+  return http.get<{ imageUrl: string }>('/grain-stations/mine/extra/business-license').then((result) => normalizeFileUrl(result.imageUrl))
 }
 
 export function createGrainStation(data: Partial<GrainStation>) {
