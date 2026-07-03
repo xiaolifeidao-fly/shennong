@@ -24,26 +24,60 @@
         {{ item }}
       </button>
     </scroll-view>
+    <view v-if="activeFilter === customFilter" class="custom-range">
+      <picker mode="date" :value="customStart || today" :end="today" @change="handleDateChange('start', $event)">
+        <view class="date-field">{{ customStart || '开始日期' }}</view>
+      </picker>
+      <text class="range-separator">至</text>
+      <picker mode="date" :value="customEnd || customStart || today" :start="customStart || undefined" :end="today" @change="handleDateChange('end', $event)">
+        <view class="date-field">{{ customEnd || '结束日期' }}</view>
+      </picker>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   keyword: string
   activeFilter: string
+  customStart: string
+  customEnd: string
 }>()
 
 const emit = defineEmits<{
   'update:keyword': [value: string]
+  'update:customStart': [value: string]
+  'update:customEnd': [value: string]
   'filter-change': [value: string]
   search: []
 }>()
 
-const filters = ['今天', '本周', '本月', '资料待补']
+const customFilter = '自定义'
+const filters = ['今天', '本周', '本月', customFilter, '资料待补']
+const today = computed(() => {
+  const date = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+})
 
 function handleInput(event: Event) {
   const detail = (event as unknown as { detail?: { value?: string } }).detail
   emit('update:keyword', detail?.value || '')
+}
+
+function handleDateChange(target: 'start' | 'end', event: { detail: { value: string } }) {
+  const value = event.detail.value
+  if (target === 'start') {
+    emit('update:customStart', value)
+    if (!props.customEnd || props.customEnd < value) {
+      emit('update:customEnd', value)
+    }
+  } else {
+    emit('update:customEnd', value)
+  }
+  emit('search')
 }
 </script>
 
@@ -144,5 +178,32 @@ function handleInput(event: Event) {
   background: linear-gradient(135deg, #e8f5ec, #fff8e8);
   color: #145535;
   box-shadow: 0 8rpx 18rpx rgba(35, 122, 75, 0.08);
+}
+
+.custom-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44rpx minmax(0, 1fr);
+  gap: 12rpx;
+  align-items: center;
+  padding: 12rpx 0 8rpx;
+}
+
+.date-field {
+  height: 74rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #d8e5d6;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.96);
+  color: #26362a;
+  font-size: 25rpx;
+  font-weight: 680;
+  line-height: 74rpx;
+  text-align: center;
+}
+
+.range-separator {
+  color: #6a766a;
+  font-size: 24rpx;
+  text-align: center;
 }
 </style>

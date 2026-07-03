@@ -90,14 +90,21 @@
         </button>
       </view>
       <view class="material-grid">
-        <image
+        <view
           v-for="(image, index) in model.materialImages"
           :key="image"
-          class="material-image"
-          :src="image"
-          mode="aspectFill"
-          @click="previewMaterial(index)"
-        />
+          class="material-item"
+        >
+          <image
+            class="material-image"
+            :src="image"
+            mode="aspectFill"
+            @click="previewMaterial(index)"
+          />
+          <button class="material-remove" @click.stop="removeMaterial(index)">
+            <text class="close-mini"></text>
+          </button>
+        </view>
         <button v-if="!model.materialImages.length" class="empty-upload" @click="chooseMaterials">
           <text class="upload-plus"></text>
           <text>添加身份证补充、票据、现场照片</text>
@@ -210,8 +217,13 @@ function clearDateTime(field: 'buyTime' | 'payTime') {
 }
 
 function chooseMaterials() {
+  const remainingCount = 9 - model.value.materialImages.length
+  if (remainingCount <= 0) {
+    uni.showToast({ title: '最多上传 9 张材料', icon: 'none' })
+    return
+  }
   uni.chooseImage({
-    count: 6,
+    count: remainingCount,
     success: (res) => {
       model.value.materialImages = [...model.value.materialImages, ...res.tempFilePaths].slice(0, 9)
     },
@@ -223,6 +235,10 @@ function previewMaterial(index: number) {
     urls: model.value.materialImages,
     current: model.value.materialImages[index],
   })
+}
+
+function removeMaterial(index: number) {
+  model.value.materialImages = model.value.materialImages.filter((_, imageIndex) => imageIndex !== index)
 }
 </script>
 
@@ -404,6 +420,7 @@ function previewMaterial(index: number) {
   gap: 14rpx;
 }
 
+.material-item,
 .material-image,
 .empty-upload {
   width: 100%;
@@ -411,8 +428,34 @@ function previewMaterial(index: number) {
   border-radius: 8rpx;
 }
 
+.material-item {
+  position: relative;
+  overflow: visible;
+}
+
 .material-image {
+  display: block;
   background: #eef2ea;
+}
+
+.material-remove {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  display: flex;
+  width: 42rpx;
+  height: 42rpx;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2rpx solid #ffffff;
+  border-radius: 50%;
+  background: rgba(23, 32, 24, 0.78);
+  box-shadow: 0 6rpx 14rpx rgba(23, 32, 24, 0.18);
+}
+
+.material-remove::after {
+  border: 0;
 }
 
 .empty-upload {
@@ -430,7 +473,8 @@ function previewMaterial(index: number) {
 
 .pin-mini,
 .upload-mini,
-.upload-plus {
+.upload-plus,
+.close-mini {
   position: relative;
   display: inline-block;
   flex: 0 0 auto;
@@ -484,6 +528,31 @@ function previewMaterial(index: number) {
   border-left: 4rpx solid currentColor;
   content: '';
   transform: rotate(45deg);
+}
+
+.close-mini {
+  width: 22rpx;
+  height: 22rpx;
+}
+
+.close-mini::before,
+.close-mini::after {
+  position: absolute;
+  left: 9rpx;
+  top: 0;
+  width: 4rpx;
+  height: 22rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  content: '';
+}
+
+.close-mini::before {
+  transform: rotate(45deg);
+}
+
+.close-mini::after {
+  transform: rotate(-45deg);
 }
 
 </style>

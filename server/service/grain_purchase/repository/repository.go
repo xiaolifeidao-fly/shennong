@@ -289,6 +289,50 @@ func (r *GrainEntryMaterialRepository) ListActiveByEntryID(entryID uint64) ([]*G
 	return entities, err
 }
 
+func (r *GrainEntryMaterialRepository) ListActiveByEntryIDs(entryIDs []uint64) ([]*GrainEntryMaterial, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if len(entryIDs) == 0 {
+		return []*GrainEntryMaterial{}, nil
+	}
+	var entities []*GrainEntryMaterial
+	err := r.Db.Where("entry_id IN ? AND active = ?", entryIDs, 1).
+		Order("entry_id ASC, sort_order ASC, id ASC").
+		Find(&entities).Error
+	return entities, err
+}
+
+func (r *GrainEntryMaterialRepository) MaxActiveCountByEntryQuery(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) (int, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
+	type row struct {
+		MaterialCount int
+	}
+	var rows []row
+	err := applyEntryQuery(
+		r.Db.Table("grain_entry_material AS m").
+			Joins("JOIN grain_purchase_entry AS e ON e.id = m.entry_id").
+			Joins("JOIN grain_farmer AS f ON f.id = e.farmer_id AND f.active = ? AND COALESCE(f.status, '') <> ?", 1, "inactive").
+			Where("e.active = ? AND e.status NOT IN ?", 1, []string{"voided", "deleted"}),
+		query,
+	).
+		Where("m.active = ?", 1).
+		Select("COUNT(m.id) AS material_count").
+		Group("m.entry_id").
+		Order("material_count DESC").
+		Limit(1).
+		Scan(&rows).Error
+	if err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 || rows[0].MaterialCount < 0 {
+		return 0, nil
+	}
+	return rows[0].MaterialCount, nil
+}
+
 func (r *GrainEntryMaterialRepository) FindByUnique(entryID uint64, imageHash string) (*GrainEntryMaterial, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")

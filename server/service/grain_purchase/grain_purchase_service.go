@@ -242,19 +242,28 @@ func (s *GrainPurchaseService) runEntryExport(batchID int, query grainPurchaseDT
 }
 
 func (s *GrainPurchaseService) buildEntryExportWorkbook(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO, batchID int, includeIDCardImages bool, onProgress func(success, fail int)) ([]byte, int, int, error) {
+	materialImageColumnCount := 0
+	if includeIDCardImages {
+		var err error
+		materialImageColumnCount, err = s.entryExportMaterialImageColumnCount(query)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+	}
+	imageColumnCount := entryExportImageColumnCount(includeIDCardImages, materialImageColumnCount)
 	var buf bytes.Buffer
 	zipWriter := zip.NewWriter(&buf)
-	if err := writeXLSXStaticParts(zipWriter, includeIDCardImages); err != nil {
+	if err := writeXLSXStaticParts(zipWriter, imageColumnCount > 0); err != nil {
 		return nil, 0, 0, err
 	}
 	sheet, err := zipWriter.Create("xl/worksheets/sheet1.xml")
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	if _, err := sheet.Write([]byte(entryExportWorksheetHeader(includeIDCardImages))); err != nil {
+	if _, err := sheet.Write([]byte(entryExportWorksheetHeader(imageColumnCount))); err != nil {
 		return nil, 0, 0, err
 	}
-	writeEntryExportXLSXRow(sheet, 1, entryExportHeaders(includeIDCardImages), 1, includeIDCardImages)
+	writeEntryExportXLSXRow(sheet, 1, entryExportHeaders(includeIDCardImages, materialImageColumnCount), 1, imageColumnCount > 0)
 	pageIndex := 1
 	successCount := 0
 	failCount := 0
@@ -268,13 +277,20 @@ func (s *GrainPurchaseService) buildEntryExportWorkbook(query grainPurchaseDTO.G
 		if err != nil {
 			return nil, successCount, failCount, err
 		}
+		materialsByEntryID := map[uint64][]*grainPurchaseRepository.GrainEntryMaterial{}
+		if includeIDCardImages && materialImageColumnCount > 0 {
+			materialsByEntryID, err = s.entryExportMaterialsByEntries(page.Data)
+			if err != nil {
+				return nil, successCount, failCount, err
+			}
+		}
 		for _, item := range page.Data {
 			if item == nil {
 				failCount++
 				continue
 			}
 			rowIndex := successCount + failCount + 2
-			if err := writeEntryExportXLSXRow(sheet, rowIndex, entryExportRow(item, successCount+failCount+1, includeIDCardImages), 2, includeIDCardImages); err != nil {
+			if err := writeEntryExportXLSXRow(sheet, rowIndex, entryExportRow(item, successCount+failCount+1, includeIDCardImages, materialImageColumnCount), 2, imageColumnCount > 0); err != nil {
 				failCount++
 				continue
 			}
@@ -283,6 +299,14 @@ func (s *GrainPurchaseService) buildEntryExportWorkbook(query grainPurchaseDTO.G
 					images = append(images, *image)
 				} else if err != nil {
 					log.Printf("[grain-entry-export] skip idcard image batchID=%d entryID=%d farmerID=%d err=%v", batchID, item.Id, item.FarmerID, err)
+				}
+				materialImages := s.entryExportMaterialImages(materialsByEntryID[uint64(item.Id)], rowIndex, entryExportMaterialImageStartColumn(includeIDCardImages))
+				for _, image := range materialImages {
+					if image.Err != nil {
+						log.Printf("[grain-entry-export] skip material image batchID=%d entryID=%d materialID=%d err=%v", batchID, item.Id, image.MaterialID, image.Err)
+						continue
+					}
+					images = append(images, image.Image)
 				}
 			}
 			successCount++
@@ -295,10 +319,10 @@ func (s *GrainPurchaseService) buildEntryExportWorkbook(query grainPurchaseDTO.G
 		}
 		pageIndex++
 	}
-	if _, err := sheet.Write([]byte(entryExportWorksheetFooter(includeIDCardImages))); err != nil {
+	if _, err := sheet.Write([]byte(entryExportWorksheetFooter(imageColumnCount > 0))); err != nil {
 		return nil, successCount, failCount, err
 	}
-	if includeIDCardImages {
+	if imageColumnCount > 0 {
 		if err := writeEntryExportXLSXImages(zipWriter, images); err != nil {
 			return nil, successCount, failCount, err
 		}
@@ -310,7 +334,7 @@ func (s *GrainPurchaseService) buildEntryExportWorkbook(query grainPurchaseDTO.G
 	return buf.Bytes(), successCount, failCount, nil
 }
 
-func entryExportHeaders(includeIDCardImages bool) []string {
+func entryExportHeaders(includeIDCardImages bool, materialImageColumnCount int) []string {
 	headers := []string{
 		"序号",
 		"买方信息\n姓名",
@@ -334,10 +358,13 @@ func entryExportHeaders(includeIDCardImages bool) []string {
 	if includeIDCardImages {
 		headers = append(headers, "身份证图片")
 	}
+	for i := 1; i <= materialImageColumnCount; i++ {
+		headers = append(headers, fmt.Sprintf("材料图片%d", i))
+	}
 	return headers
 }
 
-func entryExportRow(item *grainPurchaseDTO.GrainPurchaseEntryDTO, index int, includeIDCardImages bool) []string {
+func entryExportRow(item *grainPurchaseDTO.GrainPurchaseEntryDTO, index int, includeIDCardImages bool, materialImageColumnCount int) []string {
 	row := []string{
 		strconv.Itoa(index),
 		item.StationName,
@@ -359,6 +386,9 @@ func entryExportRow(item *grainPurchaseDTO.GrainPurchaseEntryDTO, index int, inc
 		item.Remark,
 	}
 	if includeIDCardImages {
+		row = append(row, "")
+	}
+	for i := 0; i < materialImageColumnCount; i++ {
 		row = append(row, "")
 	}
 	return row
@@ -398,8 +428,33 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func writeEntryExportXLSXRow(writer interface{ Write([]byte) (int, error) }, rowIndex int, values []string, styleID int, includeIDCardImages bool) error {
-	if _, err := writer.Write([]byte(fmt.Sprintf(`<row r="%d" ht="%s" customHeight="1">`, rowIndex, rowHeight(rowIndex, includeIDCardImages)))); err != nil {
+func entryExportBaseColumnCount() int {
+	return 18
+}
+
+func entryExportIDCardImageColumn() int {
+	return entryExportBaseColumnCount() + 1
+}
+
+func entryExportMaterialImageStartColumn(includeIDCardImages bool) int {
+	if includeIDCardImages {
+		return entryExportIDCardImageColumn() + 1
+	}
+	return entryExportBaseColumnCount() + 1
+}
+
+func entryExportImageColumnCount(includeIDCardImages bool, materialImageColumnCount int) int {
+	if materialImageColumnCount < 0 {
+		materialImageColumnCount = 0
+	}
+	if includeIDCardImages {
+		return materialImageColumnCount + 1
+	}
+	return materialImageColumnCount
+}
+
+func writeEntryExportXLSXRow(writer interface{ Write([]byte) (int, error) }, rowIndex int, values []string, styleID int, includeImages bool) error {
+	if _, err := writer.Write([]byte(fmt.Sprintf(`<row r="%d" ht="%s" customHeight="1">`, rowIndex, rowHeight(rowIndex, includeImages)))); err != nil {
 		return err
 	}
 	for colIndex, value := range values {
@@ -418,11 +473,11 @@ func writeEntryExportXLSXRow(writer interface{ Write([]byte) (int, error) }, row
 	return err
 }
 
-func rowHeight(rowIndex int, includeIDCardImages bool) string {
+func rowHeight(rowIndex int, includeImages bool) string {
 	if rowIndex == 1 {
 		return "34"
 	}
-	if includeIDCardImages {
+	if includeImages {
 		return "82"
 	}
 	return "22"
@@ -449,10 +504,12 @@ func xlsxEscape(value string) string {
 	return replacer.Replace(value)
 }
 
-func entryExportWorksheetHeader(includeIDCardImages bool) string {
-	imageCol := ""
-	if includeIDCardImages {
-		imageCol = `<col min="19" max="19" width="22" customWidth="1"/>` + "\n"
+func entryExportWorksheetHeader(imageColumnCount int) string {
+	imageCols := ""
+	if imageColumnCount > 0 {
+		imageStartCol := entryExportBaseColumnCount() + 1
+		imageEndCol := entryExportBaseColumnCount() + imageColumnCount
+		imageCols = fmt.Sprintf(`<col min="%d" max="%d" width="22" customWidth="1"/>`+"\n", imageStartCol, imageEndCol)
 	}
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -474,20 +531,20 @@ func entryExportWorksheetHeader(includeIDCardImages bool) string {
 <col min="16" max="16" width="18" customWidth="1"/>
 <col min="17" max="17" width="18" customWidth="1"/>
 <col min="18" max="18" width="18" customWidth="1"/>
-` + imageCol + `</cols><sheetData>`
+` + imageCols + `</cols><sheetData>`
 }
 
-func entryExportWorksheetFooter(includeIDCardImages bool) string {
+func entryExportWorksheetFooter(includeImages bool) string {
 	drawing := ""
-	if includeIDCardImages {
+	if includeImages {
 		drawing = `<drawing r:id="rId1"/>`
 	}
 	return `</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>` + drawing + `</worksheet>`
 }
 
-func writeXLSXStaticParts(zipWriter *zip.Writer, includeIDCardImages bool) error {
+func writeXLSXStaticParts(zipWriter *zip.Writer, includeImages bool) error {
 	contentTypesExtra := ""
-	if includeIDCardImages {
+	if includeImages {
 		contentTypesExtra = `
 <Default Extension="png" ContentType="image/png"/>
 <Default Extension="jpg" ContentType="image/jpeg"/>
@@ -539,7 +596,7 @@ func writeXLSXStaticParts(zipWriter *zip.Writer, includeIDCardImages bool) error
 		"docProps/app.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Shennong</Application></Properties>`,
 	}
-	if includeIDCardImages {
+	if includeImages {
 		parts["xl/worksheets/_rels/sheet1.xml.rels"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
@@ -559,9 +616,16 @@ func writeXLSXStaticParts(zipWriter *zip.Writer, includeIDCardImages bool) error
 
 type entryExportXLSXImage struct {
 	RowIndex  int
+	ColIndex  int
 	FileIndex int
 	Ext       string
 	Data      []byte
+}
+
+type entryExportMaterialImageResult struct {
+	Image      entryExportXLSXImage
+	MaterialID int
+	Err        error
 }
 
 func (s *GrainPurchaseService) entryExportIDCardImage(item *grainPurchaseDTO.GrainPurchaseEntryDTO, rowIndex int) (*entryExportXLSXImage, error) {
@@ -585,9 +649,73 @@ func (s *GrainPurchaseService) entryExportIDCardImage(item *grainPurchaseDTO.Gra
 	}
 	return &entryExportXLSXImage{
 		RowIndex: rowIndex,
+		ColIndex: entryExportIDCardImageColumn(),
 		Ext:      ext,
 		Data:     data,
 	}, nil
+}
+
+func (s *GrainPurchaseService) entryExportMaterialImageColumnCount(query grainPurchaseDTO.GrainPurchaseEntryQueryDTO) (int, error) {
+	if s.materialRepository == nil || s.materialRepository.Db == nil {
+		return 0, nil
+	}
+	prepareEntryFarmerSearchIndexes(&query)
+	return s.materialRepository.MaxActiveCountByEntryQuery(query)
+}
+
+func (s *GrainPurchaseService) entryExportMaterialsByEntries(entries []*grainPurchaseDTO.GrainPurchaseEntryDTO) (map[uint64][]*grainPurchaseRepository.GrainEntryMaterial, error) {
+	result := make(map[uint64][]*grainPurchaseRepository.GrainEntryMaterial)
+	if len(entries) == 0 || s.materialRepository == nil || s.materialRepository.Db == nil {
+		return result, nil
+	}
+	entryIDs := make([]uint64, 0, len(entries))
+	for _, entry := range entries {
+		if entry == nil || entry.Id <= 0 {
+			continue
+		}
+		entryIDs = append(entryIDs, uint64(entry.Id))
+	}
+	materials, err := s.materialRepository.ListActiveByEntryIDs(entryIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, material := range materials {
+		if material == nil {
+			continue
+		}
+		result[material.EntryID] = append(result[material.EntryID], material)
+	}
+	return result, nil
+}
+
+func (s *GrainPurchaseService) entryExportMaterialImages(materials []*grainPurchaseRepository.GrainEntryMaterial, rowIndex, startColumn int) []entryExportMaterialImageResult {
+	results := make([]entryExportMaterialImageResult, 0, len(materials))
+	for index, material := range materials {
+		if material == nil {
+			continue
+		}
+		result := entryExportMaterialImageResult{MaterialID: material.Id}
+		data, err := getOssObject(material.OssObjectKey, material.OssURL)
+		if err != nil {
+			result.Err = err
+			results = append(results, result)
+			continue
+		}
+		ext := entryExportImageExt(data, material.FileName)
+		if ext == "" {
+			result.Err = fmt.Errorf("unsupported material image type: %s", detectImageMimeType(data, material.FileName))
+			results = append(results, result)
+			continue
+		}
+		result.Image = entryExportXLSXImage{
+			RowIndex: rowIndex,
+			ColIndex: startColumn + index,
+			Ext:      ext,
+			Data:     data,
+		}
+		results = append(results, result)
+	}
+	return results
 }
 
 func entryExportImageExt(data []byte, fileName string) string {
@@ -644,13 +772,16 @@ func writeEntryExportDrawing(zipWriter *zip.Writer, images []entryExportXLSXImag
 }
 
 func entryExportDrawingAnchor(image entryExportXLSXImage) string {
-	const imageColZeroBased = 18
+	imageColZeroBased := image.ColIndex - 1
+	if imageColZeroBased < 0 {
+		imageColZeroBased = entryExportIDCardImageColumn() - 1
+	}
 	rowZeroBased := image.RowIndex - 1
 	return fmt.Sprintf(`<xdr:twoCellAnchor editAs="oneCell">
 <xdr:from><xdr:col>%d</xdr:col><xdr:colOff>95250</xdr:colOff><xdr:row>%d</xdr:row><xdr:rowOff>95250</xdr:rowOff></xdr:from>
 <xdr:to><xdr:col>%d</xdr:col><xdr:colOff>1047750</xdr:colOff><xdr:row>%d</xdr:row><xdr:rowOff>857250</xdr:rowOff></xdr:to>
 <xdr:pic>
-<xdr:nvPicPr><xdr:cNvPr id="%d" name="IDCardImage%d"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>
+<xdr:nvPicPr><xdr:cNvPr id="%d" name="EntryExportImage%d"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>
 <xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId%d"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
 <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
 </xdr:pic>

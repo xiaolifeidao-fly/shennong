@@ -2,6 +2,8 @@
   <view class="page farmers-page">
     <FarmerFilterBar
       v-model:keyword="keyword"
+      v-model:custom-start="customStart"
+      v-model:custom-end="customEnd"
       :active-filter="activeFilter"
       @filter-change="activeFilter = $event"
       @search="handleSearch"
@@ -29,11 +31,13 @@ import { onReachBottom, onShow } from '@dcloudio/uni-app'
 import FarmerFilterBar from './components/FarmerFilterBar.vue'
 import SectionHeader from '@/components/business/SectionHeader.vue'
 import FarmerSummaryCard from '@/components/business/FarmerSummaryCard.vue'
-import { useGrainStore } from '@/stores/grain'
+import { useGrainStore, type FarmerSummaryDateRange } from '@/stores/grain'
 
 const grainStore = useGrainStore()
 const keyword = ref('')
 const activeFilter = ref('今天')
+const customStart = ref('')
+const customEnd = ref('')
 
 const filteredFarmers = computed(() => {
   return grainStore.farmerSummaries.filter((farmer) => {
@@ -43,14 +47,17 @@ const filteredFarmers = computed(() => {
 })
 
 onShow(() => {
-  void grainStore.loadTodayFarmerSummaries(true, keyword.value, activeFilter.value)
+  reloadFarmerSummaries(true)
 })
 
 onReachBottom(() => {
-  void grainStore.loadTodayFarmerSummaries(false, keyword.value, activeFilter.value)
+  reloadFarmerSummaries(false)
 })
 
 watch(activeFilter, (filter) => {
+  if (filter === '自定义') {
+    initCustomRange()
+  }
   if (grainStore.dailySummaryLoading) {
     // 正在加载中，等加载完成后补发
     const stop = watch(
@@ -58,17 +65,44 @@ watch(activeFilter, (filter) => {
       (loading) => {
         if (!loading) {
           stop()
-          void grainStore.loadTodayFarmerSummaries(true, keyword.value, filter)
+          reloadFarmerSummaries(true)
         }
       },
     )
   } else {
-    void grainStore.loadTodayFarmerSummaries(true, keyword.value, filter)
+    reloadFarmerSummaries(true)
   }
 })
 
 function handleSearch() {
-  void grainStore.loadTodayFarmerSummaries(true, keyword.value, activeFilter.value)
+  reloadFarmerSummaries(true)
+}
+
+function todayStr() {
+  const date = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function initCustomRange() {
+  const today = todayStr()
+  customStart.value ||= today
+  customEnd.value ||= customStart.value
+}
+
+function getCustomRange(): FarmerSummaryDateRange | undefined {
+  if (activeFilter.value !== '自定义') {
+    return undefined
+  }
+  initCustomRange()
+  return {
+    startDate: customStart.value,
+    endDate: customEnd.value,
+  }
+}
+
+function reloadFarmerSummaries(force: boolean) {
+  void grainStore.loadTodayFarmerSummaries(force, keyword.value, activeFilter.value, getCustomRange())
 }
 
 function showFarmer(farmerId: string) {

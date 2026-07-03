@@ -49,6 +49,11 @@ interface NullablePage<T> {
   data?: T[] | null
 }
 
+export interface FarmerSummaryDateRange {
+  startDate: string
+  endDate: string
+}
+
 interface GrainState {
   farmers: FarmerProfile[]
   dailyFarmerSummaries: FarmerSummary[]
@@ -120,7 +125,10 @@ function toDateString(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-function getDateRangeForFilter(filter: string): { startDate: string; endDate: string } {
+function getDateRangeForFilter(filter: string, customRange?: FarmerSummaryDateRange): FarmerSummaryDateRange {
+  if (filter === '自定义' && customRange?.startDate && customRange?.endDate) {
+    return customRange
+  }
   const now = new Date()
   const today = toDateString(now)
   if (filter === '本周') {
@@ -584,7 +592,7 @@ export const useGrainStore = defineStore('grain', {
         this.summariesLoading = false
       }
     },
-    async loadTodayFarmerSummaries(force = false, search = '', dateFilter = '今天') {
+    async loadTodayFarmerSummaries(force = false, search = '', dateFilter = '今天', customRange?: FarmerSummaryDateRange) {
       if (this.dailySummaryLoading && !force) {
         return
       }
@@ -595,7 +603,7 @@ export const useGrainStore = defineStore('grain', {
       try {
         await this.ensureUserAndStation()
         const pageIndex = force ? 1 : this.dailySummaryPageIndex + 1
-        const { startDate, endDate } = getDateRangeForFilter(dateFilter)
+        const { startDate, endDate } = getDateRangeForFilter(dateFilter, customRange)
         const summaryPage = await listGrainFarmerDailySummaries({
           pageIndex,
           pageSize: this.dailySummaryPageSize,
